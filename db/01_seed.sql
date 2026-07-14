@@ -1,5 +1,5 @@
 -- ======================================================
--- 1. LIMPIEZA Y EXTENSIONES
+-- 1. LIMPIEZA, EXTENSIONES Y ESQUEMA
 -- ======================================================
 DROP SCHEMA IF EXISTS public CASCADE;
 CREATE SCHEMA public;
@@ -9,6 +9,7 @@ GRANT ALL ON SCHEMA public TO public;
 -- Extensiones necesarias
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE EXTENSION IF NOT EXISTS "citext";
+CREATE EXTENSION IF NOT EXISTS postgis;  -- Para GEOGRAPHY(POINT, 4326)
 
 -- ======================================================
 -- 2. TIPOS ENUM (Estados)
@@ -18,6 +19,7 @@ CREATE TYPE payment_intent_status_enum AS ENUM ('created', 'pending', 'authorize
 CREATE TYPE refund_status_enum AS ENUM ('pending', 'approved', 'rejected', 'cancelled');
 CREATE TYPE inventory_movement_type_enum AS ENUM ('purchase', 'sale', 'reservation', 'release', 'adjustment', 'return', 'loss');
 CREATE TYPE order_status_enum AS ENUM ('created', 'payment_pending', 'paid', 'preparing', 'shipped', 'delivered', 'cancelled', 'refunded');
+CREATE TYPE reservation_status_enum AS ENUM ('active', 'expired', 'released', 'converted');
 
 -- ======================================================
 -- 3. MÓDULO 1: CONFIGURACIÓN (4 tablas)
@@ -32,7 +34,7 @@ CREATE TABLE store (
     email VARCHAR(255) NOT NULL,
     phone VARCHAR(50),
     address TEXT,
-    logo_url TEXT,
+    logo_media_id BIGINT, -- FK a media (se agregará después)
     theme_config JSONB DEFAULT '{}',
     currency_code VARCHAR(3) NOT NULL DEFAULT 'COP',
     language VARCHAR(10) NOT NULL DEFAULT 'es',
@@ -49,8 +51,8 @@ CREATE TABLE branches (
     city VARCHAR(100) NOT NULL,
     phone VARCHAR(50),
     email VARCHAR(255),
-    latitude DECIMAL(10, 8),
-    longitude DECIMAL(11, 8),
+    location GEOGRAPHY(POINT, 4326) NOT NULL, -- Coordenadas geográficas
+    delivery_radius_km DECIMAL(6,2) NOT NULL DEFAULT 5.0 CHECK (delivery_radius_km > 0),
     schedule JSONB, -- { "monday": "08:00-20:00", ... }
     is_active BOOLEAN NOT NULL DEFAULT true,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -58,22 +60,21 @@ CREATE TABLE branches (
     deleted_at TIMESTAMPTZ
 );
 
--- 3. delivery_zones
+-- 3. delivery_zones (Sin polígonos, basado en tarifas y condiciones)
 CREATE TABLE delivery_zones (
     id BIGSERIAL PRIMARY KEY,
     branch_id BIGINT NOT NULL REFERENCES branches(id) ON DELETE RESTRICT,
     name VARCHAR(100) NOT NULL,
-    delivery_price DECIMAL(12, 2) NOT NULL DEFAULT 0,
-    minimum_order DECIMAL(12, 2) NOT NULL DEFAULT 0,
+    delivery_price DECIMAL(12,2) NOT NULL DEFAULT 0,
+    minimum_order DECIMAL(12,2) NOT NULL DEFAULT 0 CHECK (minimum_order >= 0),
     estimated_time_minutes INTEGER NOT NULL DEFAULT 60,
-    polygon GEOGRAPHY(POLYGON, 4326), -- PostGIS, o JSONB si no usas PostGIS
     is_active BOOLEAN NOT NULL DEFAULT true,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     deleted_at TIMESTAMPTZ
 );
 
--- 4. settings (clave-valor)
+-- 4. settings
 CREATE TABLE settings (
     id BIGSERIAL PRIMARY KEY,
     key VARCHAR(100) NOT NULL UNIQUE,
@@ -84,17 +85,43 @@ CREATE TABLE settings (
 );
 
 -- ======================================================
--- 4. MÓDULO 2: CATÁLOGO (11 tablas)
+-- 4. MÓDULO 2: MEDIOS (1 tabla)
 -- ======================================================
 
--- 5. categories
+-- 5. media (repositorio central)
+CREATE TABLE media (
+    id BIGSERIAL PRIMARY KEY,
+    provider VARCHAR(50) NOT NULL DEFAULT 'local', -- local, s3, gcs, etc.
+    path TEXT NOT NULL,
+    file_name VARCHAR(255) NOT NULL,
+    mime_type VARCHAR(100) NOT NULL,
+    size_bytes BIGINT NOT NULL,
+    width INTEGER,
+    height INTEGER,
+    checksum VARCHAR(64), -- SHA-256
+    metadata JSONB DEFAULT '{}',
+    alt_text VARCHAR(255),
+    is_public BOOLEAN NOT NULL DEFAULT true,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Ahora podemos agregar la FK de store.logo_media_id
+ALTER TABLE store ADD CONSTRAINT fk_store_logo_media
+    FOREIGN KEY (logo_media_id) REFERENCES media(id) ON DELETE SET NULL;
+
+-- ======================================================
+-- 5. MÓDULO 3: CATÁLOGO (11 tablas)
+-- ======================================================
+
+-- 6. categories
 CREATE TABLE categories (
     id BIGSERIAL PRIMARY KEY,
     parent_id BIGINT REFERENCES categories(id) ON DELETE RESTRICT,
     name VARCHAR(100) NOT NULL,
     slug VARCHAR(100) NOT NULL UNIQUE,
     description TEXT,
-    image_url TEXT,
+    image_media_id BIGINT REFERENCES media(id) ON DELETE SET NULL,
     level INTEGER DEFAULT 0,
     is_active BOOLEAN NOT NULL DEFAULT true,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -102,19 +129,19 @@ CREATE TABLE categories (
     deleted_at TIMESTAMPTZ
 );
 
--- 6. brands
+-- 7. brands
 CREATE TABLE brands (
     id BIGSERIAL PRIMARY KEY,
     name VARCHAR(100) NOT NULL UNIQUE,
     slug VARCHAR(100) NOT NULL UNIQUE,
-    logo_url TEXT,
+    logo_media_id BIGINT REFERENCES media(id) ON DELETE SET NULL,
     is_active BOOLEAN NOT NULL DEFAULT true,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     deleted_at TIMESTAMPTZ
 );
 
--- 7. products
+-- 8. products
 CREATE TABLE products (
     id BIGSERIAL PRIMARY KEY,
     brand_id BIGINT REFERENCES brands(id) ON DELETE RESTRICT,
@@ -129,25 +156,25 @@ CREATE TABLE products (
     deleted_at TIMESTAMPTZ
 );
 
--- 8. product_images
+-- 9. product_images (relación con media)
 CREATE TABLE product_images (
     id BIGSERIAL PRIMARY KEY,
     product_id BIGINT NOT NULL REFERENCES products(id) ON DELETE CASCADE,
-    image_url TEXT NOT NULL,
+    media_id BIGINT NOT NULL REFERENCES media(id) ON DELETE CASCADE,
     is_cover BOOLEAN NOT NULL DEFAULT false,
     position INTEGER DEFAULT 0,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- 9. product_categories
+-- 10. product_categories
 CREATE TABLE product_categories (
     product_id BIGINT NOT NULL REFERENCES products(id) ON DELETE CASCADE,
     category_id BIGINT NOT NULL REFERENCES categories(id) ON DELETE CASCADE,
     PRIMARY KEY (product_id, category_id)
 );
 
--- 10. attributes
+-- 11. attributes
 CREATE TABLE attributes (
     id BIGSERIAL PRIMARY KEY,
     name VARCHAR(100) NOT NULL UNIQUE,
@@ -158,7 +185,7 @@ CREATE TABLE attributes (
     deleted_at TIMESTAMPTZ
 );
 
--- 11. attribute_options
+-- 12. attribute_options
 CREATE TABLE attribute_options (
     id BIGSERIAL PRIMARY KEY,
     attribute_id BIGINT NOT NULL REFERENCES attributes(id) ON DELETE CASCADE,
@@ -168,7 +195,7 @@ CREATE TABLE attribute_options (
 );
 CREATE UNIQUE INDEX idx_attribute_options_unique ON attribute_options (attribute_id, value);
 
--- 12. product_attributes (Atributos del producto base)
+-- 13. product_attributes
 CREATE TABLE product_attributes (
     id BIGSERIAL PRIMARY KEY,
     product_id BIGINT NOT NULL REFERENCES products(id) ON DELETE CASCADE,
@@ -179,22 +206,22 @@ CREATE TABLE product_attributes (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- 13. product_variants
+-- 14. product_variants
 CREATE TABLE product_variants (
     id BIGSERIAL PRIMARY KEY,
     product_id BIGINT NOT NULL REFERENCES products(id) ON DELETE CASCADE,
     sku VARCHAR(100) NOT NULL UNIQUE,
     barcode VARCHAR(100),
-    current_price DECIMAL(12, 2) NOT NULL DEFAULT 0,
-    current_compare_price DECIMAL(12, 2), -- Precio tachado
-    cost_price DECIMAL(12, 2),
+    current_price DECIMAL(12,2) NOT NULL DEFAULT 0,
+    current_compare_price DECIMAL(12,2),
+    cost_price DECIMAL(12,2),
     is_active BOOLEAN NOT NULL DEFAULT true,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     deleted_at TIMESTAMPTZ
 );
 
--- 14. variant_attributes
+-- 15. variant_attributes
 CREATE TABLE variant_attributes (
     id BIGSERIAL PRIMARY KEY,
     variant_id BIGINT NOT NULL REFERENCES product_variants(id) ON DELETE CASCADE,
@@ -204,35 +231,36 @@ CREATE TABLE variant_attributes (
 );
 CREATE UNIQUE INDEX idx_variant_attributes_unique ON variant_attributes (variant_id, attribute_id);
 
--- 15. prices (Historial)
+-- 16. prices (historial)
 CREATE TABLE prices (
     id BIGSERIAL PRIMARY KEY,
     product_variant_id BIGINT NOT NULL REFERENCES product_variants(id) ON DELETE CASCADE,
     start_date TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     end_date TIMESTAMPTZ,
-    cost DECIMAL(12, 2),
-    price DECIMAL(12, 2) NOT NULL,
-    compare_price DECIMAL(12, 2),
+    cost DECIMAL(12,2) CHECK (cost IS NULL OR cost >= 0),
+    price DECIMAL(12,2) NOT NULL CHECK (price >= 0),
+    compare_price DECIMAL(12,2) CHECK (compare_price IS NULL OR compare_price >= price),
+    CONSTRAINT prices_date_check CHECK (end_date IS NULL OR end_date > start_date),
     version INTEGER DEFAULT 1,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 -- ======================================================
--- 5. MÓDULO 3: IMPUESTOS (2 tablas)
+-- 6. MÓDULO 4: IMPUESTOS (2 tablas)
 -- ======================================================
 
--- 16. tax_rates
+-- 17. tax_rates
 CREATE TABLE tax_rates (
     id BIGSERIAL PRIMARY KEY,
     name VARCHAR(50) NOT NULL,
-    rate DECIMAL(5, 2) NOT NULL, -- 19.00
+    rate DECIMAL(5,2) NOT NULL CHECK (rate >= 0 AND rate <= 100),
     is_active BOOLEAN NOT NULL DEFAULT true,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     deleted_at TIMESTAMPTZ
 );
 
--- 17. product_tax_classes
+-- 18. product_tax_classes
 CREATE TABLE product_tax_classes (
     product_id BIGINT NOT NULL REFERENCES products(id) ON DELETE CASCADE,
     tax_rate_id BIGINT NOT NULL REFERENCES tax_rates(id) ON DELETE RESTRICT,
@@ -240,24 +268,37 @@ CREATE TABLE product_tax_classes (
 );
 
 -- ======================================================
--- 6. MÓDULO 4: INVENTARIO (3 tablas)
+-- 7. MÓDULO 5: INVENTARIO (4 tablas)
 -- ======================================================
 
--- 18. inventory
+-- 19. inventory
 CREATE TABLE inventory (
     id BIGSERIAL PRIMARY KEY,
     product_variant_id BIGINT NOT NULL REFERENCES product_variants(id) ON DELETE RESTRICT,
     branch_id BIGINT NOT NULL REFERENCES branches(id) ON DELETE RESTRICT,
     stock INTEGER NOT NULL DEFAULT 0 CHECK (stock >= 0),
     reserved_stock INTEGER NOT NULL DEFAULT 0 CHECK (reserved_stock >= 0),
-    minimum_stock INTEGER NOT NULL DEFAULT 0,
-    maximum_stock INTEGER NOT NULL DEFAULT 999999,
+    minimum_stock INTEGER DEFAULT 0 CHECK (minimum_stock >= 0),
+    maximum_stock INTEGER DEFAULT 999999 CHECK (maximum_stock >= minimum_stock),
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE UNIQUE INDEX idx_inventory_unique ON inventory (product_variant_id, branch_id);
 
--- 19. inventory_movements
+-- 20. inventory_reservations (reservas activas)
+CREATE TABLE inventory_reservations (
+    id BIGSERIAL PRIMARY KEY,
+    inventory_id BIGINT NOT NULL REFERENCES inventory(id) ON DELETE RESTRICT,
+    cart_id BIGINT, -- opcional, FK a carts
+    order_id BIGINT, -- opcional, FK a orders
+    quantity INTEGER NOT NULL CHECK (quantity > 0),
+    expires_at TIMESTAMPTZ NOT NULL DEFAULT (NOW() + INTERVAL '15 minutes'),
+    status reservation_status_enum NOT NULL DEFAULT 'active',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- 21. inventory_movements
 CREATE TABLE inventory_movements (
     id BIGSERIAL PRIMARY KEY,
     inventory_id BIGINT NOT NULL REFERENCES inventory(id) ON DELETE RESTRICT,
@@ -268,7 +309,7 @@ CREATE TABLE inventory_movements (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- 20. suppliers
+-- 22. suppliers
 CREATE TABLE suppliers (
     id BIGSERIAL PRIMARY KEY,
     legal_name VARCHAR(200) NOT NULL,
@@ -283,10 +324,10 @@ CREATE TABLE suppliers (
 );
 
 -- ======================================================
--- 7. MÓDULO 5: CLIENTES (6 tablas)
+-- 8. MÓDULO 6: CLIENTES (6 tablas)
 -- ======================================================
 
--- 21. customers
+-- 23. customers
 CREATE TABLE customers (
     id BIGSERIAL PRIMARY KEY,
     email VARCHAR(255) NOT NULL UNIQUE,
@@ -303,26 +344,25 @@ CREATE TABLE customers (
     deleted_at TIMESTAMPTZ
 );
 
--- 22. customer_addresses
+-- 24. customer_addresses (con coordenadas)
 CREATE TABLE customer_addresses (
     id BIGSERIAL PRIMARY KEY,
     customer_id BIGINT NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
-    alias VARCHAR(50), -- Casa, Oficina
+    alias VARCHAR(50),
     address_line1 TEXT NOT NULL,
     address_line2 TEXT,
     city VARCHAR(100) NOT NULL,
     state VARCHAR(100),
     postal_code VARCHAR(20),
     country VARCHAR(100) NOT NULL DEFAULT 'Colombia',
-    latitude DECIMAL(10, 8),
-    longitude DECIMAL(11, 8),
+    location GEOGRAPHY(POINT, 4326), -- Coordenadas
     is_default BOOLEAN NOT NULL DEFAULT false,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     deleted_at TIMESTAMPTZ
 );
 
--- 23. customer_sessions
+-- 25. customer_sessions
 CREATE TABLE customer_sessions (
     id BIGSERIAL PRIMARY KEY,
     customer_id BIGINT NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
@@ -333,17 +373,18 @@ CREATE TABLE customer_sessions (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- 24. guest_sessions (CON expires_at)
+-- 26. guest_sessions (con last_activity_at)
 CREATE TABLE guest_sessions (
     id BIGSERIAL PRIMARY KEY,
     session_token UUID NOT NULL DEFAULT uuid_generate_v4() UNIQUE,
     ip_address INET,
     user_agent TEXT,
+    last_activity_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     expires_at TIMESTAMPTZ NOT NULL DEFAULT (NOW() + INTERVAL '30 days'),
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- 25. favorites
+-- 27. favorites
 CREATE TABLE favorites (
     customer_id BIGINT NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
     product_id BIGINT NOT NULL REFERENCES products(id) ON DELETE CASCADE,
@@ -351,22 +392,22 @@ CREATE TABLE favorites (
     PRIMARY KEY (customer_id, product_id)
 );
 
--- 26. customer_tokens
+-- 28. customer_tokens
 CREATE TABLE customer_tokens (
     id BIGSERIAL PRIMARY KEY,
     customer_id BIGINT NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
     token UUID NOT NULL DEFAULT uuid_generate_v4() UNIQUE,
-    purpose VARCHAR(50) NOT NULL, -- password_reset, email_verification, magic_login
+    purpose VARCHAR(50) NOT NULL,
     expires_at TIMESTAMPTZ NOT NULL DEFAULT (NOW() + INTERVAL '1 hour'),
     used_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 -- ======================================================
--- 8. MÓDULO 6: CARRITO (2 tablas)
+-- 9. MÓDULO 7: CARRITO (2 tablas)
 -- ======================================================
 
--- 27. carts (CON expires_at)
+-- 29. carts (con last_activity_at)
 CREATE TABLE carts (
     id BIGSERIAL PRIMARY KEY,
     customer_id BIGINT REFERENCES customers(id) ON DELETE CASCADE,
@@ -374,6 +415,7 @@ CREATE TABLE carts (
     branch_id BIGINT REFERENCES branches(id) ON DELETE RESTRICT,
     delivery_zone_id BIGINT REFERENCES delivery_zones(id) ON DELETE RESTRICT,
     coupon_code VARCHAR(50),
+    last_activity_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     expires_at TIMESTAMPTZ NOT NULL DEFAULT (NOW() + INTERVAL '7 days'),
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -383,22 +425,22 @@ CREATE TABLE carts (
     )
 );
 
--- 28. cart_items
+-- 30. cart_items
 CREATE TABLE cart_items (
     id BIGSERIAL PRIMARY KEY,
     cart_id BIGINT NOT NULL REFERENCES carts(id) ON DELETE CASCADE,
     product_variant_id BIGINT NOT NULL REFERENCES product_variants(id) ON DELETE RESTRICT,
     quantity INTEGER NOT NULL CHECK (quantity > 0),
-    unit_price DECIMAL(12, 2) NOT NULL, -- Precio congelado al agregar
+    unit_price DECIMAL(12,2) NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 -- ======================================================
--- 9. MÓDULO 7: PEDIDOS (9 tablas)
+-- 10. MÓDULO 8: PEDIDOS (9 tablas)
 -- ======================================================
 
--- 29. orders (CON reference_code)
+-- 31. orders
 CREATE TABLE orders (
     id BIGSERIAL PRIMARY KEY,
     reference_code VARCHAR(20) NOT NULL UNIQUE,
@@ -408,19 +450,20 @@ CREATE TABLE orders (
     delivery_zone_id BIGINT REFERENCES delivery_zones(id) ON DELETE RESTRICT,
     status order_status_enum NOT NULL DEFAULT 'created',
     currency_code VARCHAR(3) NOT NULL DEFAULT 'COP',
-    subtotal DECIMAL(12, 2) NOT NULL DEFAULT 0,
-    discount_total DECIMAL(12, 2) NOT NULL DEFAULT 0,
-    tax_total DECIMAL(12, 2) NOT NULL DEFAULT 0,
-    shipping_cost DECIMAL(12, 2) NOT NULL DEFAULT 0,
-    shipping_tax DECIMAL(12, 2) NOT NULL DEFAULT 0,
-    grand_total DECIMAL(12, 2) NOT NULL DEFAULT 0,
+    exchange_rate DECIMAL(12,6) DEFAULT 1.0 CHECK (exchange_rate > 0),
+    subtotal DECIMAL(12,2) NOT NULL DEFAULT 0 CHECK (subtotal >= 0),
+    discount_total DECIMAL(12,2) NOT NULL DEFAULT 0 CHECK (discount_total >= 0),
+    tax_total DECIMAL(12,2) NOT NULL DEFAULT 0 CHECK (tax_total >= 0),
+    shipping_cost DECIMAL(12,2) NOT NULL DEFAULT 0 CHECK (shipping_cost >= 0),
+    shipping_tax DECIMAL(12,2) NOT NULL DEFAULT 0 CHECK (shipping_tax >= 0),
+    grand_total DECIMAL(12,2) NOT NULL DEFAULT 0 CHECK (grand_total >= 0),
     customer_ip INET,
     user_agent TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- 30. order_items
+-- 32. order_items
 CREATE TABLE order_items (
     id BIGSERIAL PRIMARY KEY,
     order_id BIGINT NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
@@ -428,20 +471,21 @@ CREATE TABLE order_items (
     product_name VARCHAR(255) NOT NULL,
     variant_sku VARCHAR(100),
     quantity INTEGER NOT NULL CHECK (quantity > 0),
-    unit_price_net DECIMAL(12, 2) NOT NULL, -- Sin impuestos
-    unit_price_gross DECIMAL(12, 2) NOT NULL, -- Con impuestos
-    discount_amount DECIMAL(12, 2) NOT NULL DEFAULT 0,
-    tax_amount DECIMAL(12, 2) NOT NULL DEFAULT 0,
-    tax_rate DECIMAL(5, 2) DEFAULT 0,
-    subtotal DECIMAL(12, 2) NOT NULL,
+    unit_price_net DECIMAL(12,2)
+    NOT NULL CHECK (unit_price_net >= 0),
+    unit_price_gross DECIMAL(12,2) NOT NULL CHECK (unit_price_gross >= unit_price_net),
+    discount_amount DECIMAL(12,2) DEFAULT 0 CHECK (discount_amount >= 0),
+    tax_amount DECIMAL(12,2) DEFAULT 0 CHECK (tax_amount >= 0),
+    subtotal DECIMAL(12,2) NOT NULL CHECK (subtotal >= 0),
+    tax_rate DECIMAL(5,2) DEFAULT 0,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- 31. delivery_time_slots
+-- 33. delivery_time_slots
 CREATE TABLE delivery_time_slots (
     id BIGSERIAL PRIMARY KEY,
     branch_id BIGINT NOT NULL REFERENCES branches(id) ON DELETE CASCADE,
-    day_of_week INTEGER NOT NULL CHECK (day_of_week BETWEEN 0 AND 6), -- 0=Sunday
+    day_of_week INTEGER NOT NULL CHECK (day_of_week BETWEEN 0 AND 6),
     start_time TIME NOT NULL,
     end_time TIME NOT NULL,
     max_orders INTEGER DEFAULT 10,
@@ -450,7 +494,7 @@ CREATE TABLE delivery_time_slots (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- 32. shipments
+-- 34. shipments
 CREATE TABLE shipments (
     id BIGSERIAL PRIMARY KEY,
     order_id BIGINT NOT NULL REFERENCES orders(id) ON DELETE CASCADE UNIQUE,
@@ -458,43 +502,43 @@ CREATE TABLE shipments (
     address_line2 TEXT,
     city VARCHAR(100) NOT NULL,
     postal_code VARCHAR(20),
-    latitude DECIMAL(10, 8),
-    longitude DECIMAL(11, 8),
+    location GEOGRAPHY(POINT, 4326), -- coordenadas de entrega
     delivery_time_slot_id BIGINT REFERENCES delivery_time_slots(id) ON DELETE RESTRICT,
     scheduled_date DATE,
     carrier_name VARCHAR(100),
     tracking_number VARCHAR(100),
     tracking_url TEXT,
     shipping_tax_rate_id BIGINT REFERENCES tax_rates(id) ON DELETE RESTRICT,
-    shipping_tax_amount DECIMAL(12, 2) DEFAULT 0,
-    status VARCHAR(50) DEFAULT 'pending', -- pending, in_transit, delivered
+    shipping_tax_amount DECIMAL(12,2) DEFAULT 0 CHECK (shipping_tax_amount >= 0),
+    status VARCHAR(50) DEFAULT 'pending',
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- 33. payment_intents (CON IP y User-Agent)
+-- 35. payment_intents (con idempotency_key)
 CREATE TABLE payment_intents (
     id BIGSERIAL PRIMARY KEY,
     order_id BIGINT NOT NULL REFERENCES orders(id) ON DELETE CASCADE UNIQUE,
-    payment_method VARCHAR(50) NOT NULL, -- stripe, mercadopago, pse, etc.
+    payment_method VARCHAR(50) NOT NULL,
     status payment_intent_status_enum NOT NULL DEFAULT 'created',
-    amount DECIMAL(12, 2) NOT NULL,
+    amount DECIMAL(12,2) NOT NULL CHECK (amount > 0),
     currency VARCHAR(3) NOT NULL DEFAULT 'COP',
-    gateway_transaction_id VARCHAR(255),
-    provider_response JSONB, -- Respuesta cruda de la pasarela
+    provider_transaction_id VARCHAR(255),
+    provider_response JSONB,
+    idempotency_key VARCHAR(100) UNIQUE,
     customer_ip INET,
     user_agent TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- 34. payments
+-- 36. payments
 CREATE TABLE payments (
     id BIGSERIAL PRIMARY KEY,
     order_id BIGINT NOT NULL REFERENCES orders(id) ON DELETE RESTRICT,
     payment_intent_id BIGINT REFERENCES payment_intents(id) ON DELETE RESTRICT,
-    gateway_transaction_id VARCHAR(255) NOT NULL,
-    amount DECIMAL(12, 2) NOT NULL,
+    provider_transaction_id VARCHAR(255) NOT NULL,
+    amount DECIMAL(12,2) NOT NULL CHECK (amount > 0),
     currency VARCHAR(3) NOT NULL DEFAULT 'COP',
     payment_method VARCHAR(50) NOT NULL,
     installments INTEGER DEFAULT 1,
@@ -503,48 +547,97 @@ CREATE TABLE payments (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- 35. refunds
+-- 37. refunds
 CREATE TABLE refunds (
     id BIGSERIAL PRIMARY KEY,
     payment_id BIGINT NOT NULL REFERENCES payments(id) ON DELETE RESTRICT,
     order_id BIGINT NOT NULL REFERENCES orders(id) ON DELETE RESTRICT,
-    amount DECIMAL(12, 2) NOT NULL,
+    amount DECIMAL(12,2) NOT NULL CHECK (amount > 0),
     reason TEXT,
     status refund_status_enum NOT NULL DEFAULT 'pending',
-    gateway_refund_id VARCHAR(255),
+    provider_refund_id VARCHAR(255),
     processed_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- 36. order_status_history
+-- 38. order_status_history
 CREATE TABLE order_status_history (
     id BIGSERIAL PRIMARY KEY,
     order_id BIGINT NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
     status order_status_enum NOT NULL,
     note TEXT,
-    created_by BIGINT, -- user_id (admin)
+    created_by BIGINT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- 37. invoices
+-- 39. invoices
 CREATE TABLE invoices (
     id BIGSERIAL PRIMARY KEY,
     order_id BIGINT NOT NULL REFERENCES orders(id) ON DELETE RESTRICT UNIQUE,
     invoice_number VARCHAR(50) NOT NULL UNIQUE,
-    xml_url TEXT,
-    pdf_url TEXT,
-    cufe_code VARCHAR(100), -- Facturación electrónica Colombia
+    xml_media_id BIGINT REFERENCES media(id) ON DELETE SET NULL,
+    pdf_media_id BIGINT REFERENCES media(id) ON DELETE SET NULL,
+    cufe_code VARCHAR(100),
     status VARCHAR(50) DEFAULT 'pending',
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 -- ======================================================
--- 10. MÓDULO 8: PROMOCIONES (6 tablas)
+-- 11. MÓDULO 9: LOGÍSTICA (4 tablas)
 -- ======================================================
 
--- 38. promotions
+-- 40. delivery_drivers
+CREATE TABLE delivery_drivers (
+    id BIGSERIAL PRIMARY KEY,
+    full_name VARCHAR(100) NOT NULL,
+    phone VARCHAR(50) NOT NULL,
+    vehicle_type VARCHAR(50),
+    vehicle_plate VARCHAR(20),
+    is_available BOOLEAN NOT NULL DEFAULT true,
+    is_active BOOLEAN NOT NULL DEFAULT true,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    deleted_at TIMESTAMPTZ
+);
+
+-- 41. delivery_driver_locations (historial de posiciones)
+CREATE TABLE delivery_driver_locations (
+    id BIGSERIAL PRIMARY KEY,
+    driver_id BIGINT NOT NULL REFERENCES delivery_drivers(id) ON DELETE CASCADE,
+    location GEOGRAPHY(POINT, 4326) NOT NULL,
+    speed_kmh DECIMAL(5,2),
+    heading_degrees INTEGER,
+    recorded_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- 42. delivery_assignments
+CREATE TABLE delivery_assignments (
+    id BIGSERIAL PRIMARY KEY,
+    order_id BIGINT NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+    driver_id BIGINT NOT NULL REFERENCES delivery_drivers(id) ON DELETE RESTRICT,
+    assigned_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    estimated_arrival TIMESTAMPTZ,
+    completed_at TIMESTAMPTZ,
+    status VARCHAR(50) DEFAULT 'assigned' -- assigned, picked_up, in_transit, delivered, cancelled
+);
+
+-- 43. delivery_events
+CREATE TABLE delivery_events (
+    id BIGSERIAL PRIMARY KEY,
+    assignment_id BIGINT NOT NULL REFERENCES delivery_assignments(id) ON DELETE CASCADE,
+    event_type VARCHAR(50) NOT NULL,
+    location GEOGRAPHY(POINT, 4326),
+    description TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- ======================================================
+-- 12. MÓDULO 10: PROMOCIONES (5 tablas)
+-- ======================================================
+
+-- 44. promotions
 CREATE TABLE promotions (
     id BIGSERIAL PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
@@ -557,29 +650,34 @@ CREATE TABLE promotions (
     is_active BOOLEAN NOT NULL DEFAULT true,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    deleted_at TIMESTAMPTZ
+    deleted_at TIMESTAMPTZ,
+    CONSTRAINT promotion_dates_check CHECK (end_date > start_date),
 );
 
--- 39. promotion_products
+-- 45. promotion_products
 CREATE TABLE promotion_products (
     promotion_id BIGINT NOT NULL REFERENCES promotions(id) ON DELETE CASCADE,
     product_id BIGINT NOT NULL REFERENCES products(id) ON DELETE CASCADE,
-    discount_value DECIMAL(12, 2) NOT NULL, -- % o monto fijo
+    discount_value DECIMAL(12,2) NOT NULL CHECK (discount_value >= 0),
     is_percentage BOOLEAN NOT NULL DEFAULT true,
-    PRIMARY KEY (promotion_id, product_id)
+    PRIMARY KEY (promotion_id, product_id),
+    CONSTRAINT promotion_discount_check CHECK (
+        (is_percentage = TRUE AND discount_value <= 100)
+        OR
+        (is_percentage = FALSE)),
 );
 
--- 40. promotion_conditions (Motor único)
+-- 46. promotion_conditions
 CREATE TABLE promotion_conditions (
     id BIGSERIAL PRIMARY KEY,
     promotion_id BIGINT NOT NULL REFERENCES promotions(id) ON DELETE CASCADE,
-    condition_type VARCHAR(50) NOT NULL, -- min_purchase, categories, brands, first_purchase, day_of_week
-    operator VARCHAR(10) NOT NULL, -- eq, gt, lt, in, contains
-    value JSONB NOT NULL, -- {"min": 50000}, {"categories": [1,2,3]}, {"days": [1,2,3,4,5]}
+    condition_type VARCHAR(50) NOT NULL,
+    operator VARCHAR(10) NOT NULL,
+    value JSONB NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- 41. coupons
+-- 47. coupons
 CREATE TABLE coupons (
     id BIGSERIAL PRIMARY KEY,
     promotion_id BIGINT NOT NULL REFERENCES promotions(id) ON DELETE CASCADE,
@@ -590,7 +688,7 @@ CREATE TABLE coupons (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- 42. coupon_redemptions
+-- 48. coupon_redemptions
 CREATE TABLE coupon_redemptions (
     id BIGSERIAL PRIMARY KEY,
     coupon_id BIGINT NOT NULL REFERENCES coupons(id) ON DELETE CASCADE,
@@ -600,14 +698,14 @@ CREATE TABLE coupon_redemptions (
 );
 
 -- ======================================================
--- 11. MÓDULO 9: CMS (5 tablas)
+-- 13. MÓDULO 11: CMS (5 tablas)
 -- ======================================================
 
--- 43. banners
+-- 49. banners
 CREATE TABLE banners (
     id BIGSERIAL PRIMARY KEY,
     title VARCHAR(100),
-    image_url TEXT NOT NULL,
+    media_id BIGINT NOT NULL REFERENCES media(id) ON DELETE CASCADE,
     link_url TEXT,
     position INTEGER DEFAULT 0,
     is_active BOOLEAN NOT NULL DEFAULT true,
@@ -617,7 +715,7 @@ CREATE TABLE banners (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- 44. pages
+-- 50. pages
 CREATE TABLE pages (
     id BIGSERIAL PRIMARY KEY,
     title VARCHAR(200) NOT NULL,
@@ -631,17 +729,17 @@ CREATE TABLE pages (
     deleted_at TIMESTAMPTZ
 );
 
--- 45. menus
+-- 51. menus
 CREATE TABLE menus (
     id BIGSERIAL PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
-    location VARCHAR(50) UNIQUE, -- header, footer, sidebar
+    location VARCHAR(50) UNIQUE,
     is_active BOOLEAN NOT NULL DEFAULT true,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- 46. menu_items
+-- 52. menu_items
 CREATE TABLE menu_items (
     id BIGSERIAL PRIMARY KEY,
     menu_id BIGINT NOT NULL REFERENCES menus(id) ON DELETE CASCADE,
@@ -655,7 +753,7 @@ CREATE TABLE menu_items (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- 47. footer_links
+-- 53. footer_links
 CREATE TABLE footer_links (
     id BIGSERIAL PRIMARY KEY,
     column_title VARCHAR(100) NOT NULL,
@@ -668,30 +766,30 @@ CREATE TABLE footer_links (
 );
 
 -- ======================================================
--- 12. MÓDULO 10: AUDITORÍA (2 tablas)
+-- 14. MÓDULO 12: AUDITORÍA (2 tablas)
 -- ======================================================
 
--- 48. audit_logs
+-- 54. audit_logs
 CREATE TABLE audit_logs (
     id BIGSERIAL PRIMARY KEY,
     table_name VARCHAR(100) NOT NULL,
     record_id BIGINT NOT NULL,
-    action VARCHAR(20) NOT NULL, -- INSERT, UPDATE, DELETE, SOFT_DELETE
+    action VARCHAR(20) NOT NULL,
     old_data JSONB,
     new_data JSONB,
-    performed_by BIGINT, -- user_id
+    performed_by BIGINT,
     ip_address INET,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- 49. notifications
+-- 55. notifications
 CREATE TABLE notifications (
     id BIGSERIAL PRIMARY KEY,
-    type VARCHAR(50) NOT NULL, -- order_new, stock_low, payment_received, promotion_expired
+    type VARCHAR(50) NOT NULL,
     title VARCHAR(255) NOT NULL,
     message TEXT,
     is_read BOOLEAN NOT NULL DEFAULT false,
-    target_user_id BIGINT, -- admin user id
+    target_user_id BIGINT,
     target_customer_id BIGINT REFERENCES customers(id) ON DELETE CASCADE,
     link_url TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -699,10 +797,10 @@ CREATE TABLE notifications (
 );
 
 -- ======================================================
--- 13. MÓDULO 11: INFRAESTRUCTURA (1 tabla)
+-- 15. MÓDULO 13: INFRAESTRUCTURA (1 tabla)
 -- ======================================================
 
--- 50. background_jobs
+-- 56. background_jobs
 CREATE TABLE background_jobs (
     id BIGSERIAL PRIMARY KEY,
     job_name VARCHAR(100) NOT NULL,
@@ -710,7 +808,7 @@ CREATE TABLE background_jobs (
     priority INTEGER DEFAULT 5,
     attempts INTEGER DEFAULT 0,
     max_attempts INTEGER DEFAULT 3,
-    status VARCHAR(20) DEFAULT 'pending', -- pending, processing, completed, failed
+    status VARCHAR(20) DEFAULT 'pending',
     locked_at TIMESTAMPTZ,
     scheduled_at TIMESTAMPTZ DEFAULT NOW(),
     started_at TIMESTAMPTZ,
@@ -721,7 +819,7 @@ CREATE TABLE background_jobs (
 );
 
 -- ======================================================
--- 14. TRIGGER: ACTUALIZACIÓN AUTOMÁTICA DE current_price
+-- 16. TRIGGER: ACTUALIZACIÓN AUTOMÁTICA DE current_price
 -- ======================================================
 
 CREATE OR REPLACE FUNCTION update_variant_current_price()
@@ -730,21 +828,17 @@ DECLARE
     new_price DECIMAL(12,2);
     new_compare_price DECIMAL(12,2);
 BEGIN
-    -- 1. Si el nuevo precio tiene end_date NULL (es el vigente), actualizamos el current_price del variante.
     IF NEW.end_date IS NULL THEN
-        -- Obtenemos el precio y compare_price del nuevo registro
         new_price := NEW.price;
         new_compare_price := NEW.compare_price;
 
-        -- Actualizamos la variante
         UPDATE product_variants
         SET current_price = new_price,
             current_compare_price = new_compare_price,
             updated_at = NOW()
         WHERE id = NEW.product_variant_id;
 
-        -- 2. Si este nuevo precio reemplaza a otro que estaba vigente (end_date NULL), 
-        --    cerramos el anterior (le ponemos end_date = NOW() - 1 microsegundo).
+        -- Cerrar el precio anterior que estuviera vigente (end_date NULL)
         UPDATE prices
         SET end_date = (NOW() - INTERVAL '1 microsecond')
         WHERE product_variant_id = NEW.product_variant_id
@@ -762,62 +856,99 @@ FOR EACH ROW
 EXECUTE FUNCTION update_variant_current_price();
 
 -- ======================================================
--- 15. ÍNDICES CRÍTICOS (Los 5 que acordamos + soporte)
+-- 17. ÍNDICES CRÍTICOS
 -- ======================================================
 
--- 1. Catálogo: ordenar por precio (filtra activos/no eliminados)
+-- Para catálogo: ordenar por precio (solo activos)
 CREATE INDEX idx_product_variants_current_price ON product_variants (current_price)
 WHERE is_active = true AND deleted_at IS NULL;
 
--- 2. Inventario: evitar duplicados (ya tiene UNIQUE) y reservas activas
+-- Para inventario: reservas activas
 CREATE INDEX idx_inventory_reserved ON inventory (branch_id, product_variant_id)
 WHERE reserved_stock > 0;
 
--- 3. Checkout: buscar intentos de pago pendientes por carrito (ahora por order_id, ya que payment_intent tiene order_id)
---    Si quieres por cart_id, necesitas agregar cart_id a payment_intent. 
---    Sin embargo, el flujo actual crea el order antes del intent. 
---    Creamos un índice para buscar por order_id y status.
+-- Para pagos: búsqueda por order y estado
 CREATE INDEX idx_payment_intents_order_status ON payment_intents (order_id, status)
-WHERE status = 'pending' OR status = 'created';
+WHERE status IN ('pending', 'created');
 
--- 4. Historial de precios: trigger rápido
+-- Para historial de precios: trigger rápido
 CREATE INDEX idx_prices_variant_dates ON prices (product_variant_id, start_date DESC)
 WHERE end_date IS NULL;
 
--- 5. Búsqueda Full Text (GIN)
+-- Búsqueda full text (GIN)
 CREATE INDEX idx_products_search ON products USING GIN (to_tsvector('spanish', name || ' ' || COALESCE(description, '')))
 WHERE is_active = true AND deleted_at IS NULL;
 
--- Índices adicionales súper útiles
+-- Índices adicionales
 CREATE INDEX idx_orders_customer_id ON orders (customer_id);
 CREATE INDEX idx_orders_reference_code ON orders (reference_code);
 CREATE INDEX idx_orders_status_created ON orders (status, created_at DESC);
 CREATE INDEX idx_cart_items_cart_id ON cart_items (cart_id);
 CREATE INDEX idx_inventory_branch_stock ON inventory (branch_id, stock) WHERE stock > 0;
 CREATE INDEX idx_prices_variant_id ON prices (product_variant_id);
-CREATE INDEX idx_payment_intents_gateway ON payment_intents (gateway_transaction_id) WHERE gateway_transaction_id IS NOT NULL;
+CREATE INDEX idx_payment_intents_gateway ON payment_intents (provider_transaction_id) WHERE provider_transaction_id IS NOT NULL;
 
--- Índices para búsqueda de categorías (jerarquía)
+-- Índices para categorías jerárquicas
 CREATE INDEX idx_categories_parent_id ON categories (parent_id) WHERE deleted_at IS NULL;
 
--- Índice para sesiones expiradas (limpieza)
-CREATE INDEX idx_guest_sessions_expires ON guest_sessions (expires_at) WHERE expires_at < NOW();
-CREATE INDEX idx_customer_sessions_expires ON customer_sessions (expires_at) WHERE expires_at < NOW();
-CREATE INDEX idx_carts_expires ON carts (expires_at) WHERE expires_at < NOW();
+-- Índices para expiración (limpieza)
+CREATE INDEX idx_guest_sessions_expires ON guest_sessions (expires_at) WHERE expires_at;
+CREATE INDEX idx_customer_sessions_expires ON customer_sessions (expires_at) WHERE expires_at;
+CREATE INDEX idx_carts_expires ON carts (expires_at) WHERE expires_at;
+CREATE INDEX idx_inventory_reservations_expires ON inventory_reservations (expires_at) WHERE status = 'active';
+
+-- Índices geográficos (PostGIS)
+CREATE INDEX idx_branches_location ON branches USING GIST (location);
+CREATE INDEX idx_customer_addresses_location ON customer_addresses USING GIST (location);
+CREATE INDEX idx_shipments_location ON shipments USING GIST (location);
+CREATE INDEX idx_delivery_driver_locations_location ON delivery_driver_locations USING GIST (location);
+
+-- Índices faltantes
+CREATE INDEX idx_notifications_user ON notifications (customer_id, is_read);
+CREATE INDEX idx_audit_logs_entity ON audit_logs (table_name, record_id);
+CREATE INDEX idx_delivery_assignments_driver ON delivery_assignments (driver_id);
+CREATE INDEX idx_delivery_assignments_order ON delivery_assignments (order_id);
+CREATE INDEX idx_driver_locations_latest ON delivery_driver_locations (driver_id, recorded_at DESC);
+CREATE INDEX idx_refunds_payment ON refunds (payment_id);
+CREATE INDEX idx_payments_order ON payments (order_id);
+CREATE INDEX idx_order_items_variant ON order_items (product_variant_id);
+CREATE INDEX idx_order_items_order ON order_items (order_id);
+CREATE INDEX idx_orders_created ON orders (created_at DESC);
+CREATE INDEX idx_customer_addresses_customer ON customer_addresses (customer_id);
+CREATE UNIQUE INDEX idx_customers_document ON customers (document_number) WHERE deleted_at IS NULL;
+CREATE UNIQUE INDEX idx_customers_email ON customers (email) WHERE deleted_at IS NULL;
+CREATE INDEX idx_inventory_reservations_inventory ON inventory_reservations (inventory_id, status);
+CREATE INDEX idx_inventory_variant ON inventory (product_variant_id);
+CREATE INDEX idx_prices_current ON prices (product_variant_id, end_date);
+CREATE INDEX idx_product_categories_product ON product_categories (product_id);
+CREATE INDEX idx_product_categories_category ON product_categories (category_id);
+CREATE INDEX idx_products_brand ON products (brand_id) WHERE deleted_at IS NULL;
+CREATE UNIQUE INDEX idx_brands_slug ON brands (slug) WHERE deleted_at IS NULL;
+CREATE UNIQUE INDEX idx_categories_slug ON categories (slug) WHERE deleted_at IS NULL;
+CREATE UNIQUE INDEX idx_products_slug ON products (slug) WHERE deleted_at IS NULL;
+CREATE UNIQUE INDEX idx_product_variants_sku ON product_variants (sku);
+CREATE UNIQUE INDEX idx_product_variants_barcode ON product_variants (barcode) WHERE barcode IS NOT NULL;
 
 -- ======================================================
--- 16. COMENTARIOS (Documentación embebida)
+-- 18. COMENTARIOS DE DOCUMENTACIÓN
 -- ======================================================
-COMMENT ON TABLE store IS 'Configuración general de la tienda. Solo existe un registro.';
-COMMENT ON TABLE product_variants IS 'SKU individual. current_price mantenido por trigger desde prices.';
-COMMENT ON TABLE prices IS 'Historial completo de precios. El trigger actualiza product_variants.current_price al insertar.';
-COMMENT ON TABLE inventory IS 'Stock físico + reservado (reserved_stock) para control de concurrencia.';
-COMMENT ON TABLE payment_intents IS 'Almacena intentos de pago (PSE, Stripe, etc.). Guarda IP y User-Agent por seguridad.';
-COMMENT ON TABLE orders IS 'Pedido principal. reference_code es el número público (ej: ORD-2607-001A).';
-COMMENT ON COLUMN orders.reference_code IS 'Código público del pedido. Generado por trigger o app.';
-COMMENT ON COLUMN carts.expires_at IS 'Carritos abandonados se eliminan automáticamente después de esta fecha.';
-COMMENT ON COLUMN guest_sessions.expires_at IS 'Sesión de invitado expira automáticamente.';
+COMMENT ON TABLE store IS 'Configuración general de la tienda.';
+COMMENT ON TABLE branches IS 'Sucursales con ubicación geográfica y radio de cobertura.';
+COMMENT ON TABLE delivery_zones IS 'Tarifas y condiciones de envío (sin polígonos, basado en distancia).';
+COMMENT ON TABLE media IS 'Repositorio central de archivos; todas las URLs se referencian aquí.';
+COMMENT ON TABLE product_variants IS 'SKU individual con current_price mantenido por trigger.';
+COMMENT ON TABLE inventory IS 'Stock y reservas por sucursal.';
+COMMENT ON TABLE inventory_reservations IS 'Reservas activas con expiración para liberación automática.';
+COMMENT ON TABLE inventory_movements IS 'Bitácora inmutable de movimientos de inventario.';
+COMMENT ON TABLE customers IS 'Clientes registrados e invitados (customer_type).';
+COMMENT ON TABLE guest_sessions IS 'Sesiones anónimas con last_activity_at.';
+COMMENT ON TABLE orders IS 'Pedido principal con referencia pública (reference_code).';
+COMMENT ON TABLE payment_intents IS 'Intentos de pago con idempotency_key y respuesta del proveedor.';
+COMMENT ON TABLE delivery_drivers IS 'Repartidores para logística de última milla.';
+COMMENT ON TABLE delivery_assignments IS 'Asignación de pedidos a repartidores.';
+COMMENT ON TABLE promotions IS 'Campañas promocionales con motor único de condiciones.';
+COMMENT ON TABLE background_jobs IS 'Cola de trabajos asíncronos (liberación de reservas, emails, etc.).';
 
 -- ======================================================
--- FIN DEL SCRIPT
+-- FIN DEL SCRIPT V4
 -- ======================================================
