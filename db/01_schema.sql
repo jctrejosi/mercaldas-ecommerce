@@ -125,7 +125,7 @@ CREATE TABLE user_sessions (
 
 CREATE TABLE user_branches (
     user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    branch_id BIGINT,
+    branch_id BIGINT NOT NULL,
     PRIMARY KEY(user_id, branch_id)
 );
 
