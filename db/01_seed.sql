@@ -14,6 +14,14 @@ CREATE EXTENSION IF NOT EXISTS postgis;  -- Para GEOGRAPHY(POINT, 4326)
 -- ======================================================
 -- 2. TIPOS ENUM (Estados)
 -- ======================================================
+CREATE TYPE payment_method_enum AS ENUM (
+    'CARD',
+    'PSE',
+    'CASH',
+    'BANK_TRANSFER',
+    'NEQUI',
+    'DAVIPLATA'
+);
 CREATE TYPE customer_type_enum AS ENUM ('registered', 'guest');
 CREATE TYPE payment_intent_status_enum AS ENUM ('created', 'pending', 'authorized', 'failed', 'cancelled');
 CREATE TYPE refund_status_enum AS ENUM ('pending', 'approved', 'rejected', 'cancelled');
@@ -365,79 +373,157 @@ CREATE TABLE inventory (
     stock INTEGER NOT NULL DEFAULT 0 CHECK (stock >= 0),
     reserved_stock INTEGER NOT NULL DEFAULT 0 CHECK (reserved_stock >= 0),
     CHECK (reserved_stock <= stock),
+    reorder_point INTEGER NOT NULL DEFAULT 0 CHECK (reorder_point >= 0),
+    target_stock INTEGER CHECK (target_stock >= reorder_point),
+    last_movement_at TIMESTAMPTZ,
+    last_counted_at TIMESTAMPTZ,
     minimum_stock INTEGER DEFAULT 0 CHECK (minimum_stock >= 0),
     maximum_stock INTEGER DEFAULT 999999 CHECK (maximum_stock >= minimum_stock),
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+-- índices
 CREATE UNIQUE INDEX idx_inventory_unique ON inventory (product_variant_id, branch_id);
+CREATE INDEX idx_inventory_branch ON inventory(branch_id);
+CREATE INDEX idx_inventory_stock ON inventory(stock);
+CREATE INDEX idx_inventory_reorder ON inventory(reorder_point);
 
 -- 20. inventory_reservations (reservas activas)
+CREATE TYPE reservation_reference_enum AS ENUM (
+    'CART',
+    'ORDER',
+    'MANUAL'
+);
+
 CREATE TABLE inventory_reservations (
     id BIGSERIAL PRIMARY KEY,
-    inventory_id BIGINT NOT NULL REFERENCES inventory(id) ON DELETE RESTRICT,
-    cart_id BIGINT, -- opcional, FK a carts
-    order_id BIGINT, -- opcional, FK a orders
-    quantity INTEGER NOT NULL CHECK (quantity > 0),
-    expires_at TIMESTAMPTZ NOT NULL DEFAULT (NOW() + INTERVAL '15 minutes'),
-    status reservation_status_enum NOT NULL DEFAULT 'active',
+    inventory_id BIGINT NOT NULL
+        REFERENCES inventory(id) ON DELETE RESTRICT,
+    reference_type reservation_reference_enum DEFAULT 'CART',
+    reference_id BIGINT NOT NULL,
+    created_by BIGINT REFERENCES users(id) ON DELETE SET NULL,
+    quantity INTEGER NOT NULL
+        CHECK (quantity > 0),
+    released_quantity INTEGER NOT NULL DEFAULT 0
+        CHECK (
+            released_quantity >= 0
+            AND released_quantity <= quantity
+        ),
+    expires_at TIMESTAMPTZ NOT NULL
+        DEFAULT (NOW() + INTERVAL '15 minutes'),
+    released_at TIMESTAMPTZ,
+    status reservation_status_enum NOT NULL
+        DEFAULT 'active',
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+CREATE INDEX idx_inventory_reservation_inventory ON inventory_reservations(inventory_id);
+CREATE INDEX idx_inventory_reservation_reference ON inventory_reservations(reference_type, reference_id);
+CREATE INDEX idx_inventory_reservation_status ON inventory_reservations(status);
+CREATE INDEX idx_inventory_reservation_expiration ON inventory_reservations(expires_a );
 
 -- 21. inventory_movements
+CREATE TYPE inventory_reference_enum AS ENUM (
+    'ORDER',
+    'PURCHASE_ORDER',
+    'TRANSFER',
+    'RETURN',
+    'MANUAL',
+    'ADJUSTMENT'
+);
+
 CREATE TABLE inventory_movements (
     id BIGSERIAL PRIMARY KEY,
     inventory_id BIGINT NOT NULL REFERENCES inventory(id) ON DELETE RESTRICT,
     movement_type inventory_movement_type_enum NOT NULL,
     quantity INTEGER NOT NULL,
+    reference_type inventory_reference_enum NOT NULL,
+    performed_by BIGINT,
+    previous_stock INTEGER NOT NULL,
+    new_stock INTEGER NOT NULL,
+    unit_cost DECIMAL(12,2),
+    external_reference VARCHAR(100),
     reference_id BIGINT, -- order_id, purchase_order_id, etc.
     reason TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+CREATE INDEX idx_inventory_movements_inventory ON inventory_movements(inventory_id);
+CREATE INDEX idx_inventory_movements_type ON inventory_movements(movement_type);
+CREATE INDEX idx_inventory_movements_created ON inventory_movements(created_at);
+CREATE INDEX idx_inventory_movements_reference ON inventory_movements(reference_type, reference_id);
 
 -- 22. suppliers
 CREATE TABLE suppliers (
     id BIGSERIAL PRIMARY KEY,
+    code VARCHAR(30) UNIQUE,
     legal_name VARCHAR(200) NOT NULL,
     tax_id VARCHAR(50) UNIQUE,
     contact_name VARCHAR(100),
     email VARCHAR(255),
     phone VARCHAR(50),
+    address TEXT,
+    city VARCHAR(100),
+    country VARCHAR(100),
+    website VARCHAR(255),
+    payment_terms_days INTEGER
+        CHECK (payment_terms_days >= 0),
+    currency_code CHAR(3),
+    notes TEXT,
     is_active BOOLEAN NOT NULL DEFAULT true,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     deleted_at TIMESTAMPTZ
 );
+CREATE INDEX idx_suppliers_active ON suppliers(is_active);
+
+CREATE TABLE supplier_products (
+    id BIGSERIAL PRIMARY KEY,
+    supplier_id BIGINT NOT NULL REFERENCES suppliers(id) ON DELETE RESTRICT,
+    product_variant_id BIGINT NOT NULL REFERENCES product_variants(id) ON DELETE RESTRICT,
+    supplier_sku VARCHAR(100),
+    purchase_price DECIMAL(12,2) CHECK (purchase_price >= 0),
+    lead_time_days INTEGER DEFAULT 0 CHECK (lead_time_days >= 0),
+    is_preferred BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE(supplier_id, product_variant_id)
+);
+CREATE INDEX idx_supplier_products_supplier ON supplier_products(supplier_id);
+CREATE INDEX idx_supplier_products_variant ON supplier_products(product_variant_id);
+CREATE INDEX idx_supplier_products_preferred ON supplier_products(is_preferred);
 
 -- ======================================================
 -- 8. MÓDULO 6: CLIENTES (6 tablas)
 -- ======================================================
 
 -- 23. customers
+CREATE EXTENSION IF NOT EXISTS citext;
 CREATE TABLE customers (
     id BIGSERIAL PRIMARY KEY,
-    email VARCHAR(255) NOT NULL UNIQUE,
+    email CITEXT NOT NULL UNIQUE,
     password_hash VARCHAR(255),
     document_number VARCHAR(50),
+    document_type VARCHAR(20),
     first_name VARCHAR(100),
     last_name VARCHAR(100),
     phone VARCHAR(50),
+    birth_date DATE,
+    gender VARCHAR(20),
     customer_type customer_type_enum NOT NULL DEFAULT 'registered',
+    preferred_language VARCHAR(10) DEFAULT 'es',
+    accepts_marketing BOOLEAN NOT NULL DEFAULT FALSE,
+    accepts_terms_at TIMESTAMPTZ,
     is_verified BOOLEAN NOT NULL DEFAULT false,
     last_activity_at TIMESTAMPTZ,
+    last_login_at TIMESTAMPTZ,
     is_active BOOLEAN NOT NULL DEFAULT true,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     deleted_at TIMESTAMPTZ
 );
-
-ALTER TABLE price ADD CONSTRAINT fk_customer_price_id
-    FOREIGN KEY (changed_by) REFERENCES customers(id) ON DELETE SET NULL;
-
-ALTER TABLE media ADD CONSTRAINT fk_media_customer_id
-    FOREIGN KEY (uploaded_by) REFERENCES customers(id) ON DELETE SET NULL;
-
+CREATE INDEX idx_customers_active ON customers(is_active);
+CREATE INDEX idx_customers_last_activity ON customers(last_activity_at);
+CREATE INDEX idx_customers_document ON customers(document_number);
 
 -- 24. customer_addresses (con coordenadas)
 CREATE TABLE customer_addresses (
@@ -450,12 +536,19 @@ CREATE TABLE customer_addresses (
     state VARCHAR(100),
     postal_code VARCHAR(20),
     country VARCHAR(100) NOT NULL DEFAULT 'Colombia',
+    delivery_instructions TEXT,
     location GEOGRAPHY(POINT, 4326), -- Coordenadas
+    reference TEXT,
     is_default BOOLEAN NOT NULL DEFAULT false,
+    label_color VARCHAR(20),
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     deleted_at TIMESTAMPTZ
 );
+CREATE UNIQUE INDEX idx_customer_default_address ON customer_addresses(customer_id) WHERE is_default = TRUE;
+
+CREATE INDEX idx_customer_addresses_customer ON customer_addresses(customer_id);
+CREATE INDEX idx_customer_addresses_default ON customer_addresses(customer_id, is_default);
 
 -- 25. customer_sessions
 CREATE TABLE customer_sessions (
@@ -463,14 +556,19 @@ CREATE TABLE customer_sessions (
     customer_id BIGINT NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
     session_token UUID NOT NULL DEFAULT uuid_generate_v4() UNIQUE,
     ip_address INET,
+    revoked_at TIMESTAMPTZ,
+    device_name VARCHAR(100),
     user_agent TEXT,
     expires_at TIMESTAMPTZ NOT NULL DEFAULT (NOW() + INTERVAL '30 days'),
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+CREATE INDEX idx_customer_sessions_customer ON customer_sessions(customer_id);
+CREATE INDEX idx_customer_sessions_expiration ON customer_sessions(expires_at);
 
 -- 26. guest_sessions (con last_activity_at)
 CREATE TABLE guest_sessions (
     id BIGSERIAL PRIMARY KEY,
+    converted_customer_id BIGINT REFERENCES customers(id) ON DELETE SET NULL,
     session_token UUID NOT NULL DEFAULT uuid_generate_v4() UNIQUE,
     ip_address INET,
     user_agent TEXT,
@@ -478,6 +576,8 @@ CREATE TABLE guest_sessions (
     expires_at TIMESTAMPTZ NOT NULL DEFAULT (NOW() + INTERVAL '30 days'),
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+CREATE INDEX idx_guest_sessions_expiration ON guest_sessions(expires_at);
+CREATE INDEX idx_guest_sessions_last_activity ON guest_sessions(last_activity_at);
 
 -- 27. favorites
 CREATE TABLE favorites (
@@ -486,32 +586,53 @@ CREATE TABLE favorites (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     PRIMARY KEY (customer_id, product_id)
 );
+CREATE INDEX idx_guest_sessions_expiration ON guest_sessions(expires_at);
+CREATE INDEX idx_guest_sessions_last_activity ON guest_sessions(last_activity_at);
 
 -- 28. customer_tokens
+CREATE TYPE customer_token_purpose_enum AS ENUM (
+    'EMAIL_VERIFICATION',
+    'PASSWORD_RESET',
+    'EMAIL_CHANGE',
+    'PHONE_VERIFICATION'
+);
 CREATE TABLE customer_tokens (
     id BIGSERIAL PRIMARY KEY,
     customer_id BIGINT NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
     token UUID NOT NULL DEFAULT uuid_generate_v4() UNIQUE,
-    purpose VARCHAR(50) NOT NULL,
+    purpose customer_token_purpose_enum NOT NULL,
+    consumed_ip INET,
+    created_ip INET,
     expires_at TIMESTAMPTZ NOT NULL DEFAULT (NOW() + INTERVAL '1 hour'),
     used_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+CREATE INDEX idx_customer_tokens_customer ON customer_tokens(customer_id);
+CREATE INDEX idx_customer_tokens_expiration ON customer_tokens(expires_at);
+CREATE INDEX idx_customer_tokens_purpose ON customer_tokens(purpose);
 
 -- ======================================================
 -- 9. MÓDULO 7: CARRITO (2 tablas)
 -- ======================================================
 
 -- 29. carts (con last_activity_at)
+CREATE TYPE cart_status_enum AS ENUM (
+    'ACTIVE',
+    'ABANDONED',
+    'CONVERTED',
+    'EXPIRED'
+);
 CREATE TABLE carts (
     id BIGSERIAL PRIMARY KEY,
+    coupon_id BIGINT REFERENCES coupons(id) ON DELETE SET NULL,
     customer_id BIGINT REFERENCES customers(id) ON DELETE CASCADE,
     guest_session_id BIGINT REFERENCES guest_sessions(id) ON DELETE CASCADE,
     branch_id BIGINT REFERENCES branches(id) ON DELETE RESTRICT,
     delivery_zone_id BIGINT REFERENCES delivery_zones(id) ON DELETE RESTRICT,
-    coupon_code VARCHAR(50),
+    customer_address_id BIGINT REFERENCES customer_addresses(id) ON DELETE SET NULL,
     last_activity_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     expires_at TIMESTAMPTZ NOT NULL DEFAULT (NOW() + INTERVAL '7 days'),
+    status cart_status_enum NOT NULL DEFAULT 'ACTIVE',
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     CONSTRAINT cart_owner_check CHECK (
@@ -519,17 +640,32 @@ CREATE TABLE carts (
         (customer_id IS NULL AND guest_session_id IS NOT NULL)
     )
 );
+CREATE INDEX idx_carts_customer ON carts(customer_id);
+CREATE INDEX idx_carts_guest ON carts(guest_session_id);
+CREATE INDEX idx_carts_status ON carts(status);
+CREATE INDEX idx_carts_expires ON carts(expires_at);
+CREATE INDEX idx_carts_last_activity ON carts(last_activity_at);
+
+CREATE UNIQUE INDEX idx_unique_active_customer_cart ON carts(customer_id) WHERE status = 'ACTIVE';
+CREATE UNIQUE INDEX idx_unique_active_guest_cart ON carts(guest_session_id) WHERE status = 'ACTIVE';
 
 -- 30. cart_items
 CREATE TABLE cart_items (
     id BIGSERIAL PRIMARY KEY,
+    discount_amount DECIMAL(12,2) NOT NULL DEFAULT 0 CHECK (discount_amount >= 0),
+    tax_amount DECIMAL(12,2) NOT NULL DEFAULT 0 CHECK (tax_amount >= 0),
     cart_id BIGINT NOT NULL REFERENCES carts(id) ON DELETE CASCADE,
+    subtotal DECIMAL(12,2) NOT NULL CHECK (subtotal >= 0),
     product_variant_id BIGINT NOT NULL REFERENCES product_variants(id) ON DELETE RESTRICT,
     quantity INTEGER NOT NULL CHECK (quantity > 0),
     unit_price DECIMAL(12,2) NOT NULL,
+    metadata JSONB,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+CREATE UNIQUE INDEX idx_cart_item_unique ON cart_items(cart_id, product_variant_id);
+CREATE INDEX idx_cart_items_cart ON cart_items(cart_id);
+CREATE INDEX idx_cart_items_variant ON cart_items(product_variant_id);
 
 -- ======================================================
 -- 10. MÓDULO 8: PEDIDOS (9 tablas)
@@ -543,6 +679,7 @@ CREATE TABLE orders (
     guest_session_id BIGINT REFERENCES guest_sessions(id) ON DELETE RESTRICT,
     branch_id BIGINT NOT NULL REFERENCES branches(id) ON DELETE RESTRICT,
     delivery_zone_id BIGINT REFERENCES delivery_zones(id) ON DELETE RESTRICT,
+    customer_address_id BIGINT REFERENCES customer_addresses(id) ON DELETE SET NULL,
     status order_status_enum NOT NULL DEFAULT 'created',
     currency_code VARCHAR(3) NOT NULL DEFAULT 'COP',
     exchange_rate DECIMAL(12,6) DEFAULT 1.0 CHECK (exchange_rate > 0),
@@ -553,14 +690,22 @@ CREATE TABLE orders (
     shipping_tax DECIMAL(12,2) NOT NULL DEFAULT 0 CHECK (shipping_tax >= 0),
     grand_total DECIMAL(12,2) NOT NULL DEFAULT 0 CHECK (grand_total >= 0),
     customer_ip INET,
+    coupon_id BIGINT REFERENCES coupons(id) ON DELETE SET NULL,
     user_agent TEXT,
+    notes TEXT,
+    internal_notes TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+CREATE INDEX idx_orders_customer ON orders(customer_id);
+CREATE INDEX idx_orders_status ON orders(status);
+CREATE INDEX idx_orders_created ON orders(created_at);
+CREATE INDEX idx_orders_branch ON orders(branch_id);
 
 -- 32. order_items
 CREATE TABLE order_items (
     id BIGSERIAL PRIMARY KEY,
+    tax_name VARCHAR(100),
     order_id BIGINT NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
     product_variant_id BIGINT REFERENCES product_variants(id) ON DELETE RESTRICT,
     product_name VARCHAR(255) NOT NULL,
@@ -573,8 +718,11 @@ CREATE TABLE order_items (
     tax_amount DECIMAL(12,2) DEFAULT 0 CHECK (tax_amount >= 0),
     subtotal DECIMAL(12,2) NOT NULL CHECK (subtotal >= 0),
     tax_rate DECIMAL(5,2) DEFAULT 0,
+    total DECIMAL(12,2) NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+CREATE INDEX idx_order_items_order ON order_items(order_id);
+CREATE INDEX idx_order_items_variant ON order_items(product_variant_id);
 
 -- 33. delivery_time_slots
 CREATE TABLE delivery_time_slots (
@@ -583,13 +731,25 @@ CREATE TABLE delivery_time_slots (
     day_of_week INTEGER NOT NULL CHECK (day_of_week BETWEEN 0 AND 6),
     start_time TIME NOT NULL,
     end_time TIME NOT NULL,
+    CHECK(end_time > start_time),
     max_orders INTEGER DEFAULT 10,
     is_active BOOLEAN NOT NULL DEFAULT true,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+CREATE INDEX idx_delivery_slot_branch ON delivery_time_slots(branch_id);
 
 -- 34. shipments
+CREATE TYPE shipment_status_enum AS ENUM (
+    'PENDING',
+    'PREPARING',
+    'SHIPPED',
+    'IN_TRANSIT',
+    'DELIVERED',
+    'FAILED',
+    'RETURNED',
+    'CANCELLED'
+);
 CREATE TABLE shipments (
     id BIGSERIAL PRIMARY KEY,
     order_id BIGINT NOT NULL REFERENCES orders(id) ON DELETE CASCADE UNIQUE,
@@ -603,9 +763,14 @@ CREATE TABLE shipments (
     carrier_name VARCHAR(100),
     tracking_number VARCHAR(100),
     tracking_url TEXT,
+    carrier_reference VARCHAR(100),
+    estimated_delivery_at TIMESTAMPTZ,
+    delivered_at TIMESTAMPTZ,
+    recipient_name VARCHAR(200),
+    recipient_phone VARCHAR(50),
     shipping_tax_rate_id BIGINT REFERENCES tax_rates(id) ON DELETE RESTRICT,
     shipping_tax_amount DECIMAL(12,2) DEFAULT 0 CHECK (shipping_tax_amount >= 0),
-    status VARCHAR(50) DEFAULT 'pending',
+    status shipment_status_enum DEFAULT 'PENDING',
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -614,7 +779,7 @@ CREATE TABLE shipments (
 CREATE TABLE payment_intents (
     id BIGSERIAL PRIMARY KEY,
     order_id BIGINT NOT NULL REFERENCES orders(id) ON DELETE CASCADE UNIQUE,
-    payment_method VARCHAR(50) NOT NULL,
+    payment_method payment_method_enum NOT NULL,
     status payment_intent_status_enum NOT NULL DEFAULT 'created',
     amount DECIMAL(12,2) NOT NULL CHECK (amount > 0),
     currency VARCHAR(3) NOT NULL DEFAULT 'COP',
@@ -622,22 +787,28 @@ CREATE TABLE payment_intents (
     provider_response JSONB,
     idempotency_key VARCHAR(100) UNIQUE,
     customer_ip INET,
+    provider_name VARCHAR(100),
     user_agent TEXT,
+    expires_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+CREATE INDEX idx_payment_intents_status ON payment_intents(status);
 
 -- 36. payments
 CREATE TABLE payments (
     id BIGSERIAL PRIMARY KEY,
     order_id BIGINT NOT NULL REFERENCES orders(id) ON DELETE RESTRICT,
     payment_intent_id BIGINT REFERENCES payment_intents(id) ON DELETE RESTRICT,
-    provider_transaction_id VARCHAR(255) NOT NULL,
+    provider_transaction_id VARCHAR(255) UNIQUE NOT NULL,
+    provider_name VARCHAR(100),
+    authorization_code VARCHAR(100),
+    provider_response JSONB,
     amount DECIMAL(12,2) NOT NULL CHECK (amount > 0),
     currency VARCHAR(3) NOT NULL DEFAULT 'COP',
-    payment_method VARCHAR(50) NOT NULL,
+    payment_method payment_method_enum  NOT NULL,
     installments INTEGER DEFAULT 1,
-    status VARCHAR(50) DEFAULT 'completed',
+    status payment_status_enum DEFAULT 'PENDING',
     paid_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -649,6 +820,8 @@ CREATE TABLE refunds (
     order_id BIGINT NOT NULL REFERENCES orders(id) ON DELETE RESTRICT,
     amount DECIMAL(12,2) NOT NULL CHECK (amount > 0),
     reason TEXT,
+    provider_response JSONB,
+    processed_by BIGINT,
     status refund_status_enum NOT NULL DEFAULT 'pending',
     provider_refund_id VARCHAR(255),
     processed_at TIMESTAMPTZ,
@@ -662,7 +835,8 @@ CREATE TABLE order_status_history (
     order_id BIGINT NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
     status order_status_enum NOT NULL,
     note TEXT,
-    created_by BIGINT,
+    old_status order_status_enum,
+    created_by BIGINT REFERENCES customers(id) ON DELETE SET NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
@@ -671,10 +845,13 @@ CREATE TABLE invoices (
     id BIGSERIAL PRIMARY KEY,
     order_id BIGINT NOT NULL REFERENCES orders(id) ON DELETE RESTRICT UNIQUE,
     invoice_number VARCHAR(50) NOT NULL UNIQUE,
+    issued_at TIMESTAMPTZ,
+    provider_name VARCHAR(100),
+    provider_invoice_id VARCHAR(100),
     xml_media_id BIGINT REFERENCES media(id) ON DELETE SET NULL,
     pdf_media_id BIGINT REFERENCES media(id) ON DELETE SET NULL,
     cufe_code VARCHAR(100),
-    status VARCHAR(50) DEFAULT 'pending',
+    status invoice_status_enum DEFAULT 'pending',
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -688,45 +865,90 @@ CREATE TABLE delivery_drivers (
     id BIGSERIAL PRIMARY KEY,
     full_name VARCHAR(100) NOT NULL,
     phone VARCHAR(50) NOT NULL,
+    email CITEXT,
     vehicle_type VARCHAR(50),
     vehicle_plate VARCHAR(20),
+    vehicle_brand VARCHAR(100),
+    vehicle_model VARCHAR(100),
+    vehicle_color VARCHAR(50),
     is_available BOOLEAN NOT NULL DEFAULT true,
     is_active BOOLEAN NOT NULL DEFAULT true,
+    current_location GEOGRAPHY(POINT, 4326),
+    last_location_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     deleted_at TIMESTAMPTZ
 );
+CREATE INDEX idx_delivery_drivers_available ON delivery_drivers(is_available);
+CREATE INDEX idx_delivery_drivers_active ON delivery_drivers(is_active);
 
 -- 41. delivery_driver_locations (historial de posiciones)
 CREATE TABLE delivery_driver_locations (
     id BIGSERIAL PRIMARY KEY,
     driver_id BIGINT NOT NULL REFERENCES delivery_drivers(id) ON DELETE CASCADE,
     location GEOGRAPHY(POINT, 4326) NOT NULL,
-    speed_kmh DECIMAL(5,2),
-    heading_degrees INTEGER,
+    speed_kmh DECIMAL(5,2) CHECK (speed_kmh >= 0),
+    heading_degrees INTEGER CHECK (heading_degrees BETWEEN 0 AND 359),
     recorded_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+CREATE INDEX idx_driver_locations_driver ON delivery_driver_locations(driver_id);
+CREATE INDEX idx_driver_locations_recorded ON delivery_driver_locations(recorded_at);
 
 -- 42. delivery_assignments
+CREATE TYPE delivery_assignment_status_enum AS ENUM (
+    'ASSIGNED',
+    'PICKED_UP',
+    'IN_TRANSIT',
+    'DELIVERED',
+    'FAILED',
+    'CANCELLED'
+);
 CREATE TABLE delivery_assignments (
     id BIGSERIAL PRIMARY KEY,
-    order_id BIGINT NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+    shipment_id BIGINT NOT NULL REFERENCES shipments(id) ON DELETE CASCADE,
     driver_id BIGINT NOT NULL REFERENCES delivery_drivers(id) ON DELETE RESTRICT,
     assigned_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     estimated_arrival TIMESTAMPTZ,
+    picked_up_at TIMESTAMPTZ,
     completed_at TIMESTAMPTZ,
-    status VARCHAR(50) DEFAULT 'assigned' -- assigned, picked_up, in_transit, delivered, cancelled
+    cancelled_at TIMESTAMPTZ,
+    cancel_reason TEXT,
+    status delivery_assignment_status_enum NOT NULL DEFAULT 'ASSIGNED',-- assigned, picked_up, in_transit, delivered, cancelled
+);
+CREATE UNIQUE INDEX idx_delivery_assignment_order ON delivery_assignments(order_id);
+CREATE INDEX idx_delivery_assignment_driver ON delivery_assignments(driver_id);
+CREATE INDEX idx_delivery_assignment_status ON delivery_assignments(status);
+CREATE UNIQUE INDEX idx_driver_active_assignment
+ON delivery_assignments(driver_id)
+WHERE status IN (
+    'ASSIGNED',
+    'PICKED_UP',
+    'IN_TRANSIT'
 );
 
+
 -- 43. delivery_events
+CREATE TYPE delivery_event_type_enum AS ENUM (
+    'ASSIGNED',
+    'PICKED_UP',
+    'ARRIVED',
+    'DELIVERED',
+    'FAILED',
+    'CANCELLED',
+    'LOCATION_UPDATE'
+);
 CREATE TABLE delivery_events (
     id BIGSERIAL PRIMARY KEY,
     assignment_id BIGINT NOT NULL REFERENCES delivery_assignments(id) ON DELETE CASCADE,
-    event_type VARCHAR(50) NOT NULL,
+    event_type delivery_event_type_enum NOT NULL,
     location GEOGRAPHY(POINT, 4326),
     description TEXT,
+    created_by BIGINT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+CREATE INDEX idx_delivery_events_assignment ON delivery_events(assignment_id);
+CREATE INDEX idx_delivery_events_type ON delivery_events(event_type);
+CREATE INDEX idx_delivery_events_created ON delivery_events(created_at);
 
 -- ======================================================
 -- 12. MÓDULO 10: PROMOCIONES (5 tablas)
@@ -740,21 +962,30 @@ CREATE TABLE promotions (
     is_auto_apply BOOLEAN NOT NULL DEFAULT false,
     requires_code BOOLEAN NOT NULL DEFAULT false,
     priority INTEGER DEFAULT 0,
+    stackable BOOLEAN NOT NULL DEFAULT FALSE,
+    exclusive BOOLEAN NOT NULL DEFAULT FALSE,
+    usage_limit INTEGER,
+    times_used INTEGER NOT NULL DEFAULT 0,
     start_date TIMESTAMPTZ NOT NULL,
     end_date TIMESTAMPTZ NOT NULL,
     is_active BOOLEAN NOT NULL DEFAULT true,
+    created_by BIGINT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     deleted_at TIMESTAMPTZ,
     CONSTRAINT promotion_dates_check CHECK (end_date > start_date)
 );
+CREATE INDEX idx_promotions_active ON promotions(is_active);
+CREATE INDEX idx_promotions_dates ON promotions(start_date, end_date);
+CREATE INDEX idx_promotions_priority ON promotions(priority);
 
 -- 45. promotion_products
 CREATE TABLE promotion_products (
     promotion_id BIGINT NOT NULL REFERENCES promotions(id) ON DELETE CASCADE,
-    product_id BIGINT NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+    product_variant_id BIGINT REFERENCES product_variants(id) ON DELETE CASCADE,
     discount_value DECIMAL(12,2) NOT NULL CHECK (discount_value >= 0),
     is_percentage BOOLEAN NOT NULL DEFAULT true,
+    maximum_discount DECIMAL(12,2),
     PRIMARY KEY (promotion_id, product_id),
     CONSTRAINT promotion_discount_check CHECK (
         (is_percentage = TRUE AND discount_value <= 100)
@@ -763,14 +994,34 @@ CREATE TABLE promotion_products (
 );
 
 -- 46. promotion_conditions
+CREATE TYPE promotion_condition_type_enum AS ENUM (
+    'MIN_AMOUNT',
+    'MIN_QUANTITY',
+    'CUSTOMER_TYPE',
+    'PRODUCT',
+    'CATEGORY',
+    'BRAND',
+    'PAYMENT_METHOD',
+    'DELIVERY_ZONE'
+);
+CREATE TYPE promotion_operator_enum AS ENUM (
+    '=',
+    '!=',
+    '>',
+    '<',
+    '>=',
+    '<=',
+    'IN'
+);
 CREATE TABLE promotion_conditions (
     id BIGSERIAL PRIMARY KEY,
     promotion_id BIGINT NOT NULL REFERENCES promotions(id) ON DELETE CASCADE,
-    condition_type VARCHAR(50) NOT NULL,
-    operator VARCHAR(10) NOT NULL,
+    condition_type promotion_condition_type_enum NOT NULL,
+    operator promotion_operator_enum NOT NULL,
     value JSONB NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+CREATE INDEX idx_promotion_conditions_promotion ON promotion_conditions(promotion_id);
 
 -- 47. coupons
 CREATE TABLE coupons (
@@ -778,19 +1029,31 @@ CREATE TABLE coupons (
     promotion_id BIGINT NOT NULL REFERENCES promotions(id) ON DELETE CASCADE,
     code VARCHAR(50) NOT NULL UNIQUE,
     max_uses_total INTEGER DEFAULT 1,
+    starts_at TIMESTAMPTZ,
+    expires_at TIMESTAMPTZ,
+    times_used INTEGER NOT NULL DEFAULT 0,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
     max_uses_per_customer INTEGER DEFAULT 1,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+CREATE INDEX idx_coupon_code ON coupons(code);
+CREATE INDEX idx_coupon_active ON coupons(is_active);
 
 -- 48. coupon_redemptions
 CREATE TABLE coupon_redemptions (
     id BIGSERIAL PRIMARY KEY,
+    discount_amount DECIMAL(12,2) CHECK (discount_amount >= 0),
+    ip_address INET,
+    guest_session_id BIGINT REFERENCES guest_sessions(id) ON DELETE SET NULL,
     coupon_id BIGINT NOT NULL REFERENCES coupons(id) ON DELETE CASCADE,
     customer_id BIGINT REFERENCES customers(id) ON DELETE SET NULL,
     order_id BIGINT REFERENCES orders(id) ON DELETE SET NULL,
     used_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+CREATE INDEX idx_coupon_redemption_coupon ON coupon_redemptions(coupon_id);
+CREATE INDEX idx_coupon_redemption_customer ON coupon_redemptions(customer_id);
+CREATE INDEX idx_coupon_redemption_order ON coupon_redemptions(order_id);
 
 -- ======================================================
 -- 13. MÓDULO 11: CMS (5 tablas)
@@ -802,17 +1065,33 @@ CREATE TABLE banners (
     title VARCHAR(100),
     media_id BIGINT NOT NULL REFERENCES media(id) ON DELETE CASCADE,
     link_url TEXT,
+    link_target VARCHAR(20) NOT NULL DEFAULT '_self',
+    alt_text VARCHAR(255),
+    description TEXT,
     position INTEGER DEFAULT 0,
     is_active BOOLEAN NOT NULL DEFAULT true,
     start_date TIMESTAMPTZ,
     end_date TIMESTAMPTZ,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT banner_dates_check
+    CHECK (
+        end_date IS NULL
+        OR start_date IS NULL
+        OR end_date > start_date
+    )
 );
+CREATE INDEX idx_banners_active ON banners(is_active);
+CREATE INDEX idx_banners_dates ON banners(start_date, end_date);
+CREATE INDEX idx_banners_position ON banners(position);
 
 -- 50. pages
 CREATE TABLE pages (
     id BIGSERIAL PRIMARY KEY,
+    meta_keywords TEXT,
+    published_at TIMESTAMPTZ,
+    created_by BIGINT,
+    updated_by BIGINT,
     title VARCHAR(200) NOT NULL,
     slug VARCHAR(200) NOT NULL UNIQUE,
     content TEXT,
@@ -823,12 +1102,20 @@ CREATE TABLE pages (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     deleted_at TIMESTAMPTZ
 );
+CREATE INDEX idx_pages_slug ON pages(slug);
+CREATE INDEX idx_pages_active ON pages(is_active);
 
 -- 51. menus
+CREATE TYPE menu_location_enum AS ENUM (
+    'HEADER',
+    'FOOTER',
+    'SIDEBAR',
+    'MOBILE'
+);
 CREATE TABLE menus (
     id BIGSERIAL PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
-    location VARCHAR(50) UNIQUE,
+    location menu_location_enum UNIQUE,
     is_active BOOLEAN NOT NULL DEFAULT true,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -841,77 +1128,132 @@ CREATE TABLE menu_items (
     parent_id BIGINT REFERENCES menu_items(id) ON DELETE CASCADE,
     title VARCHAR(100) NOT NULL,
     link_url TEXT NOT NULL,
+    icon VARCHAR(100),
+    css_class VARCHAR(100),
+    page_id BIGINT REFERENCES pages(id) ON DELETE SET NULL,
     target VARCHAR(20) DEFAULT '_self',
     position INTEGER DEFAULT 0,
     is_active BOOLEAN NOT NULL DEFAULT true,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
-
--- 53. footer_links
-CREATE TABLE footer_links (
-    id BIGSERIAL PRIMARY KEY,
-    column_title VARCHAR(100) NOT NULL,
-    title VARCHAR(100) NOT NULL,
-    link_url TEXT NOT NULL,
-    position INTEGER DEFAULT 0,
-    is_active BOOLEAN NOT NULL DEFAULT true,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
+CREATE INDEX idx_menu_items_menu ON menu_items(menu_id);
+CREATE INDEX idx_menu_items_parent ON menu_items(parent_id);
+CREATE INDEX idx_menu_items_position ON menu_items(menu_id, position);
 
 -- ======================================================
 -- 14. MÓDULO 12: AUDITORÍA (2 tablas)
 -- ======================================================
 
 -- 54. audit_logs
+CREATE TYPE audit_action_enum AS ENUM (
+    'INSERT',
+    'UPDATE',
+    'DELETE',
+    'LOGIN',
+    'LOGOUT'
+);
 CREATE TABLE audit_logs (
     id BIGSERIAL PRIMARY KEY,
     table_name VARCHAR(100) NOT NULL,
     record_id BIGINT NOT NULL,
-    action VARCHAR(20) NOT NULL,
+    action audit_action_enum NOT NULL,
     old_data JSONB,
     new_data JSONB,
     performed_by BIGINT,
+    request_id UUID,
+    user_agent TEXT,
+    changed_fields JSONB,
+    performed_by_customer BIGINT REFERENCES customers(id) ON DELETE SET NULL,
     ip_address INET,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+CREATE INDEX idx_audit_logs_table ON audit_logs(table_name);
+CREATE INDEX idx_audit_logs_record ON audit_logs(table_name, record_id);
+CREATE INDEX idx_audit_logs_created ON audit_logs(created_at);
+CREATE INDEX idx_audit_logs_user ON audit_logs(performed_by);
 
 -- 55. notifications
+CREATE TYPE notification_type_enum AS ENUM (
+    'INFO',
+    'SUCCESS',
+    'WARNING',
+    'ERROR',
+    'ORDER',
+    'PAYMENT',
+    'PROMOTION'
+);
+CREATE TYPE notification_channel_enum AS ENUM (
+    'IN_APP',
+    'EMAIL',
+    'SMS',
+    'PUSH'
+);
 CREATE TABLE notifications (
     id BIGSERIAL PRIMARY KEY,
-    type VARCHAR(50) NOT NULL,
+    type notification_type_enum NOT NULL,
+    channel notification_channel_enum NOT NULL DEFAULT 'IN_APP',
     title VARCHAR(255) NOT NULL,
     message TEXT,
+    sent_at TIMESTAMPTZ,
     is_read BOOLEAN NOT NULL DEFAULT false,
     target_user_id BIGINT,
     target_customer_id BIGINT REFERENCES customers(id) ON DELETE CASCADE,
     link_url TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    read_at TIMESTAMPTZ
+    read_at TIMESTAMPTZ,
+    CONSTRAINT notification_target_check
+    CHECK (
+        (target_user_id IS NOT NULL AND target_customer_id IS NULL)
+        OR
+        (target_user_id IS NULL AND target_customer_id IS NOT NULL)
 );
+CREATE INDEX idx_notifications_customer ON notifications(target_customer_id);
+CREATE INDEX idx_notifications_user ON notifications(target_user_id);
+CREATE INDEX idx_notifications_read ON notifications(is_read);
+CREATE INDEX idx_notifications_created ON notifications(created_at);
 
 -- ======================================================
 -- 15. MÓDULO 13: INFRAESTRUCTURA (1 tabla)
 -- ======================================================
 
 -- 56. background_jobs
+CREATE TYPE background_job_status_enum AS ENUM (
+    'PENDING',
+    'RUNNING',
+    'COMPLETED',
+    'FAILED',
+    'CANCELLED',
+    'RETRYING'
+);
 CREATE TABLE background_jobs (
     id BIGSERIAL PRIMARY KEY,
     job_name VARCHAR(100) NOT NULL,
+    queue_name VARCHAR(50) NOT NULL DEFAULT 'default',
+    correlation_id UUID,
+    worker_name VARCHAR(100),
+    last_error_at TIMESTAMPTZ,
+    finished_at TIMESTAMPTZ,
     payload JSONB NOT NULL,
-    priority INTEGER DEFAULT 5,
-    attempts INTEGER DEFAULT 0,
+    priority INTEGER DEFAULT 5 CHECK(priority BETWEEN 1 AND 10),
+    attempts INTEGER DEFAULT 0 CHECK(attempts <= max_attempts),
     max_attempts INTEGER DEFAULT 3,
-    status VARCHAR(20) DEFAULT 'pending',
+    status background_job_status_enum NOT NULL DEFAULT 'PENDING',
     locked_at TIMESTAMPTZ,
     scheduled_at TIMESTAMPTZ DEFAULT NOW(),
     started_at TIMESTAMPTZ,
-    completed_at TIMESTAMPTZ,
+    finished_at TIMESTAMPTZ,
+    result JSONB,
+    retry_at TIMESTAMPTZ,
     error_message TEXT,
+    error_stack TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+CREATE INDEX idx_background_jobs_status ON background_jobs(status);
+CREATE INDEX idx_background_jobs_queue ON background_jobs(queue_name);
+CREATE INDEX idx_background_jobs_schedule ON background_jobs(scheduled_at);
+CREATE INDEX idx_background_jobs_priority ON background_jobs(priority);
 
 -- ======================================================
 -- 16. TRIGGER: ACTUALIZACIÓN AUTOMÁTICA DE current_price
