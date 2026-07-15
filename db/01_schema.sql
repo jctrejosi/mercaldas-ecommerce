@@ -124,32 +124,16 @@ CREATE TABLE user_sessions (
 );
 
 CREATE TABLE user_branches (
-    user_id BIGINT NOT NULL
-        REFERENCES users(id)
-        ON DELETE CASCADE,
-
-    branch_id BIGINT NOT NULL
-        REFERENCES branches(id)
-        ON DELETE CASCADE,
-
+    user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    branch_id BIGINT,
     PRIMARY KEY(user_id, branch_id)
 );
 
-CREATE INDEX idx_users_email
-ON users(email)
-WHERE deleted_at IS NULL;
-
-CREATE INDEX idx_user_roles_user
-ON user_roles(user_id);
-
-CREATE INDEX idx_user_roles_role
-ON user_roles(role_id);
-
-CREATE INDEX idx_role_permissions_role
-ON role_permissions(role_id);
-
-CREATE INDEX idx_permissions_module
-ON permissions(module);
+CREATE INDEX idx_users_email ON users(email) WHERE deleted_at IS NULL;
+CREATE INDEX idx_user_roles_user ON user_roles(user_id);
+CREATE INDEX idx_user_roles_role ON user_roles(role_id);
+CREATE INDEX idx_role_permissions_role ON role_permissions(role_id);
+CREATE INDEX idx_permissions_module ON permissions(module);
 
 ------------------------------------------------------------
 
@@ -204,6 +188,8 @@ CREATE TABLE branches (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     deleted_at TIMESTAMPTZ
 );
+ALTER TABLE user_branches ADD CONSTRAINT fk_user_branch_id
+    FOREIGN KEY (branch_id) REFERENCES branches(id) ON DELETE SET NULL;
 
 -- 3. delivery_zones (Sin polígonos, basado en tarifas y condiciones)
 CREATE TABLE delivery_zones (
@@ -1371,7 +1357,6 @@ CREATE TABLE background_jobs (
     locked_at TIMESTAMPTZ,
     scheduled_at TIMESTAMPTZ DEFAULT NOW(),
     started_at TIMESTAMPTZ,
-    finished_at TIMESTAMPTZ,
     result JSONB,
     retry_at TIMESTAMPTZ,
     error_message TEXT,
