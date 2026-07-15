@@ -189,7 +189,7 @@ CREATE TABLE branches (
     address TEXT NOT NULL,
     city VARCHAR(100) NOT NULL,
     phone VARCHAR(50) NOT NULL,
-    store_id UUID NOT NULL REFERENCES store(id),
+    store_id BIGINT NOT NULL REFERENCES store(id),
     email VARCHAR(255) NOT NULL,
     priority SMALLINT DEFAULT 1,
     manager_name VARCHAR(150) NOT NULL,
@@ -224,6 +224,8 @@ CREATE TABLE delivery_zones (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     deleted_at TIMESTAMPTZ
 );
+CREATE INDEX idx_delivery_zones_coverage ON delivery_zones USING GIST (coverage_area);
+
 
 -- 4. settings
 CREATE TABLE settings (
@@ -303,9 +305,9 @@ CREATE TABLE categories (
 -- 7. brands
 CREATE TABLE brands (
     id BIGSERIAL PRIMARY KEY,
-    website VARCHAR(255) NOT NULL;
-    description TEXT NOT NULL;
-    country VARCHAR(100) NOT NULL;
+    website VARCHAR(255) NOT NULL,
+    description TEXT NOT NULL,
+    country VARCHAR(100) NOT NULL,
     name VARCHAR(100) NOT NULL UNIQUE,
     slug VARCHAR(100) NOT NULL UNIQUE,
     logo_media_id BIGINT REFERENCES media(id) ON DELETE SET NULL,
@@ -328,7 +330,7 @@ CREATE TABLE products (
     manufacturer VARCHAR(255),
     visibility VARCHAR(20) NOT NULL DEFAULT 'PUBLIC',
     is_active BOOLEAN NOT NULL DEFAULT true,
-    published_at TIMESTAMP;
+    published_at TIMESTAMP,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     deleted_at TIMESTAMPTZ
@@ -423,7 +425,7 @@ CREATE TABLE prices (
     product_variant_id BIGINT NOT NULL REFERENCES product_variants(id) ON DELETE CASCADE,
     start_date TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     end_date TIMESTAMPTZ,
-    changed_by UUID NOT NULL REFERENCES users(id),
+    changed_by BIGINT  NOT NULL REFERENCES users(id),
     change_reason VARCHAR(100) NOT NULL,
     cost DECIMAL(12,2) CHECK (cost IS NULL OR cost >= 0),
     price DECIMAL(12,2) NOT NULL CHECK (price >= 0),
@@ -537,10 +539,11 @@ CREATE TABLE inventory_reservations (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+CREATE INDEX idx_inventory_reservations_cleanup ON inventory_reservations(status, expires_at) WHERE status = 'active';
 CREATE INDEX idx_inventory_reservation_inventory ON inventory_reservations(inventory_id);
 CREATE INDEX idx_inventory_reservation_reference ON inventory_reservations(reference_type, reference_id);
 CREATE INDEX idx_inventory_reservation_status ON inventory_reservations(status);
-CREATE INDEX idx_inventory_reservation_expiration ON inventory_reservations(expires_a );
+CREATE INDEX idx_inventory_reservation_expiration ON inventory_reservations(expires_at);
 
 -- 21. inventory_movements
 CREATE TYPE inventory_reference_enum AS ENUM (
@@ -643,7 +646,6 @@ CREATE TABLE customers (
 );
 CREATE INDEX idx_customers_active ON customers(is_active);
 CREATE INDEX idx_customers_last_activity ON customers(last_activity_at);
-CREATE INDEX idx_customers_document ON customers(document_number);
 
 -- 24. customer_addresses (con coordenadas)
 CREATE TABLE customer_addresses (
@@ -667,7 +669,6 @@ CREATE TABLE customer_addresses (
 );
 CREATE UNIQUE INDEX idx_customer_default_address ON customer_addresses(customer_id) WHERE is_default = TRUE;
 
-CREATE INDEX idx_customer_addresses_customer ON customer_addresses(customer_id);
 CREATE INDEX idx_customer_addresses_default ON customer_addresses(customer_id, is_default);
 
 -- 25. customer_sessions
@@ -706,8 +707,6 @@ CREATE TABLE favorites (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     PRIMARY KEY (customer_id, product_id)
 );
-CREATE INDEX idx_guest_sessions_expiration ON guest_sessions(expires_at);
-CREATE INDEX idx_guest_sessions_last_activity ON guest_sessions(last_activity_at);
 
 -- 28. customer_tokens
 CREATE TYPE customer_token_purpose_enum AS ENUM (
@@ -744,7 +743,7 @@ CREATE TYPE cart_status_enum AS ENUM (
 );
 CREATE TABLE carts (
     id BIGSERIAL PRIMARY KEY,
-    coupon_id BIGINT REFERENCES coupons(id) ON DELETE SET NULL,
+    coupon_id BIGINT,
     customer_id BIGINT REFERENCES customers(id) ON DELETE CASCADE,
     guest_session_id BIGINT REFERENCES guest_sessions(id) ON DELETE CASCADE,
     branch_id BIGINT REFERENCES branches(id) ON DELETE RESTRICT,
@@ -763,7 +762,6 @@ CREATE TABLE carts (
 CREATE INDEX idx_carts_customer ON carts(customer_id);
 CREATE INDEX idx_carts_guest ON carts(guest_session_id);
 CREATE INDEX idx_carts_status ON carts(status);
-CREATE INDEX idx_carts_expires ON carts(expires_at);
 CREATE INDEX idx_carts_last_activity ON carts(last_activity_at);
 
 CREATE UNIQUE INDEX idx_unique_active_customer_cart ON carts(customer_id) WHERE status = 'ACTIVE';
@@ -810,17 +808,18 @@ CREATE TABLE orders (
     shipping_tax DECIMAL(12,2) NOT NULL DEFAULT 0 CHECK (shipping_tax >= 0),
     grand_total DECIMAL(12,2) NOT NULL DEFAULT 0 CHECK (grand_total >= 0),
     customer_ip INET,
-    coupon_id BIGINT REFERENCES coupons(id) ON DELETE SET NULL,
+    coupon_id BIGINT,
     user_agent TEXT,
     notes TEXT,
     internal_notes TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+CREATE INDEX idx_orders_customer_status ON orders(customer_id, status);
 CREATE INDEX idx_orders_customer ON orders(customer_id);
 CREATE INDEX idx_orders_status ON orders(status);
-CREATE INDEX idx_orders_created ON orders(created_at);
 CREATE INDEX idx_orders_branch ON orders(branch_id);
+
 
 -- 32. order_items
 CREATE TABLE order_items (
@@ -841,8 +840,6 @@ CREATE TABLE order_items (
     total DECIMAL(12,2) NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
-CREATE INDEX idx_order_items_order ON order_items(order_id);
-CREATE INDEX idx_order_items_variant ON order_items(product_variant_id);
 
 -- 33. delivery_time_slots
 CREATE TABLE delivery_time_slots (
@@ -916,6 +913,7 @@ CREATE TABLE payment_intents (
 CREATE INDEX idx_payment_intents_status ON payment_intents(status);
 
 -- 36. payments
+CREATE TYPE payment_status_enum AS ENUM ('PENDING', 'COMPLETED', 'FAILED', 'REFUNDED', 'CANCELLED');
 CREATE TABLE payments (
     id BIGSERIAL PRIMARY KEY,
     order_id BIGINT NOT NULL REFERENCES orders(id) ON DELETE RESTRICT,
@@ -932,6 +930,7 @@ CREATE TABLE payments (
     paid_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+CREATE INDEX idx_payments_payment_intent ON payments(payment_intent_id);
 
 -- 37. refunds
 CREATE TABLE refunds (
@@ -959,8 +958,10 @@ CREATE TABLE order_status_history (
     created_by BIGINT REFERENCES customers(id) ON DELETE SET NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+CREATE INDEX idx_order_status_history_order ON order_status_history(order_id);
 
 -- 39. invoices
+CREATE TYPE invoice_status_enum AS ENUM ('pending', 'issued', 'cancelled', 'failed');
 CREATE TABLE invoices (
     id BIGSERIAL PRIMARY KEY,
     order_id BIGINT NOT NULL REFERENCES orders(id) ON DELETE RESTRICT UNIQUE,
@@ -1033,9 +1034,9 @@ CREATE TABLE delivery_assignments (
     completed_at TIMESTAMPTZ,
     cancelled_at TIMESTAMPTZ,
     cancel_reason TEXT,
-    status delivery_assignment_status_enum NOT NULL DEFAULT 'ASSIGNED',-- assigned, picked_up, in_transit, delivered, cancelled
+    status delivery_assignment_status_enum NOT NULL DEFAULT 'ASSIGNED'
 );
-CREATE UNIQUE INDEX idx_delivery_assignment_order ON delivery_assignments(order_id);
+CREATE UNIQUE INDEX idx_delivery_assignment_order ON delivery_assignments(shipment_id);
 CREATE INDEX idx_delivery_assignment_driver ON delivery_assignments(driver_id);
 CREATE INDEX idx_delivery_assignment_status ON delivery_assignments(status);
 CREATE UNIQUE INDEX idx_driver_active_assignment
@@ -1106,7 +1107,7 @@ CREATE TABLE promotion_products (
     discount_value DECIMAL(12,2) NOT NULL CHECK (discount_value >= 0),
     is_percentage BOOLEAN NOT NULL DEFAULT true,
     maximum_discount DECIMAL(12,2),
-    PRIMARY KEY (promotion_id, product_id),
+    PRIMARY KEY (promotion_id, product_variant_id),
     CONSTRAINT promotion_discount_check CHECK (
         (is_percentage = TRUE AND discount_value <= 100)
         OR
@@ -1159,6 +1160,12 @@ CREATE TABLE coupons (
 );
 CREATE INDEX idx_coupon_code ON coupons(code);
 CREATE INDEX idx_coupon_active ON coupons(is_active);
+
+ALTER TABLE orders ADD CONSTRAINT fk_order_coupon_id
+    FOREIGN KEY (coupon_id) REFERENCES coupons(id) ON DELETE SET NULL;
+
+ALTER TABLE carts ADD CONSTRAINT fk_carts_coupon_id
+    FOREIGN KEY (coupon_id) REFERENCES coupons(id) ON DELETE SET NULL;
 
 -- 48. coupon_redemptions
 CREATE TABLE coupon_redemptions (
@@ -1327,11 +1334,13 @@ CREATE TABLE notifications (
         (target_user_id IS NOT NULL AND target_customer_id IS NULL)
         OR
         (target_user_id IS NULL AND target_customer_id IS NOT NULL)
+    )
 );
 CREATE INDEX idx_notifications_customer ON notifications(target_customer_id);
 CREATE INDEX idx_notifications_user ON notifications(target_user_id);
 CREATE INDEX idx_notifications_read ON notifications(is_read);
 CREATE INDEX idx_notifications_created ON notifications(created_at);
+CREATE INDEX idx_notifications_customer_unread ON notifications(target_customer_id, is_read) WHERE is_read = false;
 
 -- ======================================================
 -- 15. MÓDULO 13: INFRAESTRUCTURA (1 tabla)
@@ -1473,8 +1482,6 @@ CREATE INDEX idx_media_provider ON media(provider);
 
 CREATE INDEX idx_media_mime_type ON media(mime_type);
 
-CREATE INDEX idx_media_type ON media(media_type);
-
 -- Para catálogo: ordenar por precio (solo activos)
 CREATE INDEX idx_product_variants_current_price ON product_variants (current_price)
 WHERE is_active = true AND deleted_at IS NULL;
@@ -1487,31 +1494,18 @@ WHERE reserved_stock > 0;
 CREATE INDEX idx_payment_intents_order_status ON payment_intents (order_id, status)
 WHERE status IN ('pending', 'created');
 
--- Para historial de precios: trigger rápido
-CREATE INDEX idx_prices_variant_dates ON prices (product_variant_id, start_date DESC)
-WHERE end_date IS NULL;
-
 -- Búsqueda full text (GIN)
 CREATE INDEX idx_products_search ON products USING GIN (to_tsvector('spanish', name || ' ' || COALESCE(description, '')))
 WHERE is_active = true AND deleted_at IS NULL;
 
 -- Índices adicionales
-CREATE INDEX idx_orders_customer_id ON orders (customer_id);
 CREATE INDEX idx_orders_reference_code ON orders (reference_code);
 CREATE INDEX idx_orders_status_created ON orders (status, created_at DESC);
-CREATE INDEX idx_cart_items_cart_id ON cart_items (cart_id);
 CREATE INDEX idx_inventory_branch_stock ON inventory (branch_id, stock) WHERE stock > 0;
-CREATE INDEX idx_prices_variant_id ON prices (product_variant_id);
 CREATE INDEX idx_payment_intents_gateway ON payment_intents (provider_transaction_id) WHERE provider_transaction_id IS NOT NULL;
 
 -- Índices para categorías jerárquicas
 CREATE INDEX idx_categories_parent_id ON categories (parent_id) WHERE deleted_at IS NULL;
-
--- Índices para expiración (limpieza)
-CREATE INDEX idx_guest_sessions_expires ON guest_sessions (expires_at) WHERE expires_at > NOW();
-CREATE INDEX idx_customer_sessions_expires ON customer_sessions (expires_at) WHERE expires_at > NOW();
-CREATE INDEX idx_carts_expires ON carts (expires_at) WHERE expires_at > NOW();
-CREATE INDEX idx_inventory_reservations_expires ON inventory_reservations (expires_at) WHERE status = 'active';
 
 -- Índices geográficos (PostGIS)
 CREATE INDEX idx_branches_location ON branches USING GIST (location);
@@ -1520,23 +1514,9 @@ CREATE INDEX idx_shipments_location ON shipments USING GIST (location);
 CREATE INDEX idx_delivery_driver_locations_location ON delivery_driver_locations USING GIST (location);
 
 -- Índices faltantes
-CREATE INDEX idx_notifications_user ON notifications (customer_id, is_read);
-CREATE INDEX idx_audit_logs_entity ON audit_logs (table_name, record_id);
-CREATE INDEX idx_delivery_assignments_driver ON delivery_assignments (driver_id);
-CREATE INDEX idx_delivery_assignments_order ON delivery_assignments (order_id);
 CREATE INDEX idx_driver_locations_latest ON delivery_driver_locations (driver_id, recorded_at DESC);
 CREATE INDEX idx_refunds_payment ON refunds (payment_id);
 CREATE INDEX idx_payments_order ON payments (order_id);
-CREATE INDEX idx_order_items_variant ON order_items (product_variant_id);
-CREATE INDEX idx_order_items_order ON order_items (order_id);
-CREATE INDEX idx_orders_created ON orders (created_at DESC);
-CREATE INDEX idx_customer_addresses_customer ON customer_addresses (customer_id);
-CREATE UNIQUE INDEX idx_customers_document ON customers (document_number) WHERE deleted_at IS NULL;
-CREATE UNIQUE INDEX idx_customers_email ON customers (email) WHERE deleted_at IS NULL;
-CREATE INDEX idx_inventory_reservations_inventory ON inventory_reservations (inventory_id, status);
-CREATE INDEX idx_inventory_variant ON inventory (product_variant_id);
-CREATE INDEX idx_prices_current ON prices (product_variant_id, end_date);
-CREATE INDEX idx_product_categories_product ON product_categories (product_id);
 CREATE INDEX idx_product_categories_category ON product_categories (category_id);
 CREATE INDEX idx_products_brand ON products (brand_id) WHERE deleted_at IS NULL;
 CREATE UNIQUE INDEX idx_brands_slug ON brands (slug) WHERE deleted_at IS NULL;
