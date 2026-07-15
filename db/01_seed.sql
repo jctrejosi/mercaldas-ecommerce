@@ -9,6 +9,7 @@ GRANT ALL ON SCHEMA public TO public;
 -- Extensiones necesarias
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE EXTENSION IF NOT EXISTS "citext";
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
 CREATE EXTENSION IF NOT EXISTS postgis;  -- Para GEOGRAPHY(POINT, 4326)
 
 -- ======================================================
@@ -32,6 +33,125 @@ CREATE TYPE reservation_status_enum AS ENUM ('active', 'expired', 'released', 'c
 -- ======================================================
 -- 3. MÓDULO 1: CONFIGURACIÓN (4 tablas)
 -- ======================================================
+
+--- admin ------------------------------------
+
+CREATE TABLE users (
+    id BIGSERIAL PRIMARY KEY,
+
+    email CITEXT NOT NULL UNIQUE,
+    password_hash VARCHAR(255) NOT NULL,
+
+    first_name VARCHAR(100) NOT NULL,
+    last_name VARCHAR(100) NOT NULL,
+
+    phone VARCHAR(50),
+
+    is_superuser BOOLEAN NOT NULL DEFAULT FALSE,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+
+    last_login_at TIMESTAMPTZ,
+
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    deleted_at TIMESTAMPTZ
+);
+
+CREATE TABLE roles (
+    id BIGSERIAL PRIMARY KEY,
+
+    name VARCHAR(100) NOT NULL UNIQUE,
+    description TEXT,
+
+    is_system BOOLEAN NOT NULL DEFAULT FALSE,
+
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE permissions (
+    id BIGSERIAL PRIMARY KEY,
+
+    code VARCHAR(100) NOT NULL UNIQUE,
+    module VARCHAR(100) NOT NULL,
+    description TEXT
+);
+
+CREATE TABLE user_roles (
+    user_id BIGINT NOT NULL
+        REFERENCES users(id)
+        ON DELETE CASCADE,
+
+    role_id BIGINT NOT NULL
+        REFERENCES roles(id)
+        ON DELETE CASCADE,
+
+    PRIMARY KEY(user_id, role_id)
+);
+
+CREATE TABLE role_permissions (
+    role_id BIGINT NOT NULL
+        REFERENCES roles(id)
+        ON DELETE CASCADE,
+
+    permission_id BIGINT NOT NULL
+        REFERENCES permissions(id)
+        ON DELETE CASCADE,
+
+    PRIMARY KEY(role_id, permission_id)
+);
+
+CREATE TABLE user_sessions (
+    id BIGSERIAL PRIMARY KEY,
+
+    user_id BIGINT NOT NULL
+        REFERENCES users(id)
+        ON DELETE CASCADE,
+
+    session_token UUID NOT NULL
+        DEFAULT uuid_generate_v4()
+        UNIQUE,
+
+    ip_address INET,
+
+    user_agent TEXT,
+
+    expires_at TIMESTAMPTZ NOT NULL,
+
+    last_activity_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE user_branches (
+    user_id BIGINT NOT NULL
+        REFERENCES users(id)
+        ON DELETE CASCADE,
+
+    branch_id BIGINT NOT NULL
+        REFERENCES branches(id)
+        ON DELETE CASCADE,
+
+    PRIMARY KEY(user_id, branch_id)
+);
+
+CREATE INDEX idx_users_email
+ON users(email)
+WHERE deleted_at IS NULL;
+
+CREATE INDEX idx_user_roles_user
+ON user_roles(user_id);
+
+CREATE INDEX idx_user_roles_role
+ON user_roles(role_id);
+
+CREATE INDEX idx_role_permissions_role
+ON role_permissions(role_id);
+
+CREATE INDEX idx_permissions_module
+ON permissions(module);
+
+------------------------------------------------------------
 
 -- 1. store
 CREATE TABLE store (
@@ -132,7 +252,7 @@ CREATE TABLE media (
     id BIGSERIAL PRIMARY KEY,
     status media_status_enum NOT NULL DEFAULT 'active',  -- O VARCHAR con CHECK
     media_type media_type_enum NOT NULL,                 -- O VARCHAR con CHECK
-    uploaded_by BIGINT,
+    uploaded_by BIGINT REFERENCES users(id),
     provider VARCHAR(50) NOT NULL DEFAULT 'local',
     path TEXT NOT NULL,
     file_name VARCHAR(255) NOT NULL,
@@ -303,7 +423,7 @@ CREATE TABLE prices (
     product_variant_id BIGINT NOT NULL REFERENCES product_variants(id) ON DELETE CASCADE,
     start_date TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     end_date TIMESTAMPTZ,
-    changed_by UUID NOT NULL,
+    changed_by UUID NOT NULL REFERENCES users(id),
     change_reason VARCHAR(100) NOT NULL,
     cost DECIMAL(12,2) CHECK (cost IS NULL OR cost >= 0),
     price DECIMAL(12,2) NOT NULL CHECK (price >= 0),
@@ -355,7 +475,7 @@ CREATE INDEX idx_tax_rates_validity ON tax_rates(valid_from, valid_to);
 CREATE TABLE product_tax_classes (
     priority SMALLINT DEFAULT 1,
     assigned_at TIMESTAMPTZ DEFAULT NOW(),
-    assigned_by BIGINT,
+    assigned_by BIGINT REFERENCES users(id),
     product_id BIGINT NOT NULL REFERENCES products(id) ON DELETE CASCADE,
     tax_rate_id BIGINT NOT NULL REFERENCES tax_rates(id) ON DELETE RESTRICT,
     PRIMARY KEY (product_id, tax_rate_id)
@@ -438,7 +558,7 @@ CREATE TABLE inventory_movements (
     movement_type inventory_movement_type_enum NOT NULL,
     quantity INTEGER NOT NULL,
     reference_type inventory_reference_enum NOT NULL,
-    performed_by BIGINT,
+    performed_by BIGINT NOT NULL REFERENCES users(id),
     previous_stock INTEGER NOT NULL,
     new_stock INTEGER NOT NULL,
     unit_cost DECIMAL(12,2),
@@ -497,7 +617,7 @@ CREATE INDEX idx_supplier_products_preferred ON supplier_products(is_preferred);
 -- ======================================================
 
 -- 23. customers
-CREATE EXTENSION IF NOT EXISTS citext;
+
 CREATE TABLE customers (
     id BIGSERIAL PRIMARY KEY,
     email CITEXT NOT NULL UNIQUE,
@@ -821,7 +941,7 @@ CREATE TABLE refunds (
     amount DECIMAL(12,2) NOT NULL CHECK (amount > 0),
     reason TEXT,
     provider_response JSONB,
-    processed_by BIGINT,
+    processed_by BIGINT REFERENCES users(id),
     status refund_status_enum NOT NULL DEFAULT 'pending',
     provider_refund_id VARCHAR(255),
     processed_at TIMESTAMPTZ,
@@ -943,7 +1063,7 @@ CREATE TABLE delivery_events (
     event_type delivery_event_type_enum NOT NULL,
     location GEOGRAPHY(POINT, 4326),
     description TEXT,
-    created_by BIGINT,
+    created_by BIGINT REFERENCES customers(id),
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX idx_delivery_events_assignment ON delivery_events(assignment_id);
@@ -969,7 +1089,7 @@ CREATE TABLE promotions (
     start_date TIMESTAMPTZ NOT NULL,
     end_date TIMESTAMPTZ NOT NULL,
     is_active BOOLEAN NOT NULL DEFAULT true,
-    created_by BIGINT,
+    created_by BIGINT REFERENCES users(id),
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     deleted_at TIMESTAMPTZ,
@@ -1090,8 +1210,8 @@ CREATE TABLE pages (
     id BIGSERIAL PRIMARY KEY,
     meta_keywords TEXT,
     published_at TIMESTAMPTZ,
-    created_by BIGINT,
-    updated_by BIGINT,
+    created_by BIGINT REFERENCES users(id),
+    updated_by BIGINT REFERENCES users(id),
     title VARCHAR(200) NOT NULL,
     slug VARCHAR(200) NOT NULL UNIQUE,
     content TEXT,
@@ -1160,7 +1280,7 @@ CREATE TABLE audit_logs (
     action audit_action_enum NOT NULL,
     old_data JSONB,
     new_data JSONB,
-    performed_by BIGINT,
+    performed_by BIGINT REFERENCES users(id),
     request_id UUID,
     user_agent TEXT,
     changed_fields JSONB,
@@ -1259,38 +1379,58 @@ CREATE INDEX idx_background_jobs_priority ON background_jobs(priority);
 -- 16. TRIGGER: ACTUALIZACIÓN AUTOMÁTICA DE current_price
 -- ======================================================
 
-CREATE OR REPLACE FUNCTION update_variant_current_price()
+CREATE OR REPLACE FUNCTION refresh_variant_current_price()
 RETURNS TRIGGER AS $$
 DECLARE
-    new_price DECIMAL(12,2);
-    new_compare_price DECIMAL(12,2);
+    v_variant_id BIGINT;
+    v_price RECORD;
 BEGIN
-    IF NEW.end_date IS NULL THEN
-        new_price := NEW.price;
-        new_compare_price := NEW.compare_price;
-
-        UPDATE product_variants
-        SET current_price = new_price,
-            current_compare_price = new_compare_price,
-            updated_at = NOW()
-        WHERE id = NEW.product_variant_id;
-
-        -- Cerrar el precio anterior que estuviera vigente (end_date NULL)
-        UPDATE prices
-        SET end_date = (NOW() - INTERVAL '1 microsecond')
-        WHERE product_variant_id = NEW.product_variant_id
-          AND id != NEW.id
-          AND end_date IS NULL;
+    -- Obtener el product_variant_id según la operación
+    IF TG_OP = 'DELETE' THEN
+        v_variant_id := OLD.product_variant_id;
+    ELSE
+        v_variant_id := NEW.product_variant_id;
     END IF;
 
-    RETURN NEW;
+    -- Buscar el precio actualmente vigente
+    SELECT
+        price,
+        compare_price
+    INTO v_price
+    FROM prices
+    WHERE product_variant_id = v_variant_id
+      AND start_date <= NOW()
+      AND (end_date IS NULL OR end_date > NOW())
+    ORDER BY start_date DESC
+    LIMIT 1;
+
+    -- Actualizar la variante
+    UPDATE product_variants
+    SET
+        current_price = v_price.price,
+        current_compare_price = v_price.compare_price
+    WHERE id = v_variant_id;
+
+    RETURN NULL;
 END;
 $$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_prices_after_insert ON prices;
 
 CREATE TRIGGER trg_prices_after_insert
 AFTER INSERT ON prices
 FOR EACH ROW
-EXECUTE FUNCTION update_variant_current_price();
+EXECUTE FUNCTION refresh_variant_current_price();
+
+CREATE TRIGGER trg_prices_after_update
+AFTER UPDATE ON prices
+FOR EACH ROW
+EXECUTE FUNCTION refresh_variant_current_price();
+
+CREATE TRIGGER trg_prices_after_delete
+AFTER DELETE ON prices
+FOR EACH ROW
+EXECUTE FUNCTION refresh_variant_current_price();
 
 -- ======================================================
 -- TRIGGER GENÉRICO PARA updated_at
@@ -1424,3 +1564,5 @@ COMMENT ON TABLE delivery_drivers IS 'Repartidores para logística de última mi
 COMMENT ON TABLE delivery_assignments IS 'Asignación de pedidos a repartidores.';
 COMMENT ON TABLE promotions IS 'Campañas promocionales con motor único de condiciones.';
 COMMENT ON TABLE background_jobs IS 'Cola de trabajos asíncronos (liberación de reservas, emails, etc.).';
+
+ANALYZE;
