@@ -28,13 +28,23 @@ CREATE TYPE reservation_status_enum AS ENUM ('active', 'expired', 'released', 'c
 -- 1. store
 CREATE TABLE store (
     id BIGSERIAL PRIMARY KEY,
+    status VARCHAR(20) NOT NULL DEFAULT 'ACTIVE',
     legal_name VARCHAR(200) NOT NULL,
     trade_name VARCHAR(200) NOT NULL,
-    tax_id VARCHAR(50) UNIQUE,
+    tax_id VARCHAR(50) UNIQUE NOT NULL,
+    tax_regime VARCHAR(50) NOT NULL,
+    business_name VARCHAR(255) NOT NULL,
+    invoice_provider VARCHAR(50) NOT NULL,
+    invoice_prefix VARCHAR(10) NOT NULL,
+    supported_languages JSONB,
+    supported_currencies JSONB,
+    invoice_resolution VARCHAR(50),
     email VARCHAR(255) NOT NULL,
-    phone VARCHAR(50),
-    address TEXT,
-    logo_media_id BIGINT, -- FK a media (se agregará después)
+    phone VARCHAR(50) NOT NULL,
+    primary_domain VARCHAR(255) NOT NULL,
+    secondary_domains JSONB,
+    address TEXT NOT NULL,
+    logo_media_id BIGINT,
     theme_config JSONB DEFAULT '{}',
     currency_code VARCHAR(3) NOT NULL DEFAULT 'COP',
     language VARCHAR(10) NOT NULL DEFAULT 'es',
@@ -46,11 +56,18 @@ CREATE TABLE store (
 -- 2. branches
 CREATE TABLE branches (
     id BIGSERIAL PRIMARY KEY,
+    code VARCHAR(20) UNIQUE NOT NULL,
     name VARCHAR(100) NOT NULL,
     address TEXT NOT NULL,
     city VARCHAR(100) NOT NULL,
-    phone VARCHAR(50),
-    email VARCHAR(255),
+    phone VARCHAR(50) NOT NULL,
+    store_id UUID NOT NULL REFERENCES store(id),
+    email VARCHAR(255) NOT NULL,
+    priority SMALLINT DEFAULT 1,
+    manager_name VARCHAR(150) NOT NULL,
+    manager_phone VARCHAR(30) NOT NULL,
+    max_daily_orders INTEGER,
+    branch_type VARCHAR(50) DEFAULT 'STORE',
     location GEOGRAPHY(POINT, 4326) NOT NULL, -- Coordenadas geográficas
     delivery_radius_km DECIMAL(6,2) NOT NULL DEFAULT 5.0 CHECK (delivery_radius_km > 0),
     schedule JSONB, -- { "monday": "08:00-20:00", ... }
@@ -66,6 +83,12 @@ CREATE TABLE delivery_zones (
     branch_id BIGINT NOT NULL REFERENCES branches(id) ON DELETE RESTRICT,
     name VARCHAR(100) NOT NULL,
     delivery_price DECIMAL(12,2) NOT NULL DEFAULT 0,
+    display_order SMALLINT,
+    schedule JSONB,
+    coverage_area GEOGRAPHY(POLYGON,4326) NOT NULL,
+    estimated_min_minutes SMALLINT NOT NULL,
+    estimated_max_minutes SMALLINT NOT NULL,
+    delivery_type VARCHAR(30) DEFAULT 'STANDARD' NOT NULL,
     minimum_order DECIMAL(12,2) NOT NULL DEFAULT 0 CHECK (minimum_order >= 0),
     estimated_time_minutes INTEGER NOT NULL DEFAULT 60,
     is_active BOOLEAN NOT NULL DEFAULT true,
@@ -80,6 +103,10 @@ CREATE TABLE settings (
     key VARCHAR(100) NOT NULL UNIQUE,
     value JSONB NOT NULL,
     description TEXT,
+    data_type VARCHAR(20) NOT NULL,
+    is_editable BOOLEAN DEFAULT TRUE NOT NULL,
+    is_public BOOLEAN DEFAULT FALSE NOT NULL,
+    module VARCHAR(50) NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -89,22 +116,34 @@ CREATE TABLE settings (
 -- ======================================================
 
 -- 5. media (repositorio central)
+CREATE TYPE media_status_enum AS ENUM ('active', 'inactive', 'archived');
+CREATE TYPE media_type_enum AS ENUM ('image', 'video', 'audio', 'document', 'other');
+
+-- Luego la tabla
 CREATE TABLE media (
     id BIGSERIAL PRIMARY KEY,
-    provider VARCHAR(50) NOT NULL DEFAULT 'local', -- local, s3, gcs, etc.
+    status media_status_enum NOT NULL DEFAULT 'active',  -- O VARCHAR con CHECK
+    media_type media_type_enum NOT NULL,                 -- O VARCHAR con CHECK
+    uploaded_by BIGINT,
+    provider VARCHAR(50) NOT NULL DEFAULT 'local',
     path TEXT NOT NULL,
     file_name VARCHAR(255) NOT NULL,
     mime_type VARCHAR(100) NOT NULL,
-    size_bytes BIGINT NOT NULL,
-    width INTEGER,
-    height INTEGER,
-    checksum VARCHAR(64), -- SHA-256
+    size_bytes BIGINT NOT NULL CHECK (size_bytes >= 0),
+    width INTEGER CHECK (width IS NULL OR width > 0),
+    height INTEGER CHECK (height IS NULL OR height > 0),
+    checksum VARCHAR(64) NOT NULL UNIQUE,  -- O UNIQUE(checksum) como tenías
     metadata JSONB DEFAULT '{}',
-    alt_text VARCHAR(255),
+    alt_text VARCHAR(255),  -- NULL permitido
     is_public BOOLEAN NOT NULL DEFAULT true,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- Índices adicionales recomendados
+CREATE INDEX idx_media_uploaded_by ON media (uploaded_by);
+CREATE INDEX idx_media_media_type ON media (media_type);
+CREATE INDEX idx_media_status ON media (status);
 
 -- Ahora podemos agregar la FK de store.logo_media_id
 ALTER TABLE store ADD CONSTRAINT fk_store_logo_media
@@ -116,13 +155,17 @@ ALTER TABLE store ADD CONSTRAINT fk_store_logo_media
 
 -- 6. categories
 CREATE TABLE categories (
+    UNIQUE(parent_id, name),
     id BIGSERIAL PRIMARY KEY,
     parent_id BIGINT REFERENCES categories(id) ON DELETE RESTRICT,
     name VARCHAR(100) NOT NULL,
+    display_order INTEGER NOT NULL DEFAULT 0,
     slug VARCHAR(100) NOT NULL UNIQUE,
     description TEXT,
     image_media_id BIGINT REFERENCES media(id) ON DELETE SET NULL,
     level INTEGER DEFAULT 0,
+    meta_title VARCHAR(255),
+    meta_description TEXT,
     is_active BOOLEAN NOT NULL DEFAULT true,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -132,6 +175,9 @@ CREATE TABLE categories (
 -- 7. brands
 CREATE TABLE brands (
     id BIGSERIAL PRIMARY KEY,
+    website VARCHAR(255) NOT NULL;
+    description TEXT NOT NULL;
+    country VARCHAR(100) NOT NULL;
     name VARCHAR(100) NOT NULL UNIQUE,
     slug VARCHAR(100) NOT NULL UNIQUE,
     logo_media_id BIGINT REFERENCES media(id) ON DELETE SET NULL,
@@ -148,9 +194,13 @@ CREATE TABLE products (
     name VARCHAR(255) NOT NULL,
     slug VARCHAR(255) NOT NULL UNIQUE,
     description TEXT,
+    product_type VARCHAR(20) NOT NULL DEFAULT 'SIMPLE',
     sku_prefix VARCHAR(50),
-    weight_grams INTEGER,
+    featured BOOLEAN NOT NULL DEFAULT FALSE,
+    manufacturer VARCHAR(255),
+    visibility VARCHAR(20) NOT NULL DEFAULT 'PUBLIC',
     is_active BOOLEAN NOT NULL DEFAULT true,
+    published_at TIMESTAMP;
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     deleted_at TIMESTAMPTZ
@@ -166,6 +216,11 @@ CREATE TABLE product_images (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- Índice único parcial: solo una imagen cover por producto
+CREATE UNIQUE INDEX idx_product_images_unique_cover 
+ON product_images (product_id) 
+WHERE is_cover = true;
 
 -- 10. product_categories
 CREATE TABLE product_categories (
@@ -214,6 +269,9 @@ CREATE TABLE product_variants (
     barcode VARCHAR(100),
     current_price DECIMAL(12,2) NOT NULL DEFAULT 0,
     current_compare_price DECIMAL(12,2),
+    length_mm INTEGER,
+    width_mm INTEGER,
+    height_mm INTEGER,
     cost_price DECIMAL(12,2),
     is_active BOOLEAN NOT NULL DEFAULT true,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -237,6 +295,8 @@ CREATE TABLE prices (
     product_variant_id BIGINT NOT NULL REFERENCES product_variants(id) ON DELETE CASCADE,
     start_date TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     end_date TIMESTAMPTZ,
+    changed_by UUID NOT NULL,
+    change_reason VARCHAR(100) NOT NULL,
     cost DECIMAL(12,2) CHECK (cost IS NULL OR cost >= 0),
     price DECIMAL(12,2) NOT NULL CHECK (price >= 0),
     compare_price DECIMAL(12,2) CHECK (compare_price IS NULL OR compare_price >= price),
@@ -244,6 +304,11 @@ CREATE TABLE prices (
     version INTEGER DEFAULT 1,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- ÍNDICE ÚNICO PARCIAL: Solo permite UN precio activo (end_date NULL) por variante
+CREATE UNIQUE INDEX idx_prices_active_unique
+ON prices (product_variant_id)
+WHERE end_date IS NULL;
 
 -- ======================================================
 -- 6. MÓDULO 4: IMPUESTOS (2 tablas)
@@ -253,15 +318,36 @@ CREATE TABLE prices (
 CREATE TABLE tax_rates (
     id BIGSERIAL PRIMARY KEY,
     name VARCHAR(50) NOT NULL,
+    code VARCHAR(30) UNIQUE NOT NULL,
+    description TEXT,
+    priority SMALLINT NOT NULL DEFAULT 1,
+    compound BOOLEAN NOT NULL DEFAULT FALSE,
+    valid_from DATE,
+    country_code CHAR(2),
+    state_code VARCHAR(20),
+    city_code VARCHAR(20),
+    valid_to DATE,
     rate DECIMAL(5,2) NOT NULL CHECK (rate >= 0 AND rate <= 100),
     is_active BOOLEAN NOT NULL DEFAULT true,
+    tax_type VARCHAR(30) NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    deleted_at TIMESTAMPTZ
+    deleted_at TIMESTAMPTZ,
+    CHECK (
+        valid_to IS NULL
+        OR valid_to >= valid_from
+    )
 );
+-- índices
+CREATE INDEX idx_tax_rates_active ON tax_rates(is_active);
+CREATE INDEX idx_tax_rates_code ON tax_rates(code);
+CREATE INDEX idx_tax_rates_validity ON tax_rates(valid_from, valid_to);
 
 -- 18. product_tax_classes
 CREATE TABLE product_tax_classes (
+    priority SMALLINT DEFAULT 1,
+    assigned_at TIMESTAMPTZ DEFAULT NOW(),
+    assigned_by BIGINT,
     product_id BIGINT NOT NULL REFERENCES products(id) ON DELETE CASCADE,
     tax_rate_id BIGINT NOT NULL REFERENCES tax_rates(id) ON DELETE RESTRICT,
     PRIMARY KEY (product_id, tax_rate_id)
@@ -278,6 +364,7 @@ CREATE TABLE inventory (
     branch_id BIGINT NOT NULL REFERENCES branches(id) ON DELETE RESTRICT,
     stock INTEGER NOT NULL DEFAULT 0 CHECK (stock >= 0),
     reserved_stock INTEGER NOT NULL DEFAULT 0 CHECK (reserved_stock >= 0),
+    CHECK (reserved_stock <= stock),
     minimum_stock INTEGER DEFAULT 0 CHECK (minimum_stock >= 0),
     maximum_stock INTEGER DEFAULT 999999 CHECK (maximum_stock >= minimum_stock),
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -332,6 +419,7 @@ CREATE TABLE customers (
     id BIGSERIAL PRIMARY KEY,
     email VARCHAR(255) NOT NULL UNIQUE,
     password_hash VARCHAR(255),
+    document_number VARCHAR(50),
     first_name VARCHAR(100),
     last_name VARCHAR(100),
     phone VARCHAR(50),
@@ -343,6 +431,13 @@ CREATE TABLE customers (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     deleted_at TIMESTAMPTZ
 );
+
+ALTER TABLE price ADD CONSTRAINT fk_customer_price_id
+    FOREIGN KEY (changed_by) REFERENCES customers(id) ON DELETE SET NULL;
+
+ALTER TABLE media ADD CONSTRAINT fk_media_customer_id
+    FOREIGN KEY (uploaded_by) REFERENCES customers(id) ON DELETE SET NULL;
+
 
 -- 24. customer_addresses (con coordenadas)
 CREATE TABLE customer_addresses (
@@ -651,7 +746,7 @@ CREATE TABLE promotions (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     deleted_at TIMESTAMPTZ,
-    CONSTRAINT promotion_dates_check CHECK (end_date > start_date),
+    CONSTRAINT promotion_dates_check CHECK (end_date > start_date)
 );
 
 -- 45. promotion_products
@@ -664,7 +759,7 @@ CREATE TABLE promotion_products (
     CONSTRAINT promotion_discount_check CHECK (
         (is_percentage = TRUE AND discount_value <= 100)
         OR
-        (is_percentage = FALSE)),
+        (is_percentage = FALSE))
 );
 
 -- 46. promotion_conditions
@@ -856,8 +951,47 @@ FOR EACH ROW
 EXECUTE FUNCTION update_variant_current_price();
 
 -- ======================================================
+-- TRIGGER GENÉRICO PARA updated_at
+-- ======================================================
+CREATE OR REPLACE FUNCTION update_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = NOW();
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Aplica el trigger a todas las tablas que tengan columna updated_at
+DO $$
+DECLARE
+    t text;
+BEGIN
+    FOR t IN 
+        SELECT table_name 
+        FROM information_schema.columns 
+        WHERE column_name = 'updated_at' 
+        AND table_schema = 'public'
+    LOOP
+        EXECUTE format('
+            CREATE TRIGGER trg_%I_update_updated_at
+            BEFORE UPDATE ON %I
+            FOR EACH ROW
+            EXECUTE FUNCTION update_updated_at_column();
+        ', t, t);
+    END LOOP;
+END;
+$$;
+
+-- ======================================================
 -- 17. ÍNDICES CRÍTICOS
 -- ======================================================
+-- Para media
+
+CREATE INDEX idx_media_provider ON media(provider);
+
+CREATE INDEX idx_media_mime_type ON media(mime_type);
+
+CREATE INDEX idx_media_type ON media(media_type);
 
 -- Para catálogo: ordenar por precio (solo activos)
 CREATE INDEX idx_product_variants_current_price ON product_variants (current_price)
@@ -892,9 +1026,9 @@ CREATE INDEX idx_payment_intents_gateway ON payment_intents (provider_transactio
 CREATE INDEX idx_categories_parent_id ON categories (parent_id) WHERE deleted_at IS NULL;
 
 -- Índices para expiración (limpieza)
-CREATE INDEX idx_guest_sessions_expires ON guest_sessions (expires_at) WHERE expires_at;
-CREATE INDEX idx_customer_sessions_expires ON customer_sessions (expires_at) WHERE expires_at;
-CREATE INDEX idx_carts_expires ON carts (expires_at) WHERE expires_at;
+CREATE INDEX idx_guest_sessions_expires ON guest_sessions (expires_at) WHERE expires_at > NOW();
+CREATE INDEX idx_customer_sessions_expires ON customer_sessions (expires_at) WHERE expires_at > NOW();
+CREATE INDEX idx_carts_expires ON carts (expires_at) WHERE expires_at > NOW();
 CREATE INDEX idx_inventory_reservations_expires ON inventory_reservations (expires_at) WHERE status = 'active';
 
 -- Índices geográficos (PostGIS)
@@ -934,7 +1068,7 @@ CREATE UNIQUE INDEX idx_product_variants_barcode ON product_variants (barcode) W
 -- ======================================================
 COMMENT ON TABLE store IS 'Configuración general de la tienda.';
 COMMENT ON TABLE branches IS 'Sucursales con ubicación geográfica y radio de cobertura.';
-COMMENT ON TABLE delivery_zones IS 'Tarifas y condiciones de envío (sin polígonos, basado en distancia).';
+COMMENT ON TABLE delivery_zones IS 'Tarifas y condiciones de envío';
 COMMENT ON TABLE media IS 'Repositorio central de archivos; todas las URLs se referencian aquí.';
 COMMENT ON TABLE product_variants IS 'SKU individual con current_price mantenido por trigger.';
 COMMENT ON TABLE inventory IS 'Stock y reservas por sucursal.';
@@ -948,7 +1082,3 @@ COMMENT ON TABLE delivery_drivers IS 'Repartidores para logística de última mi
 COMMENT ON TABLE delivery_assignments IS 'Asignación de pedidos a repartidores.';
 COMMENT ON TABLE promotions IS 'Campañas promocionales con motor único de condiciones.';
 COMMENT ON TABLE background_jobs IS 'Cola de trabajos asíncronos (liberación de reservas, emails, etc.).';
-
--- ======================================================
--- FIN DEL SCRIPT V4
--- ======================================================
