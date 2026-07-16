@@ -3,7 +3,7 @@ import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { ConfigService } from '@nestjs/config';
 import { DrizzleService } from '../../../database/drizzle.service'; // Ajusta la ruta según tu estructura
-import { users } from '../../../database/schema';
+import { users } from '../../../../drizzle/schema';
 import { eq } from 'drizzle-orm';
 
 interface RequestWithCookies extends Request {

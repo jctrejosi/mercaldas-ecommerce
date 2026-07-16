@@ -7,7 +7,7 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { DrizzleService } from '../../database/drizzle.service';
-import { users, userRefreshTokens } from '../../database/schema';
+import { users, userRefreshTokens } from '../../../drizzle/schema';
 import { eq, and, or } from 'drizzle-orm';
 import { LoginDto } from './dto/login.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
