@@ -290,7 +290,7 @@ export const users = pgTable(
   },
   (table) => [
     index('idx_users_email')
-      .using('btree', table.email.asc().nullsLast().op('citext_ops'))
+      .using('btree', table.email.asc().nullsLast().op('text_ops'))
       .where(sql`(deleted_at IS NULL)`),
     unique('users_email_key').on(table.email),
   ],
@@ -705,7 +705,7 @@ export const products = pgTable(
     index('idx_products_search')
       .using(
         'gin',
-        sql`to_tsvector('spanish'::regconfig, (((name)::text || ' '::text) `,
+        sql`to_tsvector('spanish'::regconfig, (name || ' ' || COALESCE(description, '')))`,
       )
       .where(sql`((is_active = true) AND (deleted_at IS NULL))`),
     uniqueIndex('idx_products_slug')
@@ -1068,7 +1068,7 @@ export const inventory = pgTable(
     index('idx_inventory_branch_stock')
       .using(
         'btree',
-        table.branchId.asc().nullsLast().op('int4_ops'),
+        table.branchId.asc().nullsLast().op('int8_ops'),
         table.stock.asc().nullsLast().op('int4_ops'),
       )
       .where(sql`(stock > 0)`),
@@ -2294,7 +2294,7 @@ export const deliveryDriverLocations = pgTable(
     index('idx_driver_locations_latest').using(
       'btree',
       table.driverId.asc().nullsLast().op('int8_ops'),
-      table.recordedAt.desc().nullsFirst().op('int8_ops'),
+      table.recordedAt.desc().nullsFirst().op('timestamptz_ops'),
     ),
     index('idx_driver_locations_recorded').using(
       'btree',
@@ -2855,7 +2855,7 @@ export const notifications = pgTable(
       .using(
         'btree',
         table.targetCustomerId.asc().nullsLast().op('int8_ops'),
-        table.isRead.asc().nullsLast().op('int8_ops'),
+        table.isRead.asc().nullsLast().op('bool_ops'),
       )
       .where(sql`(is_read = false)`),
     index('idx_notifications_read').using(
@@ -3020,7 +3020,7 @@ export const userBranches = pgTable(
       columns: [table.branchId],
       foreignColumns: [branches.id],
       name: 'fk_user_branch_id',
-    }).onDelete('set null'),
+    }).onDelete('cascade'),
     foreignKey({
       columns: [table.userId],
       foreignColumns: [users.id],
