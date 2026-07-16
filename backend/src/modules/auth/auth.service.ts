@@ -1,7 +1,6 @@
 import {
   Injectable,
   UnauthorizedException,
-  BadRequestException,
   NotFoundException,
   Logger,
 } from '@nestjs/common';
@@ -9,7 +8,7 @@ import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { DrizzleService } from '../../database/drizzle.service';
 import { users, userRefreshTokens } from '../../database/schema';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, or } from 'drizzle-orm';
 import { LoginDto } from './dto/login.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 import * as bcrypt from 'bcryptjs';
@@ -17,13 +16,8 @@ import * as bcrypt from 'bcryptjs';
 export interface JwtPayload {
   sub: number; // users.id
   email: string;
+  username: string;
   isSuperuser: boolean;
-}
-
-export interface TokenResponse {
-  accessToken: string;
-  refreshToken?: string;
-  expiresIn: number;
 }
 
 export interface LoginResponse {
@@ -33,6 +27,7 @@ export interface LoginResponse {
   user: {
     id: number;
     email: string;
+    username: string;
     firstName: string | null;
     lastName: string | null;
     fullName: string;
@@ -41,12 +36,6 @@ export interface LoginResponse {
     phone?: string | null;
   };
 }
-
-type UserUpdateData = {
-  failedAttempts: number;
-  lockedUntil?: Date | null;
-  lastLoginAt?: Date;
-};
 
 @Injectable()
 export class AuthService {
@@ -65,35 +54,51 @@ export class AuthService {
   }
 
   /**
-   * Validar usuario por email y password con bloqueo por intentos fallidos
+   * Validar usuario por email O username con bloqueo por intentos fallidos
    */
   async validateUser(
-    email: string,
+    identifier: string,
     password: string,
   ): Promise<typeof users.$inferSelect | null> {
+    // Buscar por email O username
     const results = await this.db
       .select()
       .from(users)
-      .where(eq(users.email, email))
+      .where(or(eq(users.email, identifier), eq(users.username, identifier)))
       .limit(1);
 
     if (!results.length) {
       this.logger.warn(
-        `Intento de login fallido: usuario "${email}" no encontrado`,
+        `Intento de login fallido: usuario "${identifier}" no encontrado`,
       );
       return null;
     }
 
     const user = results[0];
 
+    // Verificar si la cuenta está bloqueada
+    if (user.lockedUntil && new Date(user.lockedUntil) > new Date()) {
+      const remainingMinutes = Math.ceil(
+        (new Date(user.lockedUntil).getTime() - Date.now()) / (60 * 1000),
+      );
+      this.logger.warn(
+        `Intento de login fallido: usuario "${identifier}" bloqueado por ${remainingMinutes} minutos`,
+      );
+      throw new UnauthorizedException(
+        `Cuenta bloqueada temporalmente. Intente nuevamente en ${remainingMinutes} minutos.`,
+      );
+    }
+
     if (!user.isActive) {
-      this.logger.warn(`Intento de login fallido: usuario "${email}" inactivo`);
+      this.logger.warn(
+        `Intento de login fallido: usuario "${identifier}" inactivo`,
+      );
       return null;
     }
 
     if (!user.passwordHash) {
       this.logger.warn(
-        `Intento de login fallido: usuario "${email}" sin hash de contraseña`,
+        `Intento de login fallido: usuario "${identifier}" sin hash de contraseña`,
       );
       return null;
     }
@@ -102,8 +107,30 @@ export class AuthService {
 
     if (!isPasswordValid) {
       this.logger.warn(
-        `Intento de login fallido: contraseña incorrecta para "${email}"`,
+        `Intento de login fallido: contraseña incorrecta para "${identifier}"`,
       );
+
+      // Incrementar intentos fallidos
+      const newAttempts = (user.failedAttempts || 0) + 1;
+      const updateData: Partial<typeof users.$inferInsert> = {
+        failedAttempts: newAttempts,
+      };
+
+      // Bloquear si supera el límite
+      if (newAttempts >= this.MAX_LOGIN_ATTEMPTS) {
+        const lockedUntil = new Date(
+          Date.now() + this.LOCK_DURATION_MINUTES * 60 * 1000,
+        );
+        updateData.lockedUntil = lockedUntil.toISOString();
+        this.logger.warn(
+          `Usuario "${identifier}" bloqueado por ${this.LOCK_DURATION_MINUTES} minutos (${newAttempts} intentos fallidos)`,
+        );
+        throw new UnauthorizedException(
+          `Demasiados intentos fallidos. Cuenta bloqueada por ${this.LOCK_DURATION_MINUTES} minutos.`,
+        );
+      }
+
+      await this.db.update(users).set(updateData).where(eq(users.id, user.id));
 
       return null;
     }
@@ -112,6 +139,8 @@ export class AuthService {
     await this.db
       .update(users)
       .set({
+        failedAttempts: 0,
+        lockedUntil: null,
         lastLoginAt: new Date().toISOString(),
       })
       .where(eq(users.id, user.id));
@@ -120,10 +149,13 @@ export class AuthService {
   }
 
   /**
-   * Login con email y password
+   * Login con email o username
    */
   async login(loginDto: LoginDto): Promise<LoginResponse> {
-    const user = await this.validateUser(loginDto.username, loginDto.password);
+    const user = await this.validateUser(
+      loginDto.identifier,
+      loginDto.password,
+    );
 
     if (!user) {
       throw new UnauthorizedException('Credenciales inválidas');
@@ -132,17 +164,18 @@ export class AuthService {
     const payload: JwtPayload = {
       sub: Number(user.id),
       email: user.email,
+      username: user.username,
       isSuperuser: user.isSuperuser,
     };
 
     const accessToken = this.jwtService.sign(payload);
     const refreshTokenString = this.generateRefreshToken(payload);
 
-    // Guardar refresh token en BD (si usas tabla de refresh tokens)
+    // Guardar refresh token en BD
     const expiresAt = new Date(
       Date.now() +
         this.parseDurationToSeconds(
-          this.configService.get<string>('app.jwt.refreshExpiresIn') ?? '30d',
+          this.configService.get<string>('JWT_REFRESH_EXPIRES_IN') ?? '30d',
         ) *
           1000,
     );
@@ -153,6 +186,10 @@ export class AuthService {
       expiresAt: expiresAt.toISOString(),
     });
 
+    const fullName =
+      [user.firstName, user.lastName].filter(Boolean).join(' ').trim() ||
+      'Usuario';
+
     return {
       accessToken,
       refreshToken: refreshTokenString,
@@ -160,14 +197,15 @@ export class AuthService {
       user: {
         id: Number(user.id),
         email: user.email,
+        username: user.username,
         firstName: user.firstName,
         lastName: user.lastName,
-        fullName: [user.firstName, user.lastName].filter(Boolean).join(' '),
+        fullName,
         isSuperuser: user.isSuperuser,
         isActive: user.isActive,
         phone: user.phone,
       },
-    } as LoginResponse;
+    };
   }
 
   /**
@@ -178,7 +216,7 @@ export class AuthService {
     expiresIn: number;
   }> {
     try {
-      const jwtSecret = this.configService.get<string>('app.jwt.secret');
+      const jwtSecret = this.configService.get<string>('JWT_SECRET');
 
       if (!jwtSecret) {
         this.logger.error('JWT secret no configurado');
@@ -250,6 +288,7 @@ export class AuthService {
       const newPayload: JwtPayload = {
         sub: Number(user.id),
         email: user.email,
+        username: user.username,
         isSuperuser: user.isSuperuser,
       };
 
@@ -282,14 +321,17 @@ export class AuthService {
     }
 
     const user = results[0];
-    const fullName = [user.firstName, user.lastName].filter(Boolean).join(' ');
+    const fullName =
+      [user.firstName, user.lastName].filter(Boolean).join(' ').trim() ||
+      'Usuario';
 
     return {
       id: Number(user.id),
       email: user.email,
+      username: user.username,
       firstName: user.firstName,
       lastName: user.lastName,
-      fullName: fullName || 'Usuario',
+      fullName,
       phone: user.phone,
       isSuperuser: user.isSuperuser,
       isActive: user.isActive,
@@ -347,7 +389,7 @@ export class AuthService {
    */
   private generateRefreshToken(payload: JwtPayload): string {
     const refreshExpiresIn =
-      this.configService.get<string>('app.jwt.refreshExpiresIn') ?? '30d';
+      this.configService.get<string>('JWT_REFRESH_EXPIRES_IN') ?? '30d';
     return this.jwtService.sign(payload, {
       expiresIn: this.parseDurationToSeconds(refreshExpiresIn),
     });
@@ -357,8 +399,7 @@ export class AuthService {
    * Obtiene el tiempo de expiración del token en segundos
    */
   private getJwtExpiration(): number {
-    const expiresIn =
-      this.configService.get<string>('app.jwt.expiresIn') ?? '7d';
+    const expiresIn = this.configService.get<string>('JWT_EXPIRES_IN') ?? '7d';
     return this.parseDurationToSeconds(expiresIn);
   }
 

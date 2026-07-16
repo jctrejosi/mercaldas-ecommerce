@@ -229,20 +229,6 @@ export const roles = pgTable(
   (table) => [unique('roles_name_key').on(table.name)],
 );
 
-export const spatialRefSys = pgTable(
-  'spatial_ref_sys',
-  {
-    srid: integer().primaryKey().notNull(),
-    authName: varchar('auth_name', { length: 256 }),
-    authSrid: integer('auth_srid'),
-    srtext: varchar({ length: 2048 }),
-    proj4Text: varchar({ length: 2048 }),
-  },
-  (table) => [
-    check('spatial_ref_sys_srid_check', sql`(srid > 0) AND (srid <= 998999)`),
-  ],
-);
-
 export const userSessions = pgTable(
   'user_sessions',
   {
@@ -807,7 +793,7 @@ export const attributeOptions = pgTable(
     uniqueIndex('idx_attribute_options_unique').using(
       'btree',
       table.attributeId.asc().nullsLast().op('int8_ops'),
-      table.value.asc().nullsLast().op('int8_ops'),
+      table.value.asc().nullsLast().op('text_ops'),
     ),
     foreignKey({
       columns: [table.attributeId],
@@ -1159,7 +1145,7 @@ export const inventoryMovements = pgTable(
     ),
     index('idx_inventory_movements_reference').using(
       'btree',
-      table.referenceType.asc().nullsLast().op('int8_ops'),
+      table.referenceType.asc().nullsLast().op('enum_ops'),
       table.referenceId.asc().nullsLast().op('int8_ops'),
     ),
     index('idx_inventory_movements_type').using(
@@ -1218,8 +1204,8 @@ export const inventoryReservations = pgTable(
     ),
     index('idx_inventory_reservation_reference').using(
       'btree',
-      table.referenceType.asc().nullsLast().op('int8_ops'),
-      table.referenceId.asc().nullsLast().op('enum_ops'),
+      table.referenceType.asc().nullsLast().op('enum_ops'),
+      table.referenceId.asc().nullsLast().op('int8_ops'),
     ),
     index('idx_inventory_reservation_status').using(
       'btree',
@@ -1429,8 +1415,8 @@ export const customerAddresses = pgTable(
   (table) => [
     index('idx_customer_addresses_default').using(
       'btree',
-      table.customerId.asc().nullsLast().op('bool_ops'),
-      table.isDefault.asc().nullsLast().op('int8_ops'),
+      table.customerId.asc().nullsLast().op('int8_ops'),
+      table.isDefault.asc().nullsLast().op('bool_ops'),
     ),
     index('idx_customer_addresses_location').using(
       'gist',
@@ -1785,7 +1771,7 @@ export const orders = pgTable(
     ),
     index('idx_orders_customer_status').using(
       'btree',
-      table.customerId.asc().nullsLast().op('enum_ops'),
+      table.customerId.asc().nullsLast().op('int8_ops'),
       table.status.asc().nullsLast().op('enum_ops'),
     ),
     index('idx_orders_reference_code').using(
@@ -1798,7 +1784,7 @@ export const orders = pgTable(
     ),
     index('idx_orders_status_created').using(
       'btree',
-      table.status.asc().nullsLast().op('timestamptz_ops'),
+      table.status.asc().nullsLast().op('enum_ops'),
       table.createdAt.desc().nullsFirst().op('timestamptz_ops'),
     ),
     foreignKey({
@@ -2074,8 +2060,8 @@ export const paymentIntents = pgTable(
     index('idx_payment_intents_order_status')
       .using(
         'btree',
-        table.orderId.asc().nullsLast().op('enum_ops'),
-        table.status.asc().nullsLast().op('int8_ops'),
+        table.orderId.asc().nullsLast().op('int8_ops'),
+        table.status.asc().nullsLast().op('enum_ops'),
       )
       .where(
         sql`(status = ANY (ARRAY['pending'::payment_intent_status_enum, 'created'::payment_intent_status_enum]))`,
@@ -2812,8 +2798,8 @@ export const auditLogs = pgTable(
     ),
     index('idx_audit_logs_record').using(
       'btree',
-      table.tableName.asc().nullsLast().op('int8_ops'),
-      table.recordId.asc().nullsLast().op('text_ops'),
+      table.tableName.asc().nullsLast().op('text_ops'),
+      table.recordId.asc().nullsLast().op('int8_ops'),
     ),
     index('idx_audit_logs_table').using(
       'btree',
@@ -2868,7 +2854,7 @@ export const notifications = pgTable(
     index('idx_notifications_customer_unread')
       .using(
         'btree',
-        table.targetCustomerId.asc().nullsLast().op('bool_ops'),
+        table.targetCustomerId.asc().nullsLast().op('int8_ops'),
         table.isRead.asc().nullsLast().op('int8_ops'),
       )
       .where(sql`(is_read = false)`),

@@ -22,7 +22,6 @@ import {
 } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
-import { MicrosoftLoginDto } from './dto/microsoft-login.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { Public } from '../../common/decorators/public.decorator';
@@ -54,14 +53,14 @@ export class AuthController {
       'usuario@tienda.com': {
         summary: 'Usuario administrador',
         value: {
-          username: 'admin@tienda.com',
+          identifier: 'admin@tienda.com',
           password: 'admin123',
         },
       },
       'cliente@tienda.com': {
         summary: 'Usuario cliente',
         value: {
-          username: 'cliente@tienda.com',
+          identifier: 'cliente@tienda.com',
           password: 'cliente123',
         },
       },
@@ -126,7 +125,7 @@ export class AuthController {
       path: '/',
     });
 
-    // También el refresh token si quieres
+    // También el refresh token
     if (result.refreshToken) {
       response.cookie('refresh_token', result.refreshToken, {
         httpOnly: true,
