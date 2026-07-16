@@ -3,6 +3,7 @@ import { ConfigModule } from '@nestjs/config';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { DrizzleModule } from './database//drizzle.module';
+import { AuthModule } from './modules/auth/auth.module';
 import {
   appConfig,
   databaseConfig,
@@ -26,6 +27,7 @@ import {
       isGlobal: true,
     }),
     DrizzleModule,
+    AuthModule,
   ],
   controllers: [AppController],
   providers: [AppService],

@@ -84,13 +84,6 @@ async function bootstrap() {
       .setDescription('API para el sistema de control de asistencia')
       .setVersion('1.0')
       .addBearerAuth()
-      .addTag('auth', 'Autenticación')
-      .addTag('attendance', 'Asistencia')
-      .addTag('users', 'Usuarios')
-      .addTag('company', 'Empresas y sucursales')
-      .addTag('config', 'Configuración')
-      .addTag('dashboard', 'Dashboard')
-      .addTag('audit-logs', 'Logs de auditoría')
       .build();
     const document = SwaggerModule.createDocument(app, config);
     SwaggerModule.setup('api/docs', app, document);
