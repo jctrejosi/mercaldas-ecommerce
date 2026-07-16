@@ -1,0 +1,143 @@
+const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:3000";
+
+export interface CustomerRegisterData {
+  email: string;
+  password: string;
+  firstName: string;
+  lastName: string;
+  phone?: string;
+  documentNumber?: string;
+  documentType?: string;
+  acceptsMarketing?: boolean;
+  acceptsTerms: boolean;
+}
+
+export interface CustomerLoginData {
+  email: string;
+  password: string;
+}
+
+export interface CustomerSocialLoginData {
+  provider: "google" | "facebook";
+  accessToken: string;
+  providerId?: string;
+  email?: string;
+  name?: string;
+  avatarUrl?: string;
+}
+
+export interface CustomerAuthResponse {
+  accessToken: string;
+  refreshToken?: string;
+  expiresIn: number;
+  customer: {
+    id: number;
+    email: string;
+    firstName: string | null;
+    lastName: string | null;
+    fullName: string;
+    phone: string | null;
+    isVerified: boolean;
+    isActive: boolean;
+    provider: string | null;
+    avatarUrl: string | null;
+  };
+}
+
+export const customerAuthService = {
+  async register(data: CustomerRegisterData): Promise<CustomerAuthResponse> {
+    const response = await fetch(`${API_BASE_URL}/customer/auth/register`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify(data),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.message || "Error en el registro");
+    }
+
+    return response.json();
+  },
+
+  async login(data: CustomerLoginData): Promise<CustomerAuthResponse> {
+    const response = await fetch(`${API_BASE_URL}/customer/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify(data),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.message || "Credenciales inválidas");
+    }
+
+    return response.json();
+  },
+
+  async socialLogin(
+    data: CustomerSocialLoginData,
+  ): Promise<CustomerAuthResponse> {
+    const response = await fetch(`${API_BASE_URL}/customer/auth/social-login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify(data),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.message || "Error en el login social");
+    }
+
+    return response.json();
+  },
+
+  async getProfile(): Promise<CustomerAuthResponse["customer"]> {
+    const response = await fetch(`${API_BASE_URL}/customer/auth/me`, {
+      credentials: "include",
+    });
+
+    if (!response.ok) {
+      throw new Error("No autenticado");
+    }
+
+    return response.json();
+  },
+
+  async logout(
+    refreshToken?: string,
+  ): Promise<{ success: boolean; message: string }> {
+    const response = await fetch(`${API_BASE_URL}/customer/auth/logout`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ refreshToken }),
+    });
+
+    if (!response.ok) {
+      throw new Error("Error al cerrar sesión");
+    }
+
+    return response.json();
+  },
+
+  async refreshToken(
+    refreshToken: string,
+  ): Promise<{ accessToken: string; expiresIn: number }> {
+    const response = await fetch(`${API_BASE_URL}/customer/auth/refresh`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ refreshToken }),
+    });
+
+    if (!response.ok) {
+      throw new Error("No se pudo refrescar el token");
+    }
+
+    return response.json();
+  },
+};
