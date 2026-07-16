@@ -2,10 +2,9 @@ import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { ConfigService } from '@nestjs/config';
-import { getDb } from '../../../database/drizzle.service';
-import { account } from '../../../database/schema';
+import { DrizzleService } from '../../../database/drizzle.service'; // Ajusta la ruta según tu estructura
+import { users } from '../../../database/schema';
 import { eq } from 'drizzle-orm';
-import { JwtPayload } from '../auth.service';
 
 interface RequestWithCookies extends Request {
   cookies: {
@@ -13,41 +12,58 @@ interface RequestWithCookies extends Request {
   };
 }
 
+export interface JwtPayload {
+  sub: number;
+  email: string;
+  role?: string;
+}
+
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
-  constructor(private readonly configService: ConfigService) {
+  constructor(
+    private readonly configService: ConfigService,
+    private readonly drizzle: DrizzleService, // ✅ Inyectar el servicio
+  ) {
     super({
       jwtFromRequest: ExtractJwt.fromExtractors([
         (req: RequestWithCookies): string | null => {
           return req.cookies?.access_token ?? null;
         },
+        // También permitir Bearer token en header (opcional)
+        ExtractJwt.fromAuthHeaderAsBearerToken(),
       ]),
       ignoreExpiration: false,
-      secretOrKey: process.env.JWT_SECRET || 'secret-key',
+      secretOrKey: configService.get<string>('jwt.secret') || 'secret-key',
     });
   }
 
   async validate(payload: JwtPayload) {
     // Verificar que el usuario existe y está activo
-    const db = getDb();
-    const accounts = await db
+    const db = this.drizzle.db; // ✅ Usar la instancia de Drizzle
+
+    const userId = BigInt(payload.sub);
+
+    const result = await db
       .select({
-        role: account.role,
-        active: account.active,
+        id: users.id,
+        email: users.email,
+        isActive: users.isActive,
+        isSuperuser: users.isSuperuser,
       })
-      .from(account)
-      .where(eq(account.id, payload.sub))
+      .from(users)
+      .where(eq(users.id, userId))
       .limit(1);
 
-    if (!accounts.length || !accounts[0].active) {
+    if (!result.length || !result[0].isActive) {
       throw new UnauthorizedException('Usuario no válido o inactivo');
     }
 
+    const user = result[0];
+
     return {
-      sub: payload.sub,
-      username: payload.username,
-      employeeId: payload.employeeId,
-      role: accounts[0].role,
+      sub: user.id,
+      email: user.email,
+      isSuperuser: user.isSuperuser,
     };
   }
 }

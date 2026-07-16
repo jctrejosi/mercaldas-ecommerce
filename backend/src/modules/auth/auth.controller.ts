@@ -15,7 +15,7 @@ import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { Public } from '../../common/decorators/public.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
-import type { AuthenticatedUser } from '../../interfaces/request.interface';
+import type { AuthenticatedUser } from './interfaces/request.interface';
 import type { Response } from 'express';
 
 @Controller('auth')
@@ -56,17 +56,6 @@ export class AuthController {
     }
 
     return result;
-  }
-
-  /**
-   * Login con Microsoft SSO
-   * POST /api/auth/microsoft
-   */
-  @Public()
-  @Post('microsoft')
-  @HttpCode(HttpStatus.OK)
-  microsoftLogin(@Body() microsoftDto: MicrosoftLoginDto) {
-    return this.authService.microsoftLogin(microsoftDto);
   }
 
   /**

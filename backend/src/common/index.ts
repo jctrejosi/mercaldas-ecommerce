@@ -9,8 +9,3 @@ export * from './guards/roles.guard';
 
 // Filters
 export * from './filters/http-exception.filter';
-
-// Interceptors
-export * from './interceptors/audit-log.interceptor';
-export * from './interceptors/sentry.interceptor';
-export * from './interceptors/sentry.interceptor';

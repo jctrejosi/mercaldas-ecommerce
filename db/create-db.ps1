@@ -1,0 +1,1 @@
+Get-Content 01_schema.sql | docker-compose exec -T postgres psql -U postgres -d ecommerce

@@ -2,12 +2,12 @@ import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
 import {
   Strategy as PassportLocalStrategy,
-  StrategyOptions,
+  IStrategyOptions,
 } from 'passport-local';
 import { AuthService } from '../auth.service';
 
 const LocalPassportStrategy = PassportLocalStrategy as unknown as new (
-  options: StrategyOptions,
+  options: IStrategyOptions,
   verify?: (...args: any[]) => any,
 ) => any;
 

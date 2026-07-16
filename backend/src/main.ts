@@ -1,86 +1,112 @@
+/* eslint-disable @typescript-eslint/no-unsafe-call */
 import { NestFactory } from '@nestjs/core';
-import { ValidationPipe, Logger } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { AppModule } from './app.module';
-import { setupSwagger } from './config/swagger.config';
-import { CorsConfig, HelmetConfig } from './config/types';
+import { ConfigService } from '@nestjs/config';
+import { ValidationPipe } from '@nestjs/common';
+import * as express from 'express';
+import compression from 'compression';
+import helmet from 'helmet';
+import { httpLoggerMiddleware } from './utils/logger';
+import { CorrelationIdMiddleware } from './common/middleware/correlation-id.middleware';
+import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import cookieParser from 'cookie-parser';
+import { CorsConfig, HelmetConfig } from './config';
 
 async function bootstrap() {
-  const logger = new Logger('Bootstrap');
+  const app = await NestFactory.create(AppModule);
+  const configService = app.get(ConfigService);
 
-  const app = await NestFactory.create(AppModule, {
-    // Opciones de la app
-    logger: ['error', 'warn', 'log', 'debug', 'verbose'],
+  // ✅ 1. CORS PRIMERO (antes que cualquier otro middleware)
+  const corsOptions = configService.get<CorsConfig>('app.cors');
+
+  app.enableCors({
+    origin: corsOptions?.origin,
+    credentials: corsOptions?.credentials ?? true,
+    methods: corsOptions?.methods ?? [
+      'GET',
+      'POST',
+      'PUT',
+      'DELETE',
+      'PATCH',
+      'OPTIONS',
+    ],
+    allowedHeaders: corsOptions?.allowedHeaders ?? [
+      'Content-Type',
+      'Authorization',
+      'Accept',
+    ],
+    exposedHeaders: corsOptions?.exposedHeaders ?? [],
+    maxAge: corsOptions?.maxAge ?? 86400,
+    preflightContinue: corsOptions?.preflightContinue ?? false,
+    optionsSuccessStatus: corsOptions?.optionsSuccessStatus ?? 204,
   });
 
-  const configService = app.get(ConfigService);
-  const port = configService.get<number>('app.port') ?? 3000;
-  const nodeEnv = configService.get<string>('app.nodeEnv') ?? 'development';
+  // ✅ 2. Helmet (después de CORS)
+  const helmetConfig = configService.get<HelmetConfig>('app.helmet');
 
-  // =============================================
-  // 1. Global Prefix (opcional)
-  // =============================================
-  // app.setGlobalPrefix('api/v1');
-
-  // =============================================
-  // 2. CORS
-  // =============================================
-  const corsConfig = configService.get<CorsConfig>('cors');
-  app.enableCors(corsConfig);
-
-  // =============================================
-  // 3. Helmet (Seguridad)
-  // =============================================
-  const helmetConfig = configService.get<HelmetConfig>('helmet');
-  if (nodeEnv === 'production') {
-    // Importar helmet solo en producción para evitar overhead en desarrollo
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const helmet = require('helmet');
-    app.use(helmet(helmetConfig));
-  }
-
-  // =============================================
-  // 4. Validation Pipe
-  // =============================================
-  app.useGlobalPipes(
-    new ValidationPipe({
-      whitelist: true, // Elimina propiedades no definidas en los DTOs
-      forbidNonWhitelisted: true, // Lanza error si hay propiedades no definidas
-      transform: true, // Transforma automáticamente los payloads
-      transformOptions: {
-        enableImplicitConversion: false, // No convertir implícitamente tipos
+  app.use(
+    helmet({
+      crossOriginResourcePolicy: helmetConfig?.crossOriginResourcePolicy ?? {
+        policy: 'cross-origin',
       },
-      // Validar grupos (para diferentes casos de uso)
-      // groups: [],
-      // Validar tipos
-      // validateCustomDecorators: true,
-      // Mensajes de error detallados (solo en desarrollo)
-      disableErrorMessages: nodeEnv === 'production',
+      crossOriginOpenerPolicy: helmetConfig?.crossOriginOpenerPolicy ?? {
+        policy: 'unsafe-none',
+      },
+      crossOriginEmbedderPolicy:
+        helmetConfig?.crossOriginEmbedderPolicy ?? false,
     }),
   );
 
-  // =============================================
-  // 5. Swagger (solo en desarrollo)
-  // =============================================
-  if (nodeEnv !== 'production') {
-    setupSwagger(app);
+  // ✅ 3. Correlation ID
+  app.use(
+    new CorrelationIdMiddleware().use.bind(new CorrelationIdMiddleware()),
+  );
+
+  // ✅ 4. Body parsers y otros middlewares
+  app.use(express.json({ limit: '50mb' }));
+  app.use(express.urlencoded({ limit: '50mb', extended: true }));
+  app.useGlobalPipes(
+    new ValidationPipe({
+      whitelist: true,
+      transform: true,
+      forbidNonWhitelisted: true,
+    }),
+  );
+
+  app.use(compression());
+  app.use(httpLoggerMiddleware());
+  app.use(cookieParser());
+
+  // ✅ 5. Swagger (solo en desarrollo)
+  if (configService.get('app.nodeEnv') !== 'production') {
+    const config = new DocumentBuilder()
+      .setTitle('HelpDesk API')
+      .setDescription('API para el sistema de control de asistencia')
+      .setVersion('1.0')
+      .addBearerAuth()
+      .addTag('auth', 'Autenticación')
+      .addTag('attendance', 'Asistencia')
+      .addTag('users', 'Usuarios')
+      .addTag('company', 'Empresas y sucursales')
+      .addTag('config', 'Configuración')
+      .addTag('dashboard', 'Dashboard')
+      .addTag('audit-logs', 'Logs de auditoría')
+      .build();
+    const document = SwaggerModule.createDocument(app, config);
+    SwaggerModule.setup('api/docs', app, document);
   }
 
-  // =============================================
-  // 6. Compresión (opcional)
-  // =============================================
-  // if (nodeEnv === 'production') {
-  //   const compression = require('compression');
-  //   app.use(compression());
-  // }
-
-  // =============================================
-  // 7. Iniciar servidor
-  // =============================================
+  const port = configService.get<number>('app.port', 3000);
   await app.listen(port);
 
-  logger.log(`🚀 Application is running on: http://localhost:${port}`);
-  logger.log(`📚 Swagger: http://localhost:${port}/docs`);
-  logger.log(`🔧 Environment: ${nodeEnv}`);
+  console.log(`🚀 Server running on http://localhost:${port}`);
+  console.log(`📚 Swagger docs: http://localhost:${port}/api/docs`);
+  console.log(
+    `✅ CORS configurado con: ${JSON.stringify(corsOptions?.origin)}`,
+  );
+  console.log('🔍 Variables de entorno cargadas:');
+  console.log('CORS_ORIGIN:', process.env.CORS_ORIGIN);
+  console.log('NODE_ENV:', process.env.NODE_ENV);
 }
+
 bootstrap();

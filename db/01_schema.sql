@@ -135,6 +135,36 @@ CREATE INDEX idx_user_roles_role ON user_roles(role_id);
 CREATE INDEX idx_role_permissions_role ON role_permissions(role_id);
 CREATE INDEX idx_permissions_module ON permissions(module);
 
+-- Refresh tokens para JWT
+CREATE TABLE user_refresh_tokens (
+    id BIGSERIAL PRIMARY KEY,
+    user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    token VARCHAR(255) NOT NULL UNIQUE,
+    expires_at TIMESTAMPTZ NOT NULL,
+    revoked BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_user_refresh_tokens_user ON user_refresh_tokens(user_id);
+CREATE INDEX idx_user_refresh_tokens_token ON user_refresh_tokens(token);
+CREATE INDEX idx_user_refresh_tokens_expires ON user_refresh_tokens(expires_at);
+
+-- Refresh tokens para clientes
+CREATE TABLE customer_refresh_tokens (
+    id BIGSERIAL PRIMARY KEY,
+    customer_id BIGINT NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
+    token VARCHAR(255) NOT NULL UNIQUE,
+    expires_at TIMESTAMPTZ NOT NULL,
+    revoked BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_customer_refresh_tokens_customer ON customer_refresh_tokens(customer_id);
+CREATE INDEX idx_customer_refresh_tokens_token ON customer_refresh_tokens(token);
+CREATE INDEX idx_customer_refresh_tokens_expires ON customer_refresh_tokens(expires_at);
+
 ------------------------------------------------------------
 
 -- 1. store
