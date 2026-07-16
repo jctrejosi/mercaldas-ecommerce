@@ -5,5 +5,8 @@ export { default as corsConfig } from './cors.config';
 export { default as helmetConfig } from './helmet.config';
 export { default as cloudinaryConfig } from './cloudinary.config';
 
+// Swagger
+export * from './swagger.config';
+
 // Interfaces
 export * from './types';
