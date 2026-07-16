@@ -270,7 +270,7 @@ export const users = pgTable(
     id: bigserial({ mode: 'bigint' }).primaryKey().notNull(),
     // TODO: failed to parse database type 'citext'
     email: varchar('email', { length: 255 }).notNull(),
-    username: varchar('email', { length: 50 }).notNull(),
+    username: varchar('username', { length: 50 }).notNull(),
     lockedUntil: timestamp('locked_until', {
       withTimezone: true,
       mode: 'string',

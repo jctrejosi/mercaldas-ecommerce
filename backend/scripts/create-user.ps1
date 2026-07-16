@@ -1,8 +1,8 @@
-docker exec -i ecommerce_postgres psql -U postgres -d ecommerce -c "
 DELETE FROM users WHERE email = 'admin@tienda.com';
 
 INSERT INTO users (
     email,
+    username,
     password_hash,
     first_name,
     last_name,
@@ -13,7 +13,8 @@ INSERT INTO users (
     updated_at
 ) VALUES (
     'admin@tienda.com',
-    '$2b$10$SRCAUo/P5ReI16kFZ/oL6ufYrVTOSv73JFods9TdNDlxJY3CKlvjK',
+    'admin',
+    '$2b$10$ASps5qrnwl0GwJ5pVgffYOKzyukXgffym6jONm6Ue6TvCWbfSjsDC',
     'Admin',
     'Principal',
     '3001234567',
@@ -22,4 +23,3 @@ INSERT INTO users (
     NOW(),
     NOW()
 );
-"
