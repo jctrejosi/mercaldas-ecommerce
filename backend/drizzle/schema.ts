@@ -1341,9 +1341,8 @@ export const customers = pgTable(
   'customers',
   {
     id: bigserial({ mode: 'bigint' }).primaryKey().notNull(),
-    // TODO: failed to parse database type 'citext'
     email: text('email').notNull(),
-    passwordHash: varchar('password_hash', { length: 255 }),
+    passwordHash: varchar('password_hash', { length: 255 }), // 🟢 NULLABLE
     documentNumber: varchar('document_number', { length: 50 }),
     documentType: varchar('document_type', { length: 20 }),
     firstName: varchar('first_name', { length: 100 }),
@@ -1372,6 +1371,13 @@ export const customers = pgTable(
       mode: 'string',
     }),
     isActive: boolean('is_active').default(true).notNull(),
+
+    // 🟢 NUEVAS COLUMNAS PARA OAUTH
+    provider: varchar('provider', { length: 50 }), // 'google' | 'facebook' | 'local'
+    providerId: varchar('provider_id', { length: 255 }),
+    avatarUrl: text('avatar_url'),
+    emailVerified: boolean('email_verified').default(false),
+
     createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' })
       .defaultNow()
       .notNull(),
@@ -1389,6 +1395,24 @@ export const customers = pgTable(
       'btree',
       table.lastActivityAt.asc().nullsLast().op('timestamptz_ops'),
     ),
+    // 🟢 ÍNDICES PARA OAUTH
+    index('idx_customers_provider').using(
+      'btree',
+      table.provider.asc().nullsLast().op('text_ops'),
+    ),
+    index('idx_customers_provider_id').using(
+      'btree',
+      table.providerId.asc().nullsLast().op('text_ops'),
+    ),
+    // 🟢 ÍNDICE COMPUESTO PARA BÚSQUEDAS RÁPIDAS POR (PROVIDER + PROVIDER_ID)
+    uniqueIndex('idx_customers_provider_unique')
+      .using(
+        'btree',
+        table.provider.asc().nullsLast().op('text_ops'),
+        table.providerId.asc().nullsLast().op('text_ops'),
+      )
+      .where(sql`provider_id IS NOT NULL`), // solo si tiene providerId
+
     unique('customers_email_key').on(table.email),
   ],
 );
@@ -1560,6 +1584,42 @@ export const customerTokens = pgTable(
       name: 'customer_tokens_customer_id_fkey',
     }).onDelete('cascade'),
     unique('customer_tokens_token_key').on(table.token),
+  ],
+);
+
+export const customerRefreshTokens = pgTable(
+  'customer_refresh_tokens',
+  {
+    id: bigserial({ mode: 'bigint' }).primaryKey().notNull(),
+    customerId: bigint('customer_id', { mode: 'number' })
+      .notNull()
+      .references(() => customers.id, { onDelete: 'cascade' }),
+    token: varchar({ length: 255 }).notNull().unique(),
+    expiresAt: timestamp('expires_at', {
+      withTimezone: true,
+      mode: 'string',
+    }).notNull(),
+    revoked: boolean().default(false).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'string' })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    index('idx_customer_refresh_tokens_customer').using(
+      'btree',
+      table.customerId.asc().nullsLast().op('int8_ops'),
+    ),
+    index('idx_customer_refresh_tokens_token').using(
+      'btree',
+      table.token.asc().nullsLast().op('text_ops'),
+    ),
+    index('idx_customer_refresh_tokens_expires').using(
+      'btree',
+      table.expiresAt.asc().nullsLast().op('timestamptz_ops'),
+    ),
   ],
 );
 

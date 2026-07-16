@@ -4,6 +4,7 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { DrizzleModule } from './database//drizzle.module';
 import { AuthModule } from './modules/auth/auth.module';
+import { CustomerAuthModule } from './modules/customer-auth/customer-auth.module';
 import {
   appConfig,
   databaseConfig,
@@ -28,6 +29,7 @@ import {
     }),
     DrizzleModule,
     AuthModule,
+    CustomerAuthModule,
   ],
   controllers: [AppController],
   providers: [AppService],
