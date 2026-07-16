@@ -1,0 +1,519 @@
+interface CatalogPageProps {
+  cartItems: CartItem[];
+  onAdd: (p: Product) => void;
+  onRemove: (id: number) => void;
+  onBack: () => void;
+  onOpenCategory: (cat: string) => void;
+  onProductClick: (p: Product) => void;
+  catalogCategory: string[];
+  setCatalogCategory: (v: string[]) => void;
+  catalogOnSale: boolean;
+  setCatalogOnSale: (v: boolean) => void;
+  catalogPriceRange: string;
+  setCatalogPriceRange: (v: string) => void;
+  catalogSort: string;
+  setCatalogSort: (v: string) => void;
+  catalogSearch: string;
+  setCatalogSearch: (v: string) => void;
+  mobileFiltersOpen: boolean;
+  setMobileFiltersOpen: (v: boolean) => void;
+}
+
+const PRICE_RANGES = [
+  { id: "all", label: "Todos los precios" },
+  { id: "0-10000", label: "Hasta $10.000" },
+  { id: "10000-30000", label: "$10.000 – $30.000" },
+  { id: "30000-70000", label: "$30.000 – $70.000" },
+  { id: "70000+", label: "Más de $70.000" },
+];
+
+const SORT_OPTIONS = [
+  { id: "relevancia", label: "Relevancia" },
+  { id: "precio-asc", label: "Precio: menor a mayor" },
+  { id: "precio-desc", label: "Precio: mayor a menor" },
+  { id: "descuento", label: "Mayor descuento" },
+  { id: "nombre", label: "Nombre A–Z" },
+];
+
+export function CatalogPage({
+  cartItems,
+  onAdd,
+  onRemove,
+  onBack,
+  onProductClick,
+  catalogCategory,
+  setCatalogCategory,
+  catalogOnSale,
+  setCatalogOnSale,
+  catalogPriceRange,
+  setCatalogPriceRange,
+  catalogSort,
+  setCatalogSort,
+  catalogSearch,
+  setCatalogSearch,
+  mobileFiltersOpen,
+  setMobileFiltersOpen,
+}: CatalogPageProps) {
+  const PAGE_SIZE = 12;
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+
+  useEffect(() => {
+    setVisibleCount(PAGE_SIZE);
+  }, [
+    catalogCategory,
+    catalogOnSale,
+    catalogPriceRange,
+    catalogSort,
+    catalogSearch,
+  ]);
+
+  const toggleCategory = (cat: string) => {
+    setCatalogCategory(
+      catalogCategory.includes(cat)
+        ? catalogCategory.filter((c) => c !== cat)
+        : [...catalogCategory, cat],
+    );
+  };
+
+  const priceMatch = (p: Product) => {
+    const price = p.price;
+    if (catalogPriceRange === "all") return true;
+    if (catalogPriceRange === "0-10000") return price <= 10000;
+    if (catalogPriceRange === "10000-30000")
+      return price > 10000 && price <= 30000;
+    if (catalogPriceRange === "30000-70000")
+      return price > 30000 && price <= 70000;
+    if (catalogPriceRange === "70000+") return price > 70000;
+    return true;
+  };
+
+  let filtered = PRODUCTS.filter((p) => {
+    const catMatch =
+      catalogCategory.length === 0 || catalogCategory.includes(p.category);
+    const saleMatch = !catalogOnSale || !!p.originalPrice;
+    const searchMatch =
+      catalogSearch.trim() === "" ||
+      p.name.toLowerCase().includes(catalogSearch.toLowerCase()) ||
+      p.category.toLowerCase().includes(catalogSearch.toLowerCase());
+    return catMatch && saleMatch && priceMatch(p) && searchMatch;
+  });
+
+  if (catalogSort === "precio-asc")
+    filtered = [...filtered].sort((a, b) => a.price - b.price);
+  else if (catalogSort === "precio-desc")
+    filtered = [...filtered].sort((a, b) => b.price - a.price);
+  else if (catalogSort === "descuento")
+    filtered = [...filtered].sort((a, b) => {
+      const dA = a.originalPrice
+        ? (a.originalPrice - a.price) / a.originalPrice
+        : 0;
+      const dB = b.originalPrice
+        ? (b.originalPrice - b.price) / b.originalPrice
+        : 0;
+      return dB - dA;
+    });
+  else if (catalogSort === "nombre")
+    filtered = [...filtered].sort((a, b) => a.name.localeCompare(b.name));
+
+  const activeFilterCount =
+    catalogCategory.length +
+    (catalogOnSale ? 1 : 0) +
+    (catalogPriceRange !== "all" ? 1 : 0);
+
+  const clearAll = () => {
+    setCatalogCategory([]);
+    setCatalogOnSale(false);
+    setCatalogPriceRange("all");
+    setCatalogSearch("");
+  };
+
+  const SidebarContent = () => (
+    <div className="space-y-6">
+      {/* Categories */}
+      <div>
+        <h3 className="font-bold text-sm text-foreground mb-3">Categorías</h3>
+        <div className="space-y-1.5">
+          {CATEGORIES.map((cat) => {
+            const Icon = cat.icon;
+            const count = PRODUCTS.filter(
+              (p) => p.category === cat.name,
+            ).length;
+            const checked = catalogCategory.includes(cat.name);
+            return (
+              <label
+                key={cat.id}
+                className="flex items-center gap-2.5 py-1 px-2 rounded-lg cursor-pointer hover:bg-muted transition-colors group"
+              >
+                <div
+                  className="w-5 h-5 rounded border-2 flex items-center justify-center flex-shrink-0 transition-all"
+                  style={{
+                    borderColor: checked ? "#1A1A2E" : "#D1D5DB",
+                    background: checked ? "#1A1A2E" : "white",
+                  }}
+                  onClick={() => toggleCategory(cat.name)}
+                >
+                  {checked && (
+                    <svg width="10" height="8" viewBox="0 0 10 8" fill="none">
+                      <path
+                        d="M1 4l2.5 2.5L9 1"
+                        stroke="#FFF200"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                  )}
+                </div>
+                <div
+                  className="w-5 h-5 rounded flex items-center justify-center flex-shrink-0"
+                  style={{ background: cat.bg }}
+                >
+                  <Icon className="w-3 h-3" style={{ color: cat.color }} />
+                </div>
+                <span
+                  className="text-sm flex-1 transition-colors"
+                  style={{
+                    color: checked ? "#1A1A2E" : "#6B7280",
+                    fontWeight: checked ? 600 : 400,
+                  }}
+                  onClick={() => toggleCategory(cat.name)}
+                >
+                  {cat.name}
+                </span>
+                <span className="text-xs text-muted-foreground ml-auto">
+                  {count}
+                </span>
+              </label>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Price range */}
+      <div className="border-t border-border pt-5">
+        <h3 className="font-bold text-sm text-foreground mb-3">
+          Rango de precio
+        </h3>
+        <div className="space-y-1.5">
+          {PRICE_RANGES.map((r) => (
+            <label
+              key={r.id}
+              className="flex items-center gap-2.5 py-1 px-2 rounded-lg cursor-pointer hover:bg-muted transition-colors"
+            >
+              <div
+                className="w-4 h-4 rounded-full border-2 flex items-center justify-center flex-shrink-0"
+                style={{
+                  borderColor:
+                    catalogPriceRange === r.id ? "#1A1A2E" : "#D1D5DB",
+                }}
+                onClick={() => setCatalogPriceRange(r.id)}
+              >
+                {catalogPriceRange === r.id && (
+                  <div
+                    className="w-2 h-2 rounded-full"
+                    style={{ background: "#1A1A2E" }}
+                  />
+                )}
+              </div>
+              <span
+                className="text-sm cursor-pointer"
+                style={{
+                  color: catalogPriceRange === r.id ? "#1A1A2E" : "#6B7280",
+                  fontWeight: catalogPriceRange === r.id ? 600 : 400,
+                }}
+                onClick={() => setCatalogPriceRange(r.id)}
+              >
+                {r.label}
+              </span>
+            </label>
+          ))}
+        </div>
+      </div>
+
+      {/* On sale */}
+      <div className="border-t border-border pt-5">
+        <label className="flex items-center justify-between cursor-pointer group">
+          <div>
+            <p className="font-bold text-sm text-foreground">Solo ofertas</p>
+            <p className="text-xs text-muted-foreground">
+              Productos con descuento
+            </p>
+          </div>
+          <div
+            className="relative w-11 h-6 rounded-full transition-all flex-shrink-0"
+            style={{ background: catalogOnSale ? "#FFF200" : "#E5E7EB" }}
+            onClick={() => setCatalogOnSale(!catalogOnSale)}
+          >
+            <div
+              className="absolute top-1 w-4 h-4 rounded-full bg-foreground transition-all shadow-sm"
+              style={{ left: catalogOnSale ? "calc(100% - 20px)" : "4px" }}
+            />
+          </div>
+        </label>
+      </div>
+
+      {activeFilterCount > 0 && (
+        <button
+          onClick={clearAll}
+          className="w-full py-2 rounded-xl text-sm font-semibold text-muted-foreground border border-border hover:border-foreground hover:text-foreground transition-all"
+        >
+          Limpiar todos los filtros
+        </button>
+      )}
+    </div>
+  );
+
+  const visibleProducts = filtered.slice(0, visibleCount);
+  const hasMore = visibleCount < filtered.length;
+
+  return (
+    <div className="bg-muted/40" style={{ minHeight: "calc(100vh - 108px)" }}>
+      {/* ── Two-column body ── */}
+      <div className="max-w-7xl mx-auto px-4 py-5 flex gap-5 items-start">
+        {/* Desktop sidebar */}
+        <aside
+          className="hidden md:flex flex-col w-56 flex-shrink-0 bg-white rounded-xl border border-border overflow-hidden"
+          style={{
+            position: "sticky",
+            top: "80px",
+            maxHeight: "calc(100vh - 96px)",
+            overflowY: "auto",
+          }}
+        >
+          {/* Search inside sidebar */}
+          <div className="p-3 border-b border-border">
+            <div className="relative">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+              <input
+                type="text"
+                value={catalogSearch}
+                onChange={(e) => setCatalogSearch(e.target.value)}
+                placeholder="Buscar en catálogo..."
+                className="w-full pl-8 pr-3 py-2 text-xs rounded-lg border border-border bg-muted/60 focus:outline-none"
+                onFocus={(e) => {
+                  e.target.style.boxShadow = "0 0 0 2px #FFF200";
+                  e.target.style.borderColor = "#FFF200";
+                }}
+                onBlur={(e) => {
+                  e.target.style.boxShadow = "none";
+                  e.target.style.borderColor = "";
+                }}
+              />
+            </div>
+          </div>
+          <div className="p-4">
+            <SidebarContent />
+          </div>
+        </aside>
+
+        {/* Products column */}
+        <div
+          className="flex-1 min-w-0 flex flex-col"
+          style={{ minHeight: "calc(100vh - 200px)" }}
+        >
+          {/* Sort row + mobile filters trigger */}
+          <div className="flex items-center justify-between gap-3 mb-4">
+            <p className="text-sm text-muted-foreground hidden md:block">
+              <strong className="text-foreground">{filtered.length}</strong>{" "}
+              productos
+            </p>
+            <div className="flex items-center gap-2 ml-auto">
+              {/* Mobile filters button */}
+              <button
+                onClick={() => setMobileFiltersOpen(true)}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-border text-xs font-semibold md:hidden hover:bg-muted transition-colors"
+              >
+                <svg
+                  width="13"
+                  height="13"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.5"
+                >
+                  <line x1="4" y1="6" x2="20" y2="6" />
+                  <line x1="8" y1="12" x2="16" y2="12" />
+                  <line x1="11" y1="18" x2="13" y2="18" />
+                </svg>
+                Filtros
+                {activeFilterCount > 0 && (
+                  <span
+                    className="w-4 h-4 rounded-full text-xs font-black flex items-center justify-center"
+                    style={{ background: "#FFF200", color: "#1A1A2E" }}
+                  >
+                    {activeFilterCount}
+                  </span>
+                )}
+              </button>
+              {/* Sort */}
+              <select
+                value={catalogSort}
+                onChange={(e) => setCatalogSort(e.target.value)}
+                className="pl-3 pr-7 py-2 text-xs rounded-lg border border-border bg-white focus:outline-none appearance-none cursor-pointer font-medium"
+                style={{
+                  backgroundImage:
+                    "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236B7280' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E\")",
+                  backgroundRepeat: "no-repeat",
+                  backgroundPosition: "right 6px center",
+                }}
+              >
+                {SORT_OPTIONS.map((o) => (
+                  <option key={o.id} value={o.id}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* Active filter chips */}
+          {(catalogCategory.length > 0 ||
+            catalogOnSale ||
+            catalogPriceRange !== "all" ||
+            catalogSearch) && (
+            <div className="flex flex-wrap gap-1.5 mb-3">
+              {catalogCategory.map((cat) => (
+                <span
+                  key={cat}
+                  className="flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold border-2 border-foreground text-foreground"
+                >
+                  {cat}
+                  <button
+                    onClick={() => toggleCategory(cat)}
+                    className="hover:opacity-60 ml-0.5"
+                  >
+                    <X className="w-2.5 h-2.5" />
+                  </button>
+                </span>
+              ))}
+              {catalogOnSale && (
+                <span
+                  className="flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold text-white"
+                  style={{ background: "#FF4444" }}
+                >
+                  Solo ofertas
+                  <button
+                    onClick={() => setCatalogOnSale(false)}
+                    className="hover:opacity-70 ml-0.5"
+                  >
+                    <X className="w-2.5 h-2.5" />
+                  </button>
+                </span>
+              )}
+              {catalogPriceRange !== "all" && (
+                <span className="flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold border border-border text-muted-foreground">
+                  {PRICE_RANGES.find((r) => r.id === catalogPriceRange)?.label}
+                  <button
+                    onClick={() => setCatalogPriceRange("all")}
+                    className="hover:opacity-70 ml-0.5"
+                  >
+                    <X className="w-2.5 h-2.5" />
+                  </button>
+                </span>
+              )}
+              {catalogSearch && (
+                <span className="flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold border border-border text-muted-foreground">
+                  "{catalogSearch}"
+                  <button
+                    onClick={() => setCatalogSearch("")}
+                    className="hover:opacity-70 ml-0.5"
+                  >
+                    <X className="w-2.5 h-2.5" />
+                  </button>
+                </span>
+              )}
+              <button
+                onClick={clearAll}
+                className="text-xs text-muted-foreground underline hover:text-foreground transition-colors self-center ml-1"
+              >
+                Limpiar todo
+              </button>
+            </div>
+          )}
+
+          {/* Grid */}
+          {filtered.length > 0 ? (
+            <>
+              <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3 flex-1">
+                {visibleProducts.map((p) => (
+                  <ProductCard
+                    key={p.id}
+                    product={p}
+                    cartItems={cartItems}
+                    onAdd={onAdd}
+                    onRemove={onRemove}
+                    onProductClick={onProductClick}
+                  />
+                ))}
+              </div>
+
+              {/* Sentinel + skeletons */}
+              {hasMore && (
+                <InfiniteScrollTrigger
+                  onIntersect={() => setVisibleCount((c) => c + PAGE_SIZE)}
+                  count={Math.min(PAGE_SIZE, filtered.length - visibleCount)}
+                />
+              )}
+
+              {!hasMore && filtered.length > PAGE_SIZE && (
+                <p className="text-center text-xs text-muted-foreground mt-10 pb-8">
+                  ✓ Has visto todos los {filtered.length} productos
+                </p>
+              )}
+            </>
+          ) : (
+            <div className="flex flex-col items-center justify-center flex-1 text-center py-20">
+              <div className="w-16 h-16 rounded-2xl bg-muted flex items-center justify-center mb-4">
+                <Search className="w-7 h-7 text-muted-foreground" />
+              </div>
+              <p className="font-bold text-foreground">Sin resultados</p>
+              <p className="text-sm text-muted-foreground mt-1 mb-4">
+                Intenta con otros filtros o categorías.
+              </p>
+              <button
+                onClick={clearAll}
+                className="px-5 py-2.5 rounded-xl text-sm font-bold transition-all hover:brightness-95"
+                style={{ background: "#FFF200", color: "#1A1A2E" }}
+              >
+                Limpiar filtros
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Mobile filters drawer */}
+      {mobileFiltersOpen && (
+        <div className="fixed inset-0 z-50 flex md:hidden">
+          <div
+            className="absolute inset-0 bg-black/40"
+            onClick={() => setMobileFiltersOpen(false)}
+          />
+          <div className="relative ml-auto w-72 bg-white h-full flex flex-col shadow-2xl">
+            <div className="flex items-center justify-between px-4 py-4 border-b border-border">
+              <h2 className="font-bold text-base">Filtros</h2>
+              <button
+                onClick={() => setMobileFiltersOpen(false)}
+                className="p-1.5 rounded-lg hover:bg-muted transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4">
+              <SidebarContent />
+            </div>
+            <div className="border-t border-border p-4">
+              <button
+                onClick={() => setMobileFiltersOpen(false)}
+                className="w-full py-3 rounded-xl font-bold text-sm transition-all hover:brightness-95"
+                style={{ background: "#1A1A2E", color: "#FFF200" }}
+              >
+                Ver {filtered.length} productos
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
