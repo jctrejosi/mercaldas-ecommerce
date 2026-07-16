@@ -10,7 +10,7 @@ import {
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
-import { getDb } from '../../database/drizzle';
+import { getDb } from '../../database/drizzle.service';
 import {
   account,
   employee,

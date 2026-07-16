@@ -2,7 +2,7 @@ import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { ConfigService } from '@nestjs/config';
-import { getDb } from '../../../database/drizzle';
+import { getDb } from '../../../database/drizzle.service';
 import { account } from '../../../database/schema';
 import { eq } from 'drizzle-orm';
 import { JwtPayload } from '../auth.service';
