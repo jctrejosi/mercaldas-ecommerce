@@ -1,20 +1,24 @@
 import { useState } from "react";
 import { useGoogleLogin } from "@react-oauth/google";
-import { useCustomerAuth } from "../hooks/useCustomerAuth";
 
 type SocialAuthButtonsProps = {
   label: string;
+  socialLogin: (
+    provider: "google" | "facebook",
+    accessToken: string,
+    userData?: { email?: string; name?: string; picture?: string; id?: string },
+  ) => Promise<unknown>;
   onSuccess?: () => void;
   onError?: (error: unknown) => void;
 };
 
 export function SocialAuthButtons({
   label,
+  socialLogin,
   onSuccess,
   onError,
 }: SocialAuthButtonsProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const { socialLogin } = useCustomerAuth();
 
   const handleSocialLogin = async (
     provider: "google" | "facebook",
@@ -56,12 +60,21 @@ export function SocialAuthButtons({
   });
 
   const handleFacebookClick = () => {
-    if (typeof window === "undefined" || !window.FB) {
+    const facebookSdk = (window as Window & {
+      FB?: {
+        login: (
+          callback: (response: { authResponse?: { accessToken?: string } }) => void,
+          options: { scope: string },
+        ) => void;
+      };
+    }).FB;
+
+    if (typeof window === "undefined" || !facebookSdk) {
       onError?.("Facebook SDK no disponible");
       return;
     }
 
-    window.FB.login(
+    facebookSdk.login(
       (response: { authResponse?: { accessToken?: string } }) => {
         if (response.authResponse?.accessToken) {
           void handleSocialLogin("facebook", response.authResponse.accessToken);

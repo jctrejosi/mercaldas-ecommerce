@@ -17,7 +17,7 @@ async function bootstrap() {
   const configService = app.get(ConfigService);
 
   // ✅ 1. CORS PRIMERO (antes que cualquier otro middleware)
-  const corsOptions = configService.get<CorsConfig>('app.cors');
+  const corsOptions = configService.get<CorsConfig>('cors');
 
   app.enableCors({
     origin: corsOptions?.origin,
@@ -42,7 +42,7 @@ async function bootstrap() {
   });
 
   // ✅ 2. Helmet (después de CORS)
-  const helmetConfig = configService.get<HelmetConfig>('app.helmet');
+  const helmetConfig = configService.get<HelmetConfig>('helmet');
 
   app.use(
     helmet({

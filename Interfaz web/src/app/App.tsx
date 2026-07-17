@@ -278,7 +278,8 @@ export default function App() {
   >("efectivo");
   const [lastOrderId, setLastOrderId] = useState("");
 
-  const { login, register } = useCustomerAuth();
+  const { customer, loading: customerLoading, login, register, socialLogin } =
+    useCustomerAuth();
   const { categories, products, loading: catalogLoading } = useCatalog();
 
   // Estado local para errores en el modal
@@ -377,6 +378,11 @@ export default function App() {
   };
 
   const openModal = (view: "choice" | "login" | "register") => {
+    if (customer) {
+      setLoginModal(false);
+      return;
+    }
+
     setModalView(view);
     setLoginModal(true);
   };
@@ -805,11 +811,23 @@ export default function App() {
 
           <div className="flex items-center gap-0.5">
             <button
-              onClick={() => openModal("login")}
+              onClick={() => {
+                if (customer) {
+                  setSelectedOrder(null);
+                  setOrdersOpen(true);
+                  return;
+                }
+
+                openModal("login");
+              }}
               className="hidden md:flex items-center gap-1.5 px-3 py-2 rounded-lg hover:bg-muted transition-colors text-sm font-medium whitespace-nowrap"
             >
               <User className="w-4 h-4" />
-              <span className="hidden lg:inline">Iniciar sesión</span>
+              <span className="hidden lg:inline">
+                {customerLoading
+                  ? "Cargando..."
+                  : customer?.firstName || customer?.fullName || "Iniciar sesión"}
+              </span>
             </button>
             <button
               onClick={() => {
@@ -1649,6 +1667,11 @@ export default function App() {
                 <button
                   onClick={() => {
                     setCartOpen(false);
+                    if (customer) {
+                      setCheckoutStep(1);
+                      setCheckoutOpen(true);
+                      return;
+                    }
                     openModal("choice");
                   }}
                   className="w-full py-3 rounded-xl font-bold text-sm transition-all hover:brightness-95 active:scale-95"
@@ -1774,6 +1797,7 @@ export default function App() {
                 <form onSubmit={handleLoginSubmit} className="space-y-3">
                   <SocialAuthButtons
                     label="Iniciar sesión"
+                    socialLogin={socialLogin}
                     onSuccess={() => {
                       setLoginModal(false);
                       if (cartItems.length > 0) {
@@ -1876,6 +1900,7 @@ export default function App() {
                 <form onSubmit={handleRegisterSubmit} className="space-y-3">
                   <SocialAuthButtons
                     label="Registrarse"
+                    socialLogin={socialLogin}
                     onSuccess={() => {
                       setLoginModal(false);
                     }}

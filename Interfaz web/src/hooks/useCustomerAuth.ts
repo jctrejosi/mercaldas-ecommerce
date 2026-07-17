@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   customerAuthService,
   CustomerAuthResponse,
@@ -10,8 +10,10 @@ export function useCustomerAuth() {
   >(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const hasLoadedProfileRef = useRef(false);
 
   const loadProfile = useCallback(async () => {
+    setLoading(true);
     try {
       const profile = await customerAuthService.getProfile();
       setCustomer(profile);
@@ -23,7 +25,9 @@ export function useCustomerAuth() {
   }, []);
 
   useEffect(() => {
-    loadProfile();
+    if (hasLoadedProfileRef.current) return;
+    hasLoadedProfileRef.current = true;
+    void loadProfile();
   }, [loadProfile]);
 
   const login = useCallback(async (email: string, password: string) => {

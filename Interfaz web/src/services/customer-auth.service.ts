@@ -46,7 +46,7 @@ export interface CustomerAuthResponse {
 
 export const customerAuthService = {
   async register(data: CustomerRegisterData): Promise<CustomerAuthResponse> {
-    const response = await fetch(`${API_BASE_URL}/customer/auth/register`, {
+    const response = await fetch(`${API_BASE_URL}/customer-auth/register`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
@@ -62,7 +62,7 @@ export const customerAuthService = {
   },
 
   async login(data: CustomerLoginData): Promise<CustomerAuthResponse> {
-    const response = await fetch(`${API_BASE_URL}/customer/auth/login`, {
+    const response = await fetch(`${API_BASE_URL}/customer-auth/login`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
@@ -80,7 +80,7 @@ export const customerAuthService = {
   async socialLogin(
     data: CustomerSocialLoginData,
   ): Promise<CustomerAuthResponse> {
-    const response = await fetch(`${API_BASE_URL}/customer/auth/social-login`, {
+    const response = await fetch(`${API_BASE_URL}/customer-auth/social-login`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
@@ -96,7 +96,7 @@ export const customerAuthService = {
   },
 
   async getProfile(): Promise<CustomerAuthResponse["customer"]> {
-    const response = await fetch(`${API_BASE_URL}/customer/auth/me`, {
+    const response = await fetch(`${API_BASE_URL}/customer-auth/me`, {
       credentials: "include",
     });
 
@@ -110,7 +110,7 @@ export const customerAuthService = {
   async logout(
     refreshToken?: string,
   ): Promise<{ success: boolean; message: string }> {
-    const response = await fetch(`${API_BASE_URL}/customer/auth/logout`, {
+    const response = await fetch(`${API_BASE_URL}/customer-auth/logout`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
@@ -127,7 +127,7 @@ export const customerAuthService = {
   async refreshToken(
     refreshToken: string,
   ): Promise<{ accessToken: string; expiresIn: number }> {
-    const response = await fetch(`${API_BASE_URL}/customer/auth/refresh`, {
+    const response = await fetch(`${API_BASE_URL}/customer-auth/refresh`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
