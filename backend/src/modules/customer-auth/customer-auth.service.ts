@@ -19,6 +19,25 @@ import { CustomerRegisterDto } from './dto/customer-register.dto';
 import { CustomerSocialLoginDto } from './dto/customer-social-login.dto';
 import * as bcrypt from 'bcryptjs';
 
+interface GoogleTokenInfoResponse {
+  azp?: string;
+  aud?: string;
+  sub?: string;
+  email?: string;
+  email_verified?: string;
+}
+
+interface GoogleUserInfoResponse {
+  sub?: string;
+  email?: string;
+  email_verified?: boolean;
+  name?: string;
+  given_name?: string;
+  family_name?: string;
+  picture?: string;
+  locale?: string;
+}
+
 export interface CustomerJwtPayload {
   sub: number;
   email: string;
@@ -181,7 +200,10 @@ export class CustomerAuthService {
   async socialLogin(
     socialLoginDto: CustomerSocialLoginDto,
   ): Promise<CustomerAuthResponse> {
-    const { provider, providerId, email, name, avatarUrl } = socialLoginDto;
+    const validatedProfile = await this.validateSocialProfile(socialLoginDto);
+    const { provider } = socialLoginDto;
+    const { providerId, email, name, firstName, lastName, avatarUrl } =
+      validatedProfile;
 
     let customer: typeof customers.$inferSelect | undefined;
 
@@ -217,8 +239,11 @@ export class CustomerAuthService {
           .set({
             provider,
             providerId: providerId ?? customer.providerId,
+            firstName: firstName ?? customer.firstName,
+            lastName: lastName ?? customer.lastName,
             avatarUrl: avatarUrl ?? customer.avatarUrl,
             emailVerified: true,
+            isVerified: true,
             lastLoginAt: new Date().toISOString(),
             lastActivityAt: new Date().toISOString(),
           })
@@ -233,15 +258,18 @@ export class CustomerAuthService {
         );
       }
 
-      const [firstName, ...lastNameParts] = (name ?? '').trim().split(' ');
-      const lastName = lastNameParts.join(' ') || null;
+      const normalizedName = this.extractCustomerName({
+        name,
+        firstName,
+        lastName,
+      });
 
       const inserted = await this.db
         .insert(customers)
         .values({
           email,
-          firstName: firstName || null,
-          lastName,
+          firstName: normalizedName.firstName,
+          lastName: normalizedName.lastName,
           provider,
           providerId: providerId ?? null,
           avatarUrl: avatarUrl ?? null,
@@ -271,6 +299,144 @@ export class CustomerAuthService {
     }
 
     return this.buildAuthResponse(customer);
+  }
+
+  private async validateSocialProfile(
+    socialLoginDto: CustomerSocialLoginDto,
+  ): Promise<{
+    providerId?: string;
+    email?: string;
+    name?: string;
+    firstName?: string | null;
+    lastName?: string | null;
+    avatarUrl?: string;
+  }> {
+    if (socialLoginDto.provider === 'google') {
+      return this.validateGoogleAccessToken(socialLoginDto.accessToken);
+    }
+
+    const fallbackName = this.extractCustomerName({
+      name: socialLoginDto.name,
+    });
+
+    return {
+      providerId: socialLoginDto.providerId,
+      email: socialLoginDto.email,
+      name: socialLoginDto.name,
+      firstName: fallbackName.firstName,
+      lastName: fallbackName.lastName,
+      avatarUrl: socialLoginDto.avatarUrl,
+    };
+  }
+
+  private async validateGoogleAccessToken(
+    accessToken: string,
+  ): Promise<{
+    providerId?: string;
+    email?: string;
+    name?: string;
+    firstName?: string | null;
+    lastName?: string | null;
+    avatarUrl?: string;
+  }> {
+    const googleClientId = this.configService.get<string>('GOOGLE_CLIENT_ID');
+
+    if (!googleClientId) {
+      throw new UnauthorizedException(
+        'Google login no está configurado en el servidor',
+      );
+    }
+
+    const response = await fetch(
+      `https://oauth2.googleapis.com/tokeninfo?access_token=${encodeURIComponent(accessToken)}`,
+    );
+
+    if (!response.ok) {
+      this.logger.warn('Google token validation failed');
+      throw new UnauthorizedException('Token de Google inválido');
+    }
+
+    const tokenInfo = (await response.json()) as GoogleTokenInfoResponse;
+    const audience = tokenInfo.aud ?? tokenInfo.azp;
+
+    if (!audience || audience !== googleClientId) {
+      this.logger.warn(
+        `Google token audience mismatch: ${audience ?? 'unknown'}`,
+      );
+      throw new UnauthorizedException('Token de Google inválido para este cliente');
+    }
+
+    if (!tokenInfo.email) {
+      throw new BadRequestException(
+        'Google no devolvió un email para este usuario',
+      );
+    }
+
+    const userInfoResponse = await fetch(
+      'https://www.googleapis.com/oauth2/v3/userinfo',
+      {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      },
+    );
+
+    const userInfo = userInfoResponse.ok
+      ? ((await userInfoResponse.json()) as GoogleUserInfoResponse)
+      : undefined;
+
+    const normalizedName = this.extractCustomerName({
+      name: userInfo?.name,
+      firstName: userInfo?.given_name,
+      lastName: userInfo?.family_name,
+    });
+
+    return {
+      providerId: userInfo?.sub ?? tokenInfo.sub,
+      email: userInfo?.email ?? tokenInfo.email,
+      name: userInfo?.name,
+      firstName: normalizedName.firstName,
+      lastName: normalizedName.lastName,
+      avatarUrl: userInfo?.picture,
+    };
+  }
+
+  private extractCustomerName({
+    name,
+    firstName,
+    lastName,
+  }: {
+    name?: string;
+    firstName?: string | null;
+    lastName?: string | null;
+  }): {
+    firstName: string | null;
+    lastName: string | null;
+  } {
+    const normalizedFirstName = firstName?.trim() || null;
+    const normalizedLastName = lastName?.trim() || null;
+
+    if (normalizedFirstName || normalizedLastName) {
+      return {
+        firstName: normalizedFirstName,
+        lastName: normalizedLastName,
+      };
+    }
+
+    const parts = (name ?? '')
+      .trim()
+      .split(/\s+/)
+      .filter(Boolean);
+
+    if (parts.length === 0) {
+      return {
+        firstName: null,
+        lastName: null,
+      };
+    }
+
+    return {
+      firstName: parts[0] ?? null,
+      lastName: parts.slice(1).join(' ') || null,
+    };
   }
 
   async refreshToken(refreshToken: string): Promise<{

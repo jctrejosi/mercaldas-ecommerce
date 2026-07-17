@@ -139,9 +139,7 @@ export class CatalogService {
       .orderBy(...this.buildSort(sort))
       .limit(limit);
 
-    const productIds = Array.from(
-      new Set(rows.map((row) => Number(row.id))),
-    );
+    const productIds = Array.from(new Set(rows.map((row) => Number(row.id))));
     if (productIds.length === 0) {
       return [];
     }
@@ -176,7 +174,8 @@ export class CatalogService {
       const originalPrice = row.originalPrice
         ? Number(row.originalPrice)
         : undefined;
-      const images = imagesByProduct.get(productId) ?? (row.image ? [row.image] : []);
+      const images =
+        imagesByProduct.get(productId) ?? (row.image ? [row.image] : []);
 
       uniqueProducts.set(productId, {
         id: productId,

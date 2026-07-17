@@ -1,10 +1,5 @@
 import { Controller, Get, Query } from '@nestjs/common';
-import {
-  ApiOperation,
-  ApiQuery,
-  ApiResponse,
-  ApiTags,
-} from '@nestjs/swagger';
+import { ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { Public } from '../../common/decorators/public.decorator';
 import { CatalogService } from './catalog.service';
 import { CatalogProductsQueryDto } from './dto/catalog-products-query.dto';
