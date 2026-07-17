@@ -43,6 +43,14 @@ export interface CloudinaryConfig {
   apiSecret: string;
 }
 
+export interface WompiConfig {
+  publicKey: string;
+  privateKey: string;
+  integrityKey: string;
+  apiUrl: string;
+  redirectUrl: string;
+}
+
 export type CrossOriginResourcePolicy =
   'cross-origin' | 'same-origin' | 'same-site';
 

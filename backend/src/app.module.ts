@@ -6,6 +6,8 @@ import { DrizzleModule } from './database//drizzle.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { CustomerAuthModule } from './modules/customer-auth/customer-auth.module';
 import { CatalogModule } from './modules/catalog/catalog.module';
+import { OrdersModule } from './modules/orders/orders.module';
+import { PaymentsModule } from './modules/payments/payments.module';
 import {
   appConfig,
   databaseConfig,
@@ -13,6 +15,7 @@ import {
   corsConfig,
   helmetConfig,
   cloudinaryConfig,
+  wompiConfig,
 } from './config';
 
 @Module({
@@ -25,6 +28,7 @@ import {
         corsConfig,
         helmetConfig,
         cloudinaryConfig,
+        wompiConfig,
       ],
       isGlobal: true,
     }),
@@ -32,6 +36,8 @@ import {
     AuthModule,
     CustomerAuthModule,
     CatalogModule,
+    OrdersModule,
+    PaymentsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

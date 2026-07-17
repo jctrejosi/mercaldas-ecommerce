@@ -47,6 +47,7 @@ import {
 } from "lucide-react";
 import { useCustomerAuth } from "../hooks/useCustomerAuth";
 import { useCatalog } from "../hooks/useCatalog";
+import { ordersService, type WompiConfigResponse } from "../services/orders.service";
 import { CartItem, CatalogCategory, Order, Product, Slide } from "./types";
 import { ProductDetailModal } from "./ProductDetailModal";
 import { Logo } from "./Logo";
@@ -276,7 +277,29 @@ export default function App() {
   const [checkoutPayment, setCheckoutPayment] = useState<
     "efectivo" | "tarjeta" | "nequi" | "pse"
   >("efectivo");
+  const [cardPayment, setCardPayment] = useState({
+    cardholderName: "",
+    cardNumber: "",
+    expiryMonth: "",
+    expiryYear: "",
+    cvv: "",
+    installments: "1",
+  });
+  const [psePayment, setPsePayment] = useState({
+    bank: "",
+    personType: "natural" as "natural" | "juridica",
+  });
+  const [nequiPayment, setNequiPayment] = useState({
+    phone: "",
+  });
   const [lastOrderId, setLastOrderId] = useState("");
+  const [wompiConfig, setWompiConfig] = useState<WompiConfigResponse | null>(null);
+  const [wompiAcceptance, setWompiAcceptance] = useState({
+    terms: false,
+    personalData: false,
+  });
+  const [checkoutLoading, setCheckoutLoading] = useState(false);
+  const [checkoutError, setCheckoutError] = useState<string | null>(null);
 
   const { customer, loading: customerLoading, login, register, socialLogin } =
     useCustomerAuth();
@@ -408,27 +431,107 @@ export default function App() {
       minimumFractionDigits: 0,
     }).format(n);
 
-  const placeOrder = () => {
-    const shippingCost = checkoutShipping === "express" ? 9900 : 4900;
-    const orderId = `MER-${Date.now().toString().slice(-6)}`;
-    const newOrder: Order = {
-      id: orderId,
-      date: new Date().toLocaleDateString("es-CO", {
-        day: "2-digit",
-        month: "long",
-        year: "numeric",
-      }),
-      items: [...cartItems],
-      total: cartTotal + shippingCost,
-      shipping: shippingCost,
-      address: `${checkoutAddress.address}, ${checkoutAddress.city}`,
-      paymentMethod: checkoutPayment,
-      status: "preparando",
-    };
-    setOrders((prev) => [newOrder, ...prev]);
-    setLastOrderId(orderId);
-    setCartItems([]);
-    setCheckoutStep(4);
+  const placeOrder = async () => {
+    if (!customer) {
+      setCheckoutError("Debes iniciar sesión para completar el pedido");
+      return;
+    }
+
+    try {
+      setCheckoutLoading(true);
+      setCheckoutError(null);
+
+      const cardDetails =
+        checkoutPayment === "tarjeta"
+          ? await (async () => {
+              if (!wompiConfig?.publicKey) {
+                throw new Error("Wompi no está configurado correctamente");
+              }
+
+              if (
+                !wompiAcceptance.terms ||
+                !wompiAcceptance.personalData ||
+                !wompiConfig.acceptanceToken ||
+                !wompiConfig.personalDataAuthToken
+              ) {
+                throw new Error(
+                  "Debes aceptar los términos y el tratamiento de datos para pagar con tarjeta",
+                );
+              }
+
+              const tokenizedCard = await ordersService.tokenizeWompiCard({
+                publicKey: wompiConfig.publicKey,
+                number: cardPayment.cardNumber.replace(/\s+/g, ""),
+                cvc: cardPayment.cvv,
+                expMonth: cardPayment.expiryMonth,
+                expYear: cardPayment.expiryYear,
+                cardHolder: cardPayment.cardholderName,
+              });
+
+              return {
+                cardholderName: cardPayment.cardholderName,
+                cardToken: tokenizedCard.id,
+                acceptanceToken: wompiConfig.acceptanceToken,
+                acceptPersonalAuth: wompiConfig.personalDataAuthToken,
+                last4: tokenizedCard.last_four,
+                brand: tokenizedCard.brand,
+                installments: Number(cardPayment.installments || "1"),
+              };
+            })()
+          : undefined;
+
+      const response = await ordersService.checkout({
+        items: cartItems.map((item) => ({
+          productId: item.id,
+          quantity: item.quantity,
+        })),
+        address: {
+          name: checkoutAddress.name,
+          phone: checkoutAddress.phone,
+          address: checkoutAddress.address,
+          city: checkoutAddress.city,
+          notes: checkoutAddress.notes,
+        },
+        shippingType: checkoutShipping,
+        paymentMethod: checkoutPayment,
+        paymentDetails:
+          checkoutPayment === "tarjeta"
+            ? {
+                card: cardDetails,
+              }
+            : checkoutPayment === "pse"
+              ? { pse: psePayment }
+              : checkoutPayment === "nequi"
+                ? { nequi: nequiPayment }
+                : undefined,
+      });
+
+      const newOrder: Order = {
+        id: response.referenceCode,
+        date: new Date().toLocaleDateString("es-CO", {
+          day: "2-digit",
+          month: "long",
+          year: "numeric",
+        }),
+        items: [...cartItems],
+        total: response.grandTotal,
+        shipping: response.shippingCost,
+        address: `${response.address.address}, ${response.address.city}`,
+        paymentMethod: response.paymentMethod,
+        status: "preparando",
+      };
+
+      setOrders((prev) => [newOrder, ...prev]);
+      setLastOrderId(response.referenceCode);
+      setCartItems([]);
+      setCheckoutStep(4);
+    } catch (error) {
+      setCheckoutError(
+        error instanceof Error ? error.message : "No se pudo procesar el pedido",
+      );
+    } finally {
+      setCheckoutLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -439,6 +542,13 @@ export default function App() {
     };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  useEffect(() => {
+    void ordersService
+      .getWompiConfig()
+      .then(setWompiConfig)
+      .catch(() => null);
   }, []);
 
   const POPULAR_SEARCHES = [
@@ -2392,6 +2502,244 @@ export default function App() {
                     </label>
                   ))}
                 </div>
+
+                {checkoutPayment === "tarjeta" && (
+                  <div className="bg-white rounded-2xl border border-border p-4 space-y-3">
+                    <h3 className="text-sm font-bold">Datos de la tarjeta</h3>
+                    <div>
+                      <label className="text-xs font-semibold block mb-1">
+                        Nombre del titular
+                      </label>
+                      <input
+                        type="text"
+                        value={cardPayment.cardholderName}
+                        onChange={(e) =>
+                          setCardPayment((prev) => ({
+                            ...prev,
+                            cardholderName: e.target.value,
+                          }))
+                        }
+                        placeholder="Nombre como aparece en la tarjeta"
+                        className="w-full px-3 py-2.5 rounded-xl border border-border bg-muted/50 text-sm focus:outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-semibold block mb-1">
+                        Número de tarjeta
+                      </label>
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        maxLength={19}
+                        value={cardPayment.cardNumber}
+                        onChange={(e) =>
+                          setCardPayment((prev) => ({
+                            ...prev,
+                            cardNumber: e.target.value
+                              .replace(/\D/g, "")
+                              .slice(0, 16)
+                              .replace(/(.{4})/g, "$1 ")
+                              .trim(),
+                          }))
+                        }
+                        placeholder="1234 5678 9012 3456"
+                        className="w-full px-3 py-2.5 rounded-xl border border-border bg-muted/50 text-sm focus:outline-none"
+                      />
+                    </div>
+                    <div className="grid grid-cols-3 gap-2">
+                      <div>
+                        <label className="text-xs font-semibold block mb-1">MM</label>
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          maxLength={2}
+                          value={cardPayment.expiryMonth}
+                          onChange={(e) =>
+                            setCardPayment((prev) => ({
+                              ...prev,
+                              expiryMonth: e.target.value.replace(/\D/g, "").slice(0, 2),
+                            }))
+                          }
+                          placeholder="08"
+                          className="w-full px-3 py-2.5 rounded-xl border border-border bg-muted/50 text-sm focus:outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs font-semibold block mb-1">AA</label>
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          maxLength={2}
+                          value={cardPayment.expiryYear}
+                          onChange={(e) =>
+                            setCardPayment((prev) => ({
+                              ...prev,
+                              expiryYear: e.target.value.replace(/\D/g, "").slice(0, 2),
+                            }))
+                          }
+                          placeholder="29"
+                          className="w-full px-3 py-2.5 rounded-xl border border-border bg-muted/50 text-sm focus:outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs font-semibold block mb-1">CVV</label>
+                        <input
+                          type="password"
+                          inputMode="numeric"
+                          maxLength={4}
+                          value={cardPayment.cvv}
+                          onChange={(e) =>
+                            setCardPayment((prev) => ({
+                              ...prev,
+                              cvv: e.target.value.replace(/\D/g, "").slice(0, 4),
+                            }))
+                          }
+                          placeholder="123"
+                          className="w-full px-3 py-2.5 rounded-xl border border-border bg-muted/50 text-sm focus:outline-none"
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="text-xs font-semibold block mb-1">
+                        Cuotas
+                      </label>
+                      <select
+                        value={cardPayment.installments}
+                        onChange={(e) =>
+                          setCardPayment((prev) => ({
+                            ...prev,
+                            installments: e.target.value,
+                          }))
+                        }
+                        className="w-full px-3 py-2.5 rounded-xl border border-border bg-muted/50 text-sm focus:outline-none"
+                      >
+                        {[1, 2, 3, 6, 12].map((value) => (
+                          <option key={value} value={String(value)}>
+                            {value} cuota{value > 1 ? "s" : ""}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="rounded-xl border border-border bg-muted/30 p-3 space-y-2">
+                      <label className="flex items-start gap-2 text-xs text-muted-foreground">
+                        <input
+                          type="checkbox"
+                          checked={wompiAcceptance.terms}
+                          onChange={(e) =>
+                            setWompiAcceptance((prev) => ({
+                              ...prev,
+                              terms: e.target.checked,
+                            }))
+                          }
+                          className="mt-0.5"
+                        />
+                        <span>
+                          Acepto los{" "}
+                          <a
+                            href={wompiConfig?.acceptancePermalink ?? "#"}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="underline text-foreground"
+                          >
+                            términos y condiciones de Wompi
+                          </a>
+                          .
+                        </span>
+                      </label>
+                      <label className="flex items-start gap-2 text-xs text-muted-foreground">
+                        <input
+                          type="checkbox"
+                          checked={wompiAcceptance.personalData}
+                          onChange={(e) =>
+                            setWompiAcceptance((prev) => ({
+                              ...prev,
+                              personalData: e.target.checked,
+                            }))
+                          }
+                          className="mt-0.5"
+                        />
+                        <span>
+                          Autorizo el tratamiento de datos personales según{" "}
+                          <a
+                            href={wompiConfig?.personalDataAuthPermalink ?? "#"}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="underline text-foreground"
+                          >
+                            la política de Wompi
+                          </a>
+                          .
+                        </span>
+                      </label>
+                    </div>
+                  </div>
+                )}
+
+                {checkoutPayment === "pse" && (
+                  <div className="bg-white rounded-2xl border border-border p-4 space-y-3">
+                    <h3 className="text-sm font-bold">Pago con PSE</h3>
+                    <div>
+                      <label className="text-xs font-semibold block mb-1">Banco</label>
+                      <select
+                        value={psePayment.bank}
+                        onChange={(e) =>
+                          setPsePayment((prev) => ({ ...prev, bank: e.target.value }))
+                        }
+                        className="w-full px-3 py-2.5 rounded-xl border border-border bg-muted/50 text-sm focus:outline-none"
+                      >
+                        <option value="">Selecciona un banco</option>
+                        <option value="bancolombia">Bancolombia</option>
+                        <option value="davivienda">Davivienda</option>
+                        <option value="bbva">BBVA</option>
+                        <option value="bogota">Banco de Bogotá</option>
+                        <option value="occidente">Banco de Occidente</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-xs font-semibold block mb-1">
+                        Tipo de persona
+                      </label>
+                      <div className="grid grid-cols-2 gap-2">
+                        {(["natural", "juridica"] as const).map((type) => (
+                          <button
+                            key={type}
+                            type="button"
+                            onClick={() =>
+                              setPsePayment((prev) => ({ ...prev, personType: type }))
+                            }
+                            className={`px-3 py-2.5 rounded-xl border text-sm font-semibold ${psePayment.personType === type ? "border-yellow-400 bg-yellow-50" : "border-border bg-white"}`}
+                          >
+                            {type === "natural" ? "Persona natural" : "Persona jurídica"}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {checkoutPayment === "nequi" && (
+                  <div className="bg-white rounded-2xl border border-border p-4 space-y-3">
+                    <h3 className="text-sm font-bold">Pago con Nequi</h3>
+                    <div>
+                      <label className="text-xs font-semibold block mb-1">
+                        Número asociado a Nequi
+                      </label>
+                      <input
+                        type="tel"
+                        inputMode="numeric"
+                        value={nequiPayment.phone}
+                        onChange={(e) =>
+                          setNequiPayment({
+                            phone: e.target.value.replace(/\D/g, "").slice(0, 10),
+                          })
+                        }
+                        placeholder="3001234567"
+                        className="w-full px-3 py-2.5 rounded-xl border border-border bg-muted/50 text-sm focus:outline-none"
+                      />
+                    </div>
+                  </div>
+                )}
+
                 <div className="bg-white rounded-2xl border border-border p-4 space-y-2 text-sm">
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Subtotal</span>
@@ -2413,12 +2761,30 @@ export default function App() {
                     </span>
                   </div>
                 </div>
+                {checkoutError && (
+                  <div className="text-sm text-red-500 bg-red-50 rounded-xl px-3 py-2 text-center">
+                    {checkoutError}
+                  </div>
+                )}
                 <button
                   onClick={placeOrder}
-                  className="w-full py-4 rounded-2xl font-black text-base hover:brightness-95 active:scale-95 transition-all"
+                  disabled={
+                    checkoutLoading ||
+                    (checkoutPayment === "tarjeta" &&
+                      (!cardPayment.cardholderName ||
+                        !cardPayment.cardNumber ||
+                        !cardPayment.expiryMonth ||
+                        !cardPayment.expiryYear ||
+                        !cardPayment.cvv ||
+                        !wompiAcceptance.terms ||
+                        !wompiAcceptance.personalData)) ||
+                    (checkoutPayment === "pse" && !psePayment.bank) ||
+                    (checkoutPayment === "nequi" && !nequiPayment.phone)
+                  }
+                  className="w-full py-4 rounded-2xl font-black text-base hover:brightness-95 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                   style={{ background: "#FFF200", color: "#1A1A2E" }}
                 >
-                  Confirmar pedido →
+                  {checkoutLoading ? "Procesando pedido..." : "Confirmar pedido →"}
                 </button>
               </>
             )}
