@@ -43,7 +43,14 @@ export function CatalogPage({
   mobileFiltersOpen,
   setMobileFiltersOpen,
 }: CatalogPageProps) {
-  const { categories, products, loading: catalogLoading } = useCatalog();
+  const { categories, products, loading: catalogLoading } = useCatalog({
+    categories: catalogCategory,
+    onSale: catalogOnSale,
+    priceRange: catalogPriceRange,
+    sort: catalogSort,
+    search: catalogSearch,
+    limit: 200,
+  });
   const PAGE_SIZE = 12;
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
 
@@ -65,49 +72,13 @@ export function CatalogPage({
     );
   };
 
-  const priceMatch = (p: Product) => {
-    const price = p.price;
-    if (catalogPriceRange === "all") return true;
-    if (catalogPriceRange === "0-10000") return price <= 10000;
-    if (catalogPriceRange === "10000-30000")
-      return price > 10000 && price <= 30000;
-    if (catalogPriceRange === "30000-70000")
-      return price > 30000 && price <= 70000;
-    if (catalogPriceRange === "70000+") return price > 70000;
-    return true;
-  };
+
 
   const catalogProducts = products.length > 0 ? products : EMPTY_PRODUCTS;
   const catalogCategories =
     categories.length > 0 ? categories : EMPTY_CATEGORIES;
 
-  let filtered = catalogProducts.filter((p) => {
-    const catMatch =
-      catalogCategory.length === 0 || catalogCategory.includes(p.category);
-    const saleMatch = !catalogOnSale || !!p.originalPrice;
-    const searchMatch =
-      catalogSearch.trim() === "" ||
-      p.name.toLowerCase().includes(catalogSearch.toLowerCase()) ||
-      p.category.toLowerCase().includes(catalogSearch.toLowerCase());
-    return catMatch && saleMatch && priceMatch(p) && searchMatch;
-  });
-
-  if (catalogSort === "precio-asc")
-    filtered = [...filtered].sort((a, b) => a.price - b.price);
-  else if (catalogSort === "precio-desc")
-    filtered = [...filtered].sort((a, b) => b.price - a.price);
-  else if (catalogSort === "descuento")
-    filtered = [...filtered].sort((a, b) => {
-      const dA = a.originalPrice
-        ? (a.originalPrice - a.price) / a.originalPrice
-        : 0;
-      const dB = b.originalPrice
-        ? (b.originalPrice - b.price) / b.originalPrice
-        : 0;
-      return dB - dA;
-    });
-  else if (catalogSort === "nombre")
-    filtered = [...filtered].sort((a, b) => a.name.localeCompare(b.name));
+  const filtered = catalogProducts;
 
   const activeFilterCount =
     catalogCategory.length +

@@ -280,7 +280,17 @@ export default function App() {
 
   const { customer, loading: customerLoading, login, register, socialLogin } =
     useCustomerAuth();
-  const { categories, products, loading: catalogLoading } = useCatalog();
+  const { categories, products, loading: catalogLoading } = useCatalog({
+    limit: 200,
+  });
+  const { products: catalogProducts } = useCatalog({
+    categories: catalogCategory,
+    onSale: catalogOnSale,
+    priceRange: catalogPriceRange,
+    sort: catalogSort,
+    search: catalogSearch,
+    limit: 200,
+  });
 
   // Estado local para errores en el modal
   const [authError, setAuthError] = useState<string | null>(null);
@@ -480,9 +490,9 @@ export default function App() {
     startSlideTimer();
   };
 
-  const filteredProducts = products.filter((p) =>
-    (p.tabs ?? []).includes(activeTab),
-  );
+  const featuredProducts = products
+    .filter((p) => p.isFeatured)
+    .slice(0, 8);
 
   const handleNewsletterSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -1152,7 +1162,7 @@ export default function App() {
             </div>
 
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-4">
-              {filteredProducts.map((p) => (
+              {featuredProducts.map((p) => (
                 <ProductCard
                   key={p.id}
                   product={p}
