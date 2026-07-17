@@ -11,56 +11,10 @@ import { CorrelationIdMiddleware } from './common/middleware/correlation-id.midd
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import cookieParser from 'cookie-parser';
 import { CorsConfig, HelmetConfig } from './config';
-import { exec } from 'child_process';
-import { promisify } from 'util';
 
-const execAsync = promisify(exec);
-
-async function runMigrations(): Promise<void> {
-  console.log('🔄 Running database migrations...');
-
-  try {
-    // 1️⃣ PRIMERO: Generar la migración basada en el esquema actual
-    console.log('📝 Generating migration files...');
-    const { stdout: genStdout, stderr: genStderr } =
-      await execAsync('yarn db:generate');
-
-    if (genStdout) {
-      console.log('✅ Migration generated:', genStdout);
-    }
-    if (genStderr) {
-      console.warn('⚠️ Generation warnings:', genStderr);
-    }
-
-    // 2️⃣ LUEGO: Aplicar la migración a la base de datos
-    console.log('🔄 Applying migrations to database...');
-    const { stdout: pushStdout, stderr: pushStderr } =
-      await execAsync('yarn db:push');
-
-    if (pushStdout) {
-      console.log('✅ Migrations applied:', pushStdout);
-    }
-    if (pushStderr) {
-      console.warn('⚠️ Push warnings:', pushStderr);
-    }
-
-    console.log('✅ Database migrations completed successfully');
-  } catch (error) {
-    const errorMessage =
-      error instanceof Error ? error.message : 'Unknown error';
-    console.error('❌ Migration failed:', errorMessage);
-    throw error; // Detener la aplicación si la migración falla
-  }
-}
-
-async function bootstrap(): Promise<void> {
+async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   const configService = app.get(ConfigService);
-
-  // ✅ Ejecutar migraciones SOLO en producción
-  if (configService.get<string>('app.nodeEnv') === 'production') {
-    await runMigrations();
-  }
 
   // ✅ 1. CORS PRIMERO (antes que cualquier otro middleware)
   const corsOptions = configService.get<CorsConfig>('cors');
@@ -124,7 +78,7 @@ async function bootstrap(): Promise<void> {
   app.use(cookieParser());
 
   // ✅ 5. Swagger (solo en desarrollo)
-  if (configService.get<string>('app.nodeEnv') !== 'production') {
+  if (configService.get('app.nodeEnv') !== 'production') {
     const config = new DocumentBuilder()
       .setTitle('HelpDesk API')
       .setDescription('API para el sistema de control de asistencia')
@@ -138,17 +92,14 @@ async function bootstrap(): Promise<void> {
   const port = configService.get<number>('app.port', 3000);
   await app.listen(port);
 
-  const origin = corsOptions?.origin;
-  const originStr = Array.isArray(origin)
-    ? origin.join(', ')
-    : String(origin ?? 'all');
-
   console.log(`🚀 Server running on http://localhost:${port}`);
   console.log(`📚 Swagger docs: http://localhost:${port}/api/docs`);
-  console.log(`✅ CORS configurado con: ${originStr}`);
+  console.log(
+    `✅ CORS configurado con: ${JSON.stringify(corsOptions?.origin)}`,
+  );
   console.log('🔍 Variables de entorno cargadas:');
-  console.log('CORS_ORIGIN:', process.env.CORS_ORIGIN ?? 'not set');
-  console.log('NODE_ENV:', process.env.NODE_ENV ?? 'not set');
+  console.log('CORS_ORIGIN:', process.env.CORS_ORIGIN);
+  console.log('NODE_ENV:', process.env.NODE_ENV);
 }
 
-void bootstrap();
+bootstrap();
