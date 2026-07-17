@@ -13,7 +13,7 @@
     "start:dev": "dotenvx run -f .env.development.local -- nest start --watch",
     "start:debug": "dotenvx run -f .env.development.local -- nest start --debug --watch",
     "start:prod": "node dist/src/main.js",
-    "migrate": "node scripts/migrate-if-needed.js",
+    "migrate:prod": "node scripts/migrate-if-needed.js",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",
@@ -24,8 +24,7 @@
     "test:watch": "jest --watch",
     "test:cov": "jest --coverage",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
-    "test:e2e": "jest --config ./test/jest-e2e.json",
-    "migrate:prod": "node ./node_modules/drizzle-kit/bin/drizzle-kit.js push"
+    "test:e2e": "jest --config ./test/jest-e2e.json"
   },
   "dependencies": {
     "@nestjs/cli": "11.0.24",
