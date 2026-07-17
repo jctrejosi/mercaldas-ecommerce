@@ -48,6 +48,7 @@ import {
 import { useCustomerAuth } from "../hooks/useCustomerAuth";
 import { useCatalog } from "../hooks/useCatalog";
 import { ordersService, type WompiConfigResponse } from "../services/orders.service";
+import { cartService } from "../services/cart.service";
 import { CartItem, CatalogCategory, Order, Product, Slide } from "./types";
 import { ProductDetailModal } from "./ProductDetailModal";
 import { Logo } from "./Logo";
@@ -237,6 +238,7 @@ const PRODUCT_TABS = [
 export default function App() {
   const [currentView, setCurrentView] = useState<"home" | "catalog">("home");
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
+  const [cartHydrated, setCartHydrated] = useState(false);
   const [cartOpen, setCartOpen] = useState(false);
   const [activeTab, setActiveTab] = useState("vendidos");
   // catalog filters
@@ -374,6 +376,58 @@ export default function App() {
   // 4. Google Login usando useGoogleLogin
 
   // 5. Facebook Login callback
+
+  useEffect(() => {
+    if (customerLoading) return;
+
+    if (!customer) {
+      setCartHydrated(true);
+      return;
+    }
+
+    void cartService
+      .getCart()
+      .then((response) => {
+        setCartItems((prev) => {
+          const merged = new Map<number, CartItem>();
+
+          for (const item of response.items) {
+            merged.set(item.id, {
+              ...item,
+            });
+          }
+
+          for (const item of prev) {
+            const existing = merged.get(item.id);
+            if (existing) {
+              merged.set(item.id, {
+                ...existing,
+                quantity: existing.quantity + item.quantity,
+              });
+            } else {
+              merged.set(item.id, item);
+            }
+          }
+
+          return Array.from(merged.values());
+        });
+        setCartHydrated(true);
+      })
+      .catch(() => {
+        setCartHydrated(true);
+      });
+  }, [customer, customerLoading]);
+
+  useEffect(() => {
+    if (!customer || !cartHydrated) return;
+
+    void cartService.updateCart(
+      cartItems.map((item) => ({
+        productId: item.id,
+        quantity: item.quantity,
+      })),
+    );
+  }, [cartHydrated, cartItems, customer]);
 
   const addToCart = (product: Product) => {
     setCartItems((prev) => {
