@@ -23,6 +23,8 @@ async function runMigrations() {
     console.log('✅ Migraciones completadas exitosamente');
   } catch (error) {
     console.error('❌ Error en migraciones:', error);
+    console.error('STDERR:', migrationError.stderr); // <--- Línea clave
+    console.error('STDOUT:', migrationError.stdout);
     process.exit(1);
   }
 }
