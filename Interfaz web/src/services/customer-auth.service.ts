@@ -1,4 +1,31 @@
 const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:3000";
+const CUSTOMER_ACCESS_TOKEN_KEY = "customer_access_token_fallback";
+
+export function getCustomerAccessToken(): string | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  return window.localStorage.getItem(CUSTOMER_ACCESS_TOKEN_KEY);
+}
+
+export function getAuthHeaders(): Record<string, string> {
+  const token = getCustomerAccessToken();
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
+function persistAccessToken(accessToken?: string | null) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  if (accessToken) {
+    window.localStorage.setItem(CUSTOMER_ACCESS_TOKEN_KEY, accessToken);
+    return;
+  }
+
+  window.localStorage.removeItem(CUSTOMER_ACCESS_TOKEN_KEY);
+}
 
 export interface CustomerRegisterData {
   email: string;
@@ -58,7 +85,9 @@ export const customerAuthService = {
       throw new Error(errorData.message || "Error en el registro");
     }
 
-    return response.json();
+    const result = await response.json();
+    persistAccessToken(result.accessToken);
+    return result;
   },
 
   async login(data: CustomerLoginData): Promise<CustomerAuthResponse> {
@@ -74,7 +103,9 @@ export const customerAuthService = {
       throw new Error(errorData.message || "Credenciales inválidas");
     }
 
-    return response.json();
+    const result = await response.json();
+    persistAccessToken(result.accessToken);
+    return result;
   },
 
   async socialLogin(
@@ -92,15 +123,21 @@ export const customerAuthService = {
       throw new Error(errorData.message || "Error en el login social");
     }
 
-    return response.json();
+    const result = await response.json();
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(CUSTOMER_ACCESS_TOKEN_KEY, result.accessToken);
+    }
+    return result;
   },
 
   async getProfile(): Promise<CustomerAuthResponse["customer"]> {
     const response = await fetch(`${API_BASE_URL}/customer-auth/me`, {
       credentials: "include",
+      headers: getAuthHeaders(),
     });
 
     if (!response.ok) {
+      persistAccessToken(null);
       throw new Error("No autenticado");
     }
 
@@ -112,7 +149,7 @@ export const customerAuthService = {
   ): Promise<{ success: boolean; message: string }> {
     const response = await fetch(`${API_BASE_URL}/customer-auth/logout`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...getAuthHeaders() },
       credentials: "include",
       body: JSON.stringify({ refreshToken }),
     });
@@ -121,6 +158,7 @@ export const customerAuthService = {
       throw new Error("Error al cerrar sesión");
     }
 
+    persistAccessToken(null);
     return response.json();
   },
 
@@ -135,9 +173,12 @@ export const customerAuthService = {
     });
 
     if (!response.ok) {
+      persistAccessToken(null);
       throw new Error("No se pudo refrescar el token");
     }
 
-    return response.json();
+    const result = await response.json();
+    persistAccessToken(result.accessToken);
+    return result;
   },
 };

@@ -1,3 +1,5 @@
+import { getAuthHeaders } from "./customer-auth.service";
+
 const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:3000";
 
 export type CheckoutItem = {
@@ -72,7 +74,13 @@ export type WompiConfigResponse = {
 };
 
 async function fetchJson<T>(input: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(input, init);
+  const response = await fetch(input, {
+    ...init,
+    headers: {
+      ...getAuthHeaders(),
+      ...(init?.headers ?? {}),
+    },
+  });
   const json = await response.json().catch(() => null);
 
   if (!response.ok) {

@@ -1,3 +1,5 @@
+import { getAuthHeaders } from "./customer-auth.service";
+
 const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:3000";
 
 export type CartSyncItem = {
@@ -27,6 +29,10 @@ async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
   const response = await fetch(url, {
     credentials: "include",
     ...init,
+    headers: {
+      ...getAuthHeaders(),
+      ...(init?.headers ?? {}),
+    },
   });
 
   const json = await response.json().catch(() => null);
