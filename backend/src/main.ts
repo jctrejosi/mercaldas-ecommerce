@@ -16,27 +16,50 @@ import { promisify } from 'util';
 
 const execAsync = promisify(exec);
 
+async function runMigrations(): Promise<void> {
+  console.log('🔄 Running database migrations...');
+
+  try {
+    // 1️⃣ PRIMERO: Generar la migración basada en el esquema actual
+    console.log('📝 Generating migration files...');
+    const { stdout: genStdout, stderr: genStderr } =
+      await execAsync('yarn db:generate');
+
+    if (genStdout) {
+      console.log('✅ Migration generated:', genStdout);
+    }
+    if (genStderr) {
+      console.warn('⚠️ Generation warnings:', genStderr);
+    }
+
+    // 2️⃣ LUEGO: Aplicar la migración a la base de datos
+    console.log('🔄 Applying migrations to database...');
+    const { stdout: pushStdout, stderr: pushStderr } =
+      await execAsync('yarn db:push');
+
+    if (pushStdout) {
+      console.log('✅ Migrations applied:', pushStdout);
+    }
+    if (pushStderr) {
+      console.warn('⚠️ Push warnings:', pushStderr);
+    }
+
+    console.log('✅ Database migrations completed successfully');
+  } catch (error) {
+    const errorMessage =
+      error instanceof Error ? error.message : 'Unknown error';
+    console.error('❌ Migration failed:', errorMessage);
+    throw error; // Detener la aplicación si la migración falla
+  }
+}
+
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create(AppModule);
   const configService = app.get(ConfigService);
 
-  // Solo ejecutar migraciones en producción
+  // ✅ Ejecutar migraciones SOLO en producción
   if (configService.get<string>('app.nodeEnv') === 'production') {
-    try {
-      const { stdout, stderr } = await execAsync('yarn db:push');
-
-      if (stdout) {
-        console.log('✅ Migrations completed:', stdout);
-      }
-      if (stderr) {
-        console.warn('⚠️ Migration warnings:', stderr);
-      }
-    } catch (error) {
-      const errorMessage =
-        error instanceof Error ? error.message : 'Unknown error';
-      console.error('❌ Migration error:', errorMessage);
-      // No detener la aplicación si falla la migración
-    }
+    await runMigrations();
   }
 
   // ✅ 1. CORS PRIMERO (antes que cualquier otro middleware)
