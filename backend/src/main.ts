@@ -11,10 +11,33 @@ import { CorrelationIdMiddleware } from './common/middleware/correlation-id.midd
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import cookieParser from 'cookie-parser';
 import { CorsConfig, HelmetConfig } from './config';
+import { exec } from 'child_process';
+import { promisify } from 'util';
 
-async function bootstrap() {
+const execAsync = promisify(exec);
+
+async function bootstrap(): Promise<void> {
   const app = await NestFactory.create(AppModule);
   const configService = app.get(ConfigService);
+
+  // Solo ejecutar migraciones en producción
+  if (configService.get<string>('app.nodeEnv') === 'production') {
+    try {
+      const { stdout, stderr } = await execAsync('yarn db:push');
+
+      if (stdout) {
+        console.log('✅ Migrations completed:', stdout);
+      }
+      if (stderr) {
+        console.warn('⚠️ Migration warnings:', stderr);
+      }
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
+      console.error('❌ Migration error:', errorMessage);
+      // No detener la aplicación si falla la migración
+    }
+  }
 
   // ✅ 1. CORS PRIMERO (antes que cualquier otro middleware)
   const corsOptions = configService.get<CorsConfig>('cors');
@@ -78,7 +101,7 @@ async function bootstrap() {
   app.use(cookieParser());
 
   // ✅ 5. Swagger (solo en desarrollo)
-  if (configService.get('app.nodeEnv') !== 'production') {
+  if (configService.get<string>('app.nodeEnv') !== 'production') {
     const config = new DocumentBuilder()
       .setTitle('HelpDesk API')
       .setDescription('API para el sistema de control de asistencia')
@@ -92,14 +115,17 @@ async function bootstrap() {
   const port = configService.get<number>('app.port', 3000);
   await app.listen(port);
 
+  const origin = corsOptions?.origin;
+  const originStr = Array.isArray(origin)
+    ? origin.join(', ')
+    : String(origin ?? 'all');
+
   console.log(`🚀 Server running on http://localhost:${port}`);
   console.log(`📚 Swagger docs: http://localhost:${port}/api/docs`);
-  console.log(
-    `✅ CORS configurado con: ${JSON.stringify(corsOptions?.origin)}`,
-  );
+  console.log(`✅ CORS configurado con: ${originStr}`);
   console.log('🔍 Variables de entorno cargadas:');
-  console.log('CORS_ORIGIN:', process.env.CORS_ORIGIN);
-  console.log('NODE_ENV:', process.env.NODE_ENV);
+  console.log('CORS_ORIGIN:', process.env.CORS_ORIGIN ?? 'not set');
+  console.log('NODE_ENV:', process.env.NODE_ENV ?? 'not set');
 }
 
-bootstrap();
+void bootstrap();
