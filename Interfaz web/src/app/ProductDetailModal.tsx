@@ -1,6 +1,7 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { ProductDetailModalProps, Product } from "./types";
 import { Minus, Plus, ShoppingCart, TrendingUp, X } from "lucide-react";
+import { catalogService } from "../services/catalog.service";
 
 const PRODUCTS: Product[] = [
   {
@@ -464,6 +465,7 @@ export function ProductDetailModal({
   onRemove,
   onClose,
 }: ProductDetailModalProps) {
+  const [relatedProducts, setRelatedProducts] = useState<Product[]>([]);
   const inCart = product ? cartItems.find((c) => c.id === product.id) : null;
   const qty = inCart?.quantity ?? 0;
 
@@ -483,15 +485,29 @@ export function ProductDetailModal({
     return () => document.removeEventListener("keydown", onKey);
   }, [onClose]);
 
+  useEffect(() => {
+    let mounted = true;
+
+    const loadRelatedProducts = async () => {
+      if (!product) return;
+      const related = await catalogService.getRelatedProducts(product);
+      if (mounted) {
+        setRelatedProducts(related.slice(0, 4));
+      }
+    };
+
+    loadRelatedProducts();
+
+    return () => {
+      mounted = false;
+    };
+  }, [product]);
+
   if (!product) return null;
 
   const discount = product.originalPrice
     ? Math.round((1 - product.price / product.originalPrice) * 100)
     : null;
-
-  const relatedProducts = PRODUCTS.filter(
-    (p) => p.category === product.category && p.id !== product.id,
-  ).slice(0, 4);
 
   const specs = getSpec(product.category);
   const description =

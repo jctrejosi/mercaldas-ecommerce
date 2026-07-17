@@ -45,8 +45,10 @@ import {
   Banknote,
   Smartphone,
 } from "lucide-react";
+import { useCatalog } from "../../../hooks/useCatalog";
 import { InfiniteScrollTrigger } from "./InfiniteScrollTrigger";
 import { ProductCard } from "./ProductCard";
+import { CatalogPageProps, Product } from "../../types";
 
 const PRICE_RANGES = [
   { id: "all", label: "Todos los precios" },
@@ -64,7 +66,7 @@ const SORT_OPTIONS = [
   { id: "nombre", label: "Nombre A–Z" },
 ];
 
-const PRODUCTS: Product[] = [
+const FALLBACK_PRODUCTS: Product[] = [
   {
     id: 1,
     name: "Pechuga de Pollo Fresca x kg",
@@ -429,7 +431,7 @@ const PRODUCTS: Product[] = [
   },
 ];
 
-const CATEGORIES = [
+const FALLBACK_CATEGORIES = [
   {
     id: 1,
     name: "Carnes y Pollo",
@@ -505,6 +507,7 @@ export function CatalogPage({
   mobileFiltersOpen,
   setMobileFiltersOpen,
 }: CatalogPageProps) {
+  const { categories, products, loading: catalogLoading } = useCatalog();
   const PAGE_SIZE = 12;
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
 
@@ -538,7 +541,11 @@ export function CatalogPage({
     return true;
   };
 
-  let filtered = PRODUCTS.filter((p) => {
+  const catalogProducts = products.length > 0 ? products : FALLBACK_PRODUCTS;
+  const catalogCategories =
+    categories.length > 0 ? categories : FALLBACK_CATEGORIES;
+
+  let filtered = catalogProducts.filter((p) => {
     const catMatch =
       catalogCategory.length === 0 || catalogCategory.includes(p.category);
     const saleMatch = !catalogOnSale || !!p.originalPrice;
@@ -584,9 +591,9 @@ export function CatalogPage({
       <div>
         <h3 className="font-bold text-sm text-foreground mb-3">Categorías</h3>
         <div className="space-y-1.5">
-          {CATEGORIES.map((cat) => {
+          {catalogCategories.map((cat) => {
             const Icon = cat.icon;
-            const count = PRODUCTS.filter(
+            const count = catalogProducts.filter(
               (p) => p.category === cat.name,
             ).length;
             const checked = catalogCategory.includes(cat.name);
@@ -886,16 +893,22 @@ export function CatalogPage({
           {filtered.length > 0 ? (
             <>
               <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3 flex-1">
-                {visibleProducts.map((p) => (
-                  <ProductCard
-                    key={p.id}
-                    product={p}
-                    cartItems={cartItems}
-                    onAdd={onAdd}
-                    onRemove={onRemove}
-                    onProductClick={onProductClick}
-                  />
-                ))}
+                {catalogLoading ? (
+                  <div className="col-span-full text-center py-12 text-sm text-muted-foreground">
+                    Cargando catálogo...
+                  </div>
+                ) : (
+                  visibleProducts.map((p) => (
+                    <ProductCard
+                      key={p.id}
+                      product={p}
+                      cartItems={cartItems}
+                      onAdd={onAdd}
+                      onRemove={onRemove}
+                      onProductClick={onProductClick}
+                    />
+                  ))
+                )}
               </div>
 
               {/* Sentinel + skeletons */}

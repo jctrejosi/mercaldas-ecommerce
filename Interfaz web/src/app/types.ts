@@ -35,6 +35,14 @@ export interface Product {
   unit: string;
 }
 
+export interface CatalogCategory {
+  id: number;
+  name: string;
+  icon: React.ComponentType<React.SVGProps<SVGSVGElement>>;
+  color: string;
+  bg: string;
+}
+
 export interface Slide {
   id: number;
   title: string;

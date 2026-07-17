@@ -46,13 +46,16 @@ import {
   Smartphone,
 } from "lucide-react";
 import { useCustomerAuth } from "../hooks/useCustomerAuth";
-import { useGoogleLogin } from "@react-oauth/google";
-import FacebookLogin from "react-facebook-login";
-import { CartItem, Order, Product, Slide } from "./types";
+import { useCatalog } from "../hooks/useCatalog";
+import { CartItem, CatalogCategory, Order, Product, Slide } from "./types";
 import { ProductDetailModal } from "./ProductDetailModal";
+import { Logo } from "./Logo";
+import { CatalogPage } from "./Views/CatalogView";
+import { ProductCard } from "./Views/CatalogView/ProductCard";
+import { SocialAuthButtons } from "./SocialAuthButtons";
 
 /* ─── Data ───────────────────────────────────────────────── */
-const CATEGORIES = [
+const CATEGORIES: CatalogCategory[] = [
   {
     id: 1,
     name: "Carnes y Pollo",
@@ -640,149 +643,14 @@ const PRODUCT_TABS = [
 ];
 
 /* ─── Helpers ────────────────────────────────────────────── */
-const fmt = (n: number) =>
-  new Intl.NumberFormat("es-CO", {
-    style: "currency",
-    currency: "COP",
-    maximumFractionDigits: 0,
-  }).format(n);
 
 /* ─── ProductCard ────────────────────────────────────────── */
 
 /* ─── Product Detail Modal ───────────────────────────────── */
 
-const MOCK_DESCRIPTIONS: Record<string, string> = {
-  "Carnes y Pollo":
-    "Producto de primera calidad, seleccionado directamente de proveedores locales certificados. Garantizamos la cadena de frío y frescura desde el origen hasta tu mesa.",
-  Lácteos:
-    "Producto lácteo de alta calidad elaborado con leche fresca de vacas alimentadas en pasturas naturales. Rico en calcio, proteínas y vitaminas esenciales.",
-  "Frutas y Verduras":
-    "Producto fresco traído directamente de las fincas de la región. Sin conservantes, seleccionado en su punto óptimo de madurez para garantizar el mejor sabor.",
-  Despensa:
-    "Producto de despensa esencial para tu hogar. Elaborado con ingredientes de alta calidad y procesos certificados de inocuidad alimentaria.",
-  Limpieza:
-    "Fórmula concentrada de alto rendimiento. Eficaz contra el 99.9% de gérmenes y bacterias, con un aroma fresco duradero.",
-  "Cuidado Personal":
-    "Formulado dermatológicamente para el cuidado diario. pH balanceado, sin parabenos. Adecuado para todo tipo de piel.",
-  "Cuidado del Bebé":
-    "Especialmente formulado para la delicada piel del bebé. Dermatológicamente probado, hipoalergénico y libre de sustancias agresivas.",
-  "Vinos y Licores":
-    "Seleccionado por nuestros expertos enólogos. Proveniente de viñedos de altitud con características organolépticas excepcionales.",
-  Hogar:
-    "Diseñado para durar. Fabricado con materiales resistentes y de alta calidad para el uso cotidiano del hogar.",
-  Tecnología:
-    "Tecnología de última generación. Compatible con los principales estándares del mercado, con garantía oficial del fabricante.",
-  Mascotas:
-    "Nutricionalmente balanceado para cubrir todas las necesidades de tu mascota en cada etapa de su vida.",
-  Electrodomésticos:
-    "Electrodoméstico de alta eficiencia energética. Certificado con garantía del fabricante y soporte técnico especializado.",
-};
-
-const MOCK_SPECS: Record<string, Array<{ label: string; value: string }>> = {
-  "Carnes y Pollo": [
-    { label: "Origen", value: "Colombia" },
-    { label: "Temperatura", value: "Refrigerado 0–4 °C" },
-    { label: "Proteína", value: "23 g por 100 g" },
-    { label: "Grasa total", value: "3.5 g por 100 g" },
-  ],
-  Lácteos: [
-    { label: "Origen", value: "Caldas, Colombia" },
-    { label: "Temperatura", value: "Refrigerado 0–4 °C" },
-    { label: "Calcio", value: "120 mg por 100 mL" },
-    { label: "Proteína", value: "3.2 g por 100 mL" },
-  ],
-  "Frutas y Verduras": [
-    { label: "Origen", value: "Región Andina, Colombia" },
-    { label: "Conservación", value: "Lugar fresco y seco" },
-    { label: "Calorías", value: "Aprox. 40–80 kcal / 100 g" },
-    { label: "Libre de", value: "Conservantes artificiales" },
-  ],
-  Despensa: [
-    { label: "Contenido", value: "Ver empaque" },
-    { label: "Conservación", value: "Lugar fresco y seco" },
-    { label: "Registro INVIMA", value: "RSA-F-0012345" },
-    { label: "Hecho en", value: "Colombia" },
-  ],
-  Limpieza: [
-    { label: "Rendimiento", value: "Hasta 80 lavadas" },
-    { label: "Concentración", value: "Alta" },
-    { label: "Fragancia", value: "Brisa marina" },
-    { label: "Biodegradable", value: "Sí" },
-  ],
-  "Cuidado Personal": [
-    { label: "pH", value: "Balanceado (5.5)" },
-    { label: "Libre de parabenos", value: "Sí" },
-    { label: "Tipo de piel", value: "Todo tipo" },
-    { label: "Dermatológicamente probado", value: "Sí" },
-  ],
-  "Cuidado del Bebé": [
-    { label: "Hipoalergénico", value: "Sí" },
-    { label: "Libre de fragancias fuertes", value: "Sí" },
-    { label: "Dermatológicamente probado", value: "Sí" },
-    { label: "Edad recomendada", value: "Desde el nacimiento" },
-  ],
-};
-
-function getSpec(category: string) {
-  return (
-    MOCK_SPECS[category] ?? [
-      { label: "Contenido neto", value: "Ver empaque" },
-      { label: "País de origen", value: "Colombia" },
-      { label: "Registro", value: "RSA-F-0012345" },
-      { label: "Garantía", value: "Según fabricante" },
-    ]
-  );
-}
-
 /* ─── Logo ───────────────────────────────────────────────── */
 
 /* ─── Infinite scroll trigger ────────────────────────────── */
-function InfiniteScrollTrigger({
-  onIntersect,
-  count,
-}: {
-  onIntersect: () => void;
-  count: number;
-}) {
-  const sentinelRef = useRef<HTMLDivElement>(null);
-  const firedRef = useRef(false);
-
-  useEffect(() => {
-    firedRef.current = false;
-    const el = sentinelRef.current;
-    if (!el) return;
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting && !firedRef.current) {
-          firedRef.current = true;
-          setTimeout(onIntersect, 600);
-        }
-      },
-      { rootMargin: "200px" },
-    );
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, [onIntersect]);
-
-  return (
-    <div>
-      {/* Skeleton grid shown while scrolling into view */}
-      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3 mt-3">
-        {Array.from({ length: count }).map((_, i) => (
-          <SkeletonCard key={i} />
-        ))}
-      </div>
-      {/* Invisible sentinel at the bottom */}
-      <div ref={sentinelRef} className="h-1 w-full" />
-      <style>{`
-        @keyframes shimmer {
-          0% { background-position: -200% 0; }
-          100% { background-position: 200% 0; }
-        }
-      `}</style>
-    </div>
-  );
-}
 
 /* ─── Main App ───────────────────────────────────────────── */
 export default function App() {
@@ -830,14 +698,23 @@ export default function App() {
   >("efectivo");
   const [lastOrderId, setLastOrderId] = useState("");
 
-  const { login, register, socialLogin, loading, customer } = useCustomerAuth();
+  const { login, register } = useCustomerAuth();
+  const { categories, products, loading: catalogLoading } = useCatalog();
 
   // Estado local para errores en el modal
   const [authError, setAuthError] = useState<string | null>(null);
   const [authLoading, setAuthLoading] = useState(false);
 
   // 3. Crear handlers para login y registro
-  const handleLoginSubmit = async (email: string, password: string) => {
+  const handleLoginSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setAuthError(null);
+    setAuthLoading(true);
+
+    const formData = new FormData(e.currentTarget);
+    const email = formData.get("email") as string;
+    const password = formData.get("password") as string;
+
     try {
       await login(email, password);
       setLoginModal(false);
@@ -845,9 +722,10 @@ export default function App() {
         setCheckoutStep(1);
         setCheckoutOpen(true);
       }
-    } catch (error) {
-      // Mostrar error en el modal (puedes usar un estado local)
-      console.error(error);
+    } catch (error: any) {
+      setAuthError(error.message || "Error al iniciar sesión");
+    } finally {
+      setAuthLoading(false);
     }
   };
 
@@ -882,18 +760,6 @@ export default function App() {
   // 4. Google Login usando useGoogleLogin
 
   // 5. Facebook Login callback
-  const facebookResponse = (response: any) => {
-    if (response.accessToken) {
-      socialLogin("facebook", response.accessToken, {
-        email: response.email,
-        name: response.name,
-        picture: response.picture?.data?.url,
-        id: response.id,
-      })
-        .then(() => setLoginModal(false))
-        .catch(console.error);
-    }
-  };
 
   const addToCart = (product: Product) => {
     setCartItems((prev) => {
@@ -936,13 +802,6 @@ export default function App() {
   };
 
   const closeModal = () => setLoginModal(false);
-
-  const handleAuthSuccess = () => {
-    setLoginModal(false);
-    setCartOpen(false);
-    setCheckoutStep(1);
-    setCheckoutOpen(true);
-  };
 
   const cartTotal = cartItems.reduce((s, c) => s + c.price * c.quantity, 0);
   const cartCount = cartItems.reduce((s, c) => s + c.quantity, 0);
@@ -994,22 +853,28 @@ export default function App() {
     "Huevos",
     "Café Juan Valdez",
   ];
-  const SUGGESTED_CATEGORIES = CATEGORIES.slice(0, 6);
+  const SUGGESTED_CATEGORIES = (
+    categories.length > 0 ? categories : CATEGORIES
+  ).slice(0, 6);
 
   const searchResults =
     searchQuery.trim().length >= 2
-      ? PRODUCTS.filter(
-          (p) =>
-            p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            p.category.toLowerCase().includes(searchQuery.toLowerCase()),
-        ).slice(0, 5)
+      ? (products.length > 0 ? products : PRODUCTS)
+          .filter(
+            (p) =>
+              p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+              p.category.toLowerCase().includes(searchQuery.toLowerCase()),
+          )
+          .slice(0, 5)
       : [];
 
   const suggestedCategories =
     searchQuery.trim().length >= 2
-      ? CATEGORIES.filter((c) =>
-          c.name.toLowerCase().includes(searchQuery.toLowerCase()),
-        ).slice(0, 3)
+      ? (categories.length > 0 ? categories : CATEGORIES)
+          .filter((c) =>
+            c.name.toLowerCase().includes(searchQuery.toLowerCase()),
+          )
+          .slice(0, 3)
       : [];
 
   const startSlideTimer = () => {
@@ -1031,7 +896,9 @@ export default function App() {
     startSlideTimer();
   };
 
-  const filteredProducts = PRODUCTS.filter((p) => p.tabs.includes(activeTab));
+  const filteredProducts = (products.length > 0 ? products : PRODUCTS).filter(
+    (p) => p.tabs.includes(activeTab),
+  );
 
   const handleNewsletterSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -2330,7 +2197,13 @@ export default function App() {
                         setCheckoutOpen(true);
                       }
                     }}
-                    onError={(error) => setAuthError(error)}
+                    onError={(error: unknown) =>
+                      setAuthError(
+                        error instanceof Error
+                          ? error.message
+                          : "Error en autenticación",
+                      )
+                    }
                   />
 
                   <div>
@@ -2422,7 +2295,13 @@ export default function App() {
                     onSuccess={() => {
                       setLoginModal(false);
                     }}
-                    onError={(error) => setAuthError(error)}
+                    onError={(error: unknown) =>
+                      setAuthError(
+                        error instanceof Error
+                          ? error.message
+                          : "Error en autenticación",
+                      )
+                    }
                   />
 
                   <div className="grid grid-cols-2 gap-2">
