@@ -6,12 +6,7 @@ export default defineConfig({
   schema: './drizzle/schema.ts',
   out: './drizzle/migrate',
   dbCredentials: {
-    host: process.env.DB_HOST || 'localhost',
-    port: parseInt(process.env.DB_PORT || '5432'),
-    user: process.env.DB_USER || 'postgres',
-    password: process.env.DB_PASSWORD || 'postgres',
-    database: process.env.DB_NAME || 'ecommerce',
-    ssl: false,
+    url: process.env.DATABASE_URL!,
   },
   tablesFilter: ['!spatial_ref_sys', '!geography_columns', '!geometry_columns'],
   verbose: true,
