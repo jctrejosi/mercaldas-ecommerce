@@ -31,6 +31,8 @@ async function runMigrations() {
     console.log('✅ Proceso completado exitosamente');
     
   } catch (error) {
+    console.error(error?.stdout || 'no stdout');
+    console.error(error?.stderr || 'no stderr');
     console.log('⚠️ Error en el proceso (ignorado):', error.message);
   }
   
