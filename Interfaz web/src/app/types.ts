@@ -25,22 +25,40 @@ export interface CatalogPageProps {
 
 export interface Product {
   id: number;
+  slug?: string;
   name: string;
+  description?: string;
   price: number;
+  currency?: string;
   originalPrice?: number;
-  image: string;
+  image?: string;
+  images?: string[];
   category: string;
+  categoryId?: number;
   badge?: string;
-  tabs: string[];
-  unit: string;
+  tabs?: string[];
+  unit?: string;
+  stock?: number;
+  isActive?: boolean;
+  isFeatured?: boolean;
+  tags?: string[];
 }
 
 export interface CatalogCategory {
   id: number;
+  slug?: string;
   name: string;
-  icon: React.ComponentType<React.SVGProps<SVGSVGElement>>;
-  color: string;
-  bg: string;
+  description?: string;
+  icon?: React.ComponentType<React.SVGProps<SVGSVGElement>> | null;
+  iconName?: string;
+  color?: string;
+  bg?: string;
+  isActive?: boolean;
+}
+
+export interface CatalogDataResponse {
+  categories: CatalogCategory[];
+  products: Product[];
 }
 
 export interface Slide {
