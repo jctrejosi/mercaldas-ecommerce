@@ -409,15 +409,6 @@ export const store = pgTable(
 
 import { customType } from 'drizzle-orm/pg-core';
 
-export const geography = customType<{
-  data: unknown; // o el tipo que uses (GeoJSON, WKT, etc.)
-  driverData: unknown;
-}>({
-  dataType() {
-    return 'geography';
-  },
-});
-
 export const branches = pgTable(
   'branches',
   {
@@ -435,8 +426,8 @@ export const branches = pgTable(
     managerPhone: varchar('manager_phone', { length: 30 }).notNull(),
     maxDailyOrders: integer('max_daily_orders'),
     branchType: varchar('branch_type', { length: 50 }).default('STORE'),
-    // TODO: failed to parse database type 'geography'
-    location: geography('location').notNull(),
+    // TODO: failed to parse database type 'text'
+    location: text('location').notNull(),
     deliveryRadiusKm: numeric('delivery_radius_km', { precision: 6, scale: 2 })
       .default('5.0')
       .notNull(),
@@ -452,8 +443,8 @@ export const branches = pgTable(
   },
   (table) => [
     index('idx_branches_location').using(
-      'gist',
-      table.location.asc().nullsLast().op('gist_geography_ops'),
+      'btree',
+      table.location.asc().nullsLast().op('text_ops'),
     ),
     foreignKey({
       columns: [table.storeId],
@@ -480,8 +471,8 @@ export const deliveryZones = pgTable(
       .notNull(),
     displayOrder: smallint('display_order'),
     schedule: jsonb(),
-    // TODO: failed to parse database type 'geography'
-    coverageArea: geography('coverage_area').notNull(),
+    // TODO: failed to parse database type 'text'
+    coverageArea: text('coverage_area').notNull(),
     estimatedMinMinutes: smallint('estimated_min_minutes').notNull(),
     estimatedMaxMinutes: smallint('estimated_max_minutes').notNull(),
     deliveryType: varchar('delivery_type', { length: 30 })
@@ -504,8 +495,8 @@ export const deliveryZones = pgTable(
   },
   (table) => [
     index('idx_delivery_zones_coverage').using(
-      'gist',
-      table.coverageArea.asc().nullsLast().op('gist_geography_ops'),
+      'btree',
+      table.coverageArea.asc().nullsLast().op('text_ops'),
     ),
     foreignKey({
       columns: [table.branchId],
@@ -1431,8 +1422,8 @@ export const customerAddresses = pgTable(
     postalCode: varchar('postal_code', { length: 20 }),
     country: varchar({ length: 100 }).default('Colombia').notNull(),
     deliveryInstructions: text('delivery_instructions'),
-    // TODO: failed to parse database type 'geography'
-    location: geography('location'),
+    // TODO: failed to parse database type 'text'
+    location: text('location'),
     reference: text(),
     isDefault: boolean('is_default').default(false).notNull(),
     labelColor: varchar('label_color', { length: 20 }),
@@ -1451,8 +1442,8 @@ export const customerAddresses = pgTable(
       table.isDefault.asc().nullsLast().op('bool_ops'),
     ),
     index('idx_customer_addresses_location').using(
-      'gist',
-      table.location.asc().nullsLast().op('gist_geography_ops'),
+      'btree',
+      table.location.asc().nullsLast().op('text_ops'),
     ),
     uniqueIndex('idx_customer_default_address')
       .using('btree', table.customerId.asc().nullsLast().op('int8_ops'))
@@ -2000,8 +1991,8 @@ export const shipments = pgTable(
     addressLine2: text('address_line2'),
     city: varchar({ length: 100 }).notNull(),
     postalCode: varchar('postal_code', { length: 20 }),
-    // TODO: failed to parse database type 'geography'
-    location: geography('location'),
+    // TODO: failed to parse database type 'text'
+    location: text('location'),
     // You can use { mode: "bigint" } if numbers are exceeding js number limitations
     deliveryTimeSlotId: bigint('delivery_time_slot_id', { mode: 'number' }),
     scheduledDate: date('scheduled_date'),
@@ -2035,8 +2026,8 @@ export const shipments = pgTable(
   },
   (table) => [
     index('idx_shipments_location').using(
-      'gist',
-      table.location.asc().nullsLast().op('gist_geography_ops'),
+      'btree',
+      table.location.asc().nullsLast().op('text_ops'),
     ),
     foreignKey({
       columns: [table.deliveryTimeSlotId],
@@ -2310,8 +2301,8 @@ export const deliveryDrivers = pgTable(
     vehicleColor: varchar('vehicle_color', { length: 50 }),
     isAvailable: boolean('is_available').default(true).notNull(),
     isActive: boolean('is_active').default(true).notNull(),
-    // TODO: failed to parse database type 'geography'
-    currentLocation: geography('current_location'),
+    // TODO: failed to parse database type 'text'
+    currentLocation: text('current_location'),
     lastLocationAt: timestamp('last_location_at', {
       withTimezone: true,
       mode: 'string',
@@ -2342,8 +2333,8 @@ export const deliveryDriverLocations = pgTable(
     id: bigserial({ mode: 'bigint' }).primaryKey().notNull(),
     // You can use { mode: "bigint" } if numbers are exceeding js number limitations
     driverId: bigint('driver_id', { mode: 'number' }).notNull(),
-    // TODO: failed to parse database type 'geography'
-    location: geography('location').notNull(),
+    // TODO: failed to parse database type 'text'
+    location: text('location').notNull(),
     speedKmh: numeric('speed_kmh', { precision: 5, scale: 2 }),
     headingDegrees: integer('heading_degrees'),
     recordedAt: timestamp('recorded_at', { withTimezone: true, mode: 'string' })
@@ -2352,8 +2343,8 @@ export const deliveryDriverLocations = pgTable(
   },
   (table) => [
     index('idx_delivery_driver_locations_location').using(
-      'gist',
-      table.location.asc().nullsLast().op('gist_geography_ops'),
+      'btree',
+      table.location.asc().nullsLast().op('text_ops'),
     ),
     index('idx_driver_locations_driver').using(
       'btree',
@@ -2452,8 +2443,8 @@ export const deliveryEvents = pgTable(
     // You can use { mode: "bigint" } if numbers are exceeding js number limitations
     assignmentId: bigint('assignment_id', { mode: 'number' }).notNull(),
     eventType: deliveryEventTypeEnum('event_type').notNull(),
-    // TODO: failed to parse database type 'geography'
-    location: geography('location'),
+    // TODO: failed to parse database type 'text'
+    location: text('location'),
     description: text(),
     // You can use { mode: "bigint" } if numbers are exceeding js number limitations
     createdBy: bigint('created_by', { mode: 'number' }),
