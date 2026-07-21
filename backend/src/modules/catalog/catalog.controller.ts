@@ -1,4 +1,4 @@
-import { Controller, Get, Query } from '@nestjs/common';
+import { Body, Controller, Get, Post, Query } from '@nestjs/common';
 import { ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { Public } from '../../common/decorators/public.decorator';
 import { CatalogService } from './catalog.service';
@@ -18,20 +18,10 @@ export class CatalogController {
   }
 
   @Public()
-  @Get('products')
+  @Post('products')
   @ApiOperation({ summary: 'Obtener productos del catálogo con filtros' })
-  @ApiQuery({
-    name: 'categories',
-    required: false,
-    description: 'Categorías separadas por coma',
-  })
-  @ApiQuery({ name: 'onSale', required: false, type: Boolean })
-  @ApiQuery({ name: 'priceRange', required: false, example: '10000-30000' })
-  @ApiQuery({ name: 'sort', required: false, example: 'relevancia' })
-  @ApiQuery({ name: 'search', required: false, example: 'leche' })
-  @ApiQuery({ name: 'limit', required: false, type: Number })
   @ApiResponse({ status: 200, description: 'Listado de productos' })
-  getProducts(@Query() query: CatalogProductsQueryDto) {
+  getProducts(@Body() query: CatalogProductsQueryDto) {
     return this.catalogService.getProducts(query);
   }
 }

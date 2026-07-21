@@ -79,6 +79,13 @@ export function CatalogPage({
   const catalogCategories =
     categories.length > 0 ? categories : EMPTY_CATEGORIES;
 
+  const rootCategories = catalogCategories.filter(
+    (category) => !category.parentId,
+  );
+
+  const getChildCategories = (parentId: number) =>
+    catalogCategories.filter((category) => category.parentId === parentId);
+
   const filtered = catalogProducts;
 
   const activeFilterCount =
@@ -99,62 +106,117 @@ export function CatalogPage({
       <div>
         <h3 className="font-bold text-sm text-foreground mb-3">Categorías</h3>
         <div className="space-y-1.5">
-          {catalogCategories.map((cat) => {
+          {rootCategories.map((cat) => {
             const Icon = cat.icon;
+            const childCategories = getChildCategories(cat.id);
             const count = catalogProducts.filter(
-              (p) => p.category === cat.name,
+              (p) =>
+                p.categoryId === cat.id ||
+                childCategories.some((child) => child.id === p.categoryId),
             ).length;
             const checked = catalogCategory.includes(cat.name);
+
             return (
-              <label
-                key={cat.id}
-                className="flex items-center gap-2.5 py-1 px-2 rounded-lg cursor-pointer hover:bg-muted transition-colors group"
-              >
-                <div
-                  className="w-5 h-5 rounded border-2 flex items-center justify-center flex-shrink-0 transition-all"
-                  style={{
-                    borderColor: checked ? "#1A1A2E" : "#D1D5DB",
-                    background: checked ? "#1A1A2E" : "white",
-                  }}
-                  onClick={() => toggleCategory(cat.name)}
-                >
-                  {checked && (
-                    <svg width="10" height="8" viewBox="0 0 10 8" fill="none">
-                      <path
-                        d="M1 4l2.5 2.5L9 1"
-                        stroke="#FFF200"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
+              <div key={cat.id} className="space-y-1">
+                <label className="flex items-center gap-2.5 py-1 px-2 rounded-lg cursor-pointer hover:bg-muted transition-colors group">
+                  <div
+                    className="w-5 h-5 rounded border-2 flex items-center justify-center flex-shrink-0 transition-all"
+                    style={{
+                      borderColor: checked ? "#1A1A2E" : "#D1D5DB",
+                      background: checked ? "#1A1A2E" : "white",
+                    }}
+                    onClick={() => toggleCategory(cat.name)}
+                  >
+                    {checked && (
+                      <svg width="10" height="8" viewBox="0 0 10 8" fill="none">
+                        <path
+                          d="M1 4l2.5 2.5L9 1"
+                          stroke="#FFF200"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                      </svg>
+                    )}
+                  </div>
+                  <div
+                    className="w-5 h-5 rounded flex items-center justify-center flex-shrink-0"
+                    style={{ background: cat.bg ?? "#F3F4F6" }}
+                  >
+                    {Icon ? (
+                      <Icon
+                        className="w-3 h-3"
+                        style={{ color: cat.color ?? "currentColor" }}
                       />
-                    </svg>
-                  )}
-                </div>
-                <div
-                  className="w-5 h-5 rounded flex items-center justify-center flex-shrink-0"
-                  style={{ background: cat.bg ?? "#F3F4F6" }}
-                >
-                  {Icon ? (
-                    <Icon
-                      className="w-3 h-3"
-                      style={{ color: cat.color ?? "currentColor" }}
-                    />
-                  ) : null}
-                </div>
-                <span
-                  className="text-sm flex-1 transition-colors"
-                  style={{
-                    color: checked ? "#1A1A2E" : "#6B7280",
-                    fontWeight: checked ? 600 : 400,
-                  }}
-                  onClick={() => toggleCategory(cat.name)}
-                >
-                  {cat.name}
-                </span>
-                <span className="text-xs text-muted-foreground ml-auto">
-                  {count}
-                </span>
-              </label>
+                    ) : null}
+                  </div>
+                  <span
+                    className="text-sm flex-1 transition-colors"
+                    style={{
+                      color: checked ? "#1A1A2E" : "#6B7280",
+                      fontWeight: checked ? 600 : 400,
+                    }}
+                    onClick={() => toggleCategory(cat.name)}
+                  >
+                    {cat.name}
+                  </span>
+                  <span className="text-xs text-muted-foreground ml-auto">
+                    {count}
+                  </span>
+                </label>
+
+                {checked && childCategories.length > 0 && (
+                  <div className="ml-7 space-y-1 border-l border-border pl-2">
+                    {childCategories.map((child) => {
+                      const childChecked = catalogCategory.includes(child.name);
+                      const childCount = catalogProducts.filter(
+                        (p) => p.categoryId === child.id,
+                      ).length;
+
+                      return (
+                        <label
+                          key={child.id}
+                          className="flex items-center gap-2 py-1 px-2 rounded-lg cursor-pointer hover:bg-muted transition-colors"
+                        >
+                          <div
+                            className="w-4 h-4 rounded border flex items-center justify-center flex-shrink-0 transition-all"
+                            style={{
+                              borderColor: childChecked ? "#1A1A2E" : "#D1D5DB",
+                              background: childChecked ? "#1A1A2E" : "white",
+                            }}
+                            onClick={() => toggleCategory(child.name)}
+                          >
+                            {childChecked && (
+                              <svg width="8" height="6" viewBox="0 0 10 8" fill="none">
+                                <path
+                                  d="M1 4l2.5 2.5L9 1"
+                                  stroke="#FFF200"
+                                  strokeWidth="2"
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                />
+                              </svg>
+                            )}
+                          </div>
+                          <span
+                            className="text-xs flex-1"
+                            style={{
+                              color: childChecked ? "#1A1A2E" : "#6B7280",
+                              fontWeight: childChecked ? 600 : 400,
+                            }}
+                            onClick={() => toggleCategory(child.name)}
+                          >
+                            {child.name}
+                          </span>
+                          <span className="text-[11px] text-muted-foreground">
+                            {childCount}
+                          </span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
             );
           })}
         </div>

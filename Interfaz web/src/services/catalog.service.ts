@@ -15,35 +15,24 @@ export type CatalogProductsQuery = {
   limit?: number;
 };
 
-function buildProductsQuery(params?: CatalogProductsQuery) {
-  const searchParams = new URLSearchParams();
-
-  if (params?.categories?.length) {
-    searchParams.set("categories", params.categories.join(","));
-  }
-  if (params?.onSale) {
-    searchParams.set("onSale", "true");
-  }
-  if (params?.priceRange && params.priceRange !== "all") {
-    searchParams.set("priceRange", params.priceRange);
-  }
-  if (params?.sort) {
-    searchParams.set("sort", params.sort);
-  }
-  if (params?.search?.trim()) {
-    searchParams.set("search", params.search.trim());
-  }
-  if (params?.limit) {
-    searchParams.set("limit", String(params.limit));
-  }
-
-  const queryString = searchParams.toString();
-  return queryString ? `?${queryString}` : "";
+function buildProductsPayload(params?: CatalogProductsQuery) {
+  return {
+    categories: params?.categories?.length ? params.categories : undefined,
+    onSale: params?.onSale || undefined,
+    priceRange:
+      params?.priceRange && params.priceRange !== "all"
+        ? params.priceRange
+        : undefined,
+    sort: params?.sort || undefined,
+    search: params?.search?.trim() ? params.search.trim() : undefined,
+    limit: params?.limit || undefined,
+  };
 }
 
-async function fetchJson<T>(url: string): Promise<T> {
+async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
   const response = await fetch(url, {
     credentials: "include",
+    ...init,
   });
 
   if (!response.ok) {
@@ -72,10 +61,12 @@ export const catalogService = {
   },
 
   async getProducts(params?: CatalogProductsQuery): Promise<Product[]> {
-    const query = buildProductsQuery(params);
-    const products = await fetchJson<Product[]>(
-      `${API_BASE_URL}/catalog/products${query}`,
-    );
+    const payload = buildProductsPayload(params);
+    const products = await fetchJson<Product[]>(`${API_BASE_URL}/catalog/products`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
 
     return products.map((product) => ({ ...product }));
   },

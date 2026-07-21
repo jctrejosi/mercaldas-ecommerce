@@ -49,6 +49,8 @@ export interface Product {
 
 export interface CatalogCategory {
   id: number;
+  parentId?: number | null;
+  level?: number;
   slug?: string;
   name: string;
   description?: string;

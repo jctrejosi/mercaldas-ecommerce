@@ -690,9 +690,11 @@ export default function App() {
     startSlideTimer();
   };
 
-  const featuredProducts = products
-    .filter((p) => p.isFeatured)
-    .slice(0, 8);
+  const featuredProducts = (
+    products.some((p) => p.isFeatured)
+      ? products.filter((p) => p.isFeatured)
+      : products
+  ).slice(0, 8);
 
   const handleNewsletterSubmit = (e: React.FormEvent) => {
     e.preventDefault();

@@ -25,6 +25,8 @@ import { CatalogProductsQueryDto } from './dto/catalog-products-query.dto';
 
 type CatalogCategoryResponse = {
   id: number;
+  parentId: number | null;
+  level: number;
   slug: string;
   name: string;
   description: string | null;
@@ -59,6 +61,8 @@ export class CatalogService {
     const rows = await this.drizzleService.db
       .select({
         id: categories.id,
+        parentId: categories.parentId,
+        level: categories.level,
         slug: categories.slug,
         name: categories.name,
         description: categories.description,
@@ -72,6 +76,8 @@ export class CatalogService {
 
     return rows.map((row) => ({
       id: Number(row.id),
+      parentId: row.parentId ? Number(row.parentId) : null,
+      level: Number(row.level ?? 0),
       slug: row.slug,
       name: row.name,
       description: row.description,
@@ -87,6 +93,51 @@ export class CatalogService {
     const search = query.search?.trim();
     const sort = query.sort ?? 'relevancia';
     const limit = Math.min(Math.max(query.limit ?? 100, 1), 200);
+
+    let allowedCategoryIds: number[] = [];
+
+    if (normalizedCategories.length > 0) {
+      const categoryRows = await this.drizzleService.db
+        .select({
+          id: categories.id,
+          parentId: categories.parentId,
+          name: categories.name,
+        })
+        .from(categories)
+        .where(and(eq(categories.isActive, true), isNull(categories.deletedAt)));
+
+      const normalizedSet = new Set(normalizedCategories);
+      const childrenByParentId = new Map<number, number[]>();
+
+      for (const row of categoryRows) {
+        const parentId = row.parentId ? Number(row.parentId) : null;
+        if (parentId === null) continue;
+        const current = childrenByParentId.get(parentId) ?? [];
+        current.push(Number(row.id));
+        childrenByParentId.set(parentId, current);
+      }
+
+      const rootIds = categoryRows
+        .filter((row) => normalizedSet.has(row.name))
+        .map((row) => Number(row.id));
+
+      const collectedIds = new Set<number>();
+      const stack = [...rootIds];
+
+      while (stack.length > 0) {
+        const currentId = stack.pop()!;
+        if (collectedIds.has(currentId)) continue;
+        collectedIds.add(currentId);
+
+        for (const childId of childrenByParentId.get(currentId) ?? []) {
+          stack.push(childId);
+        }
+      }
+
+      allowedCategoryIds = Array.from(collectedIds);
+    }
+
+    const allowedCategoryBigIntIds = allowedCategoryIds.map((id) => BigInt(id));
 
     const rows = await this.drizzleService.db
       .select({
@@ -133,9 +184,11 @@ export class CatalogService {
           isNull(productVariants.deletedAt),
           eq(categories.isActive, true),
           isNull(categories.deletedAt),
-          normalizedCategories.length > 0
-            ? inArray(categories.name, normalizedCategories)
-            : undefined,
+          allowedCategoryBigIntIds.length > 0
+            ? inArray(categories.id, allowedCategoryBigIntIds)
+            : normalizedCategories.length > 0
+              ? sql`1 = 0`
+              : undefined,
           query.onSale
             ? sql`${productVariants.currentComparePrice} IS NOT NULL`
             : undefined,
