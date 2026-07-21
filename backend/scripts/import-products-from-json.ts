@@ -41,6 +41,15 @@ type CatalogFile = {
   PRODUCTOS: CatalogProductRow[];
 };
 
+type TidtabRow = {
+  CODIGO: string;
+  NOMBRE: string;
+};
+
+type TidtabFile = {
+  TABLAS: TidtabRow[];
+};
+
 type CategoryNodeInput = {
   code: string;
   parentCode: string | null;
@@ -57,10 +66,17 @@ if (!DATABASE_URL) {
 const pool = new Pool({ connectionString: DATABASE_URL });
 const db = drizzle(pool, { schema });
 
-const catalogFilePath = path.join(__dirname, 'CATALOGO_0.JSON');
-const rawData = fs.readFileSync(catalogFilePath, 'utf8');
-const catalog = JSON.parse(rawData) as CatalogFile;
+const dataDirectoryPath = path.join(__dirname, '..', 'data');
+const catalogFilePath = path.join(dataDirectoryPath, 'CATALOGO_0.JSON');
+const tidtabFilePath = path.join(dataDirectoryPath, 'TIDTAB_0.JSON');
+
+const rawCatalogData = fs.readFileSync(catalogFilePath, 'utf8');
+const rawTidtabData = fs.readFileSync(tidtabFilePath, 'utf8');
+
+const catalog = JSON.parse(rawCatalogData) as CatalogFile;
+const tidtab = JSON.parse(rawTidtabData) as TidtabFile;
 const sourceProducts = catalog.PRODUCTOS ?? [];
+const tidtabRows = tidtab.TABLAS ?? [];
 
 const taxCodeByTipoImp: Record<string, string> = {
   J: 'IVA19',
@@ -70,6 +86,11 @@ const taxCodeByTipoImp: Record<string, string> = {
 
 const taxMap = new Map<string, number>();
 const categoryIdByCode = new Map<string, number>();
+const tidtabNameByCode = new Map<string, string>(
+  tidtabRows
+    .map((row) => [normalizeText(row.CODIGO), normalizeText(row.NOMBRE)] as const)
+    .filter(([code, name]) => code.length > 0 && name.length > 0),
+);
 
 function normalizeText(value: string | null | undefined): string {
   return (value ?? '').trim();
@@ -104,15 +125,19 @@ function buildSlug(parts: Array<string | number>) {
 }
 
 function buildCategoryLabel(
-  type: 'familia' | 'departamento' | 'grupo' | 'seccion' | 'categoria',
+  type: 'departamento' | 'grupo' | 'seccion',
   code: string,
 ) {
+  const mappedName = tidtabNameByCode.get(code);
+
+  if (mappedName) {
+    return mappedName;
+  }
+
   const prefixMap = {
-    familia: 'Familia',
     departamento: 'Departamento',
     grupo: 'Grupo',
     seccion: 'Sección',
-    categoria: 'Categoría',
   } as const;
 
   return `${prefixMap[type]} ${code}`;
@@ -124,54 +149,37 @@ function collectCategoryNodes(
   const nodes = new Map<string, CategoryNodeInput>();
 
   for (const product of products) {
-    const familia = normalizeText(product.FAMILIA);
     const departamento = normalizeText(product.DEPARTAMENTO);
     const grupo = normalizeText(product.GRUPO);
     const seccion = normalizeText(product.SECCION);
-    const categoria = normalizeText(product.CATEGORIA);
 
-    if (familia) {
-      nodes.set(`familia:${familia}`, {
-        code: `familia:${familia}`,
-        parentCode: null,
-        level: 0,
-        label: buildCategoryLabel('familia', familia),
-      });
-    }
-
-    if (departamento) {
+    if (departamento && departamento.length === 3) {
       nodes.set(`departamento:${departamento}`, {
         code: `departamento:${departamento}`,
-        parentCode: familia ? `familia:${familia}` : null,
-        level: 1,
+        parentCode: null,
+        level: 0,
         label: buildCategoryLabel('departamento', departamento),
       });
     }
 
-    if (grupo) {
+    if (grupo && grupo.length === 5) {
       nodes.set(`grupo:${grupo}`, {
         code: `grupo:${grupo}`,
-        parentCode: departamento ? `departamento:${departamento}` : null,
-        level: 2,
+        parentCode:
+          departamento && departamento.length === 3
+            ? `departamento:${departamento}`
+            : null,
+        level: 1,
         label: buildCategoryLabel('grupo', grupo),
       });
     }
 
-    if (seccion) {
+    if (seccion && seccion.length === 7) {
       nodes.set(`seccion:${seccion}`, {
         code: `seccion:${seccion}`,
-        parentCode: grupo ? `grupo:${grupo}` : null,
-        level: 3,
+        parentCode: grupo && grupo.length === 5 ? `grupo:${grupo}` : null,
+        level: 2,
         label: buildCategoryLabel('seccion', seccion),
-      });
-    }
-
-    if (categoria) {
-      nodes.set(`categoria:${seccion}:${categoria}`, {
-        code: `categoria:${seccion}:${categoria}`,
-        parentCode: seccion ? `seccion:${seccion}` : null,
-        level: 4,
-        label: buildCategoryLabel('categoria', categoria),
       });
     }
   }
@@ -298,11 +306,11 @@ async function ensureCategories(products: CatalogProductRow[]) {
       .insert(schema.categories)
       .values({
         parentId: node.parentCode
-          ? (categoryIdByCode.get(node.parentCode) ?? null)
+          ? categoryIdByCode.get(node.parentCode) ?? null
           : null,
         name: node.label,
         slug,
-        description: `Importada desde catálogo JSON (${node.code})`,
+        description: `Importada desde catálogo JSON/TIDTAB (${node.code})`,
         displayOrder: 0,
         level: node.level,
         isActive: true,
@@ -315,44 +323,41 @@ async function ensureCategories(products: CatalogProductRow[]) {
 
 function resolveLeafCategoryCode(product: CatalogProductRow): string | null {
   const seccion = normalizeText(product.SECCION);
-  const categoria = normalizeText(product.CATEGORIA);
-
-  if (seccion && categoria) {
-    return `categoria:${seccion}:${categoria}`;
-  }
-
-  if (seccion) return `seccion:${seccion}`;
+  if (seccion && seccion.length === 7) return `seccion:${seccion}`;
 
   const grupo = normalizeText(product.GRUPO);
-  if (grupo) return `grupo:${grupo}`;
+  if (grupo && grupo.length === 5) return `grupo:${grupo}`;
 
   const departamento = normalizeText(product.DEPARTAMENTO);
-  if (departamento) return `departamento:${departamento}`;
-
-  const familia = normalizeText(product.FAMILIA);
-  if (familia) return `familia:${familia}`;
+  if (departamento && departamento.length === 3) {
+    return `departamento:${departamento}`;
+  }
 
   return null;
 }
 
 async function assignProductCategory(productId: number, categoryId: number) {
-  const existing = await db
-    .select()
+  const existingRelations = await db
+    .select({ categoryId: schema.productCategories.categoryId })
     .from(schema.productCategories)
-    .where(
-      and(
-        eq(schema.productCategories.productId, productId),
-        eq(schema.productCategories.categoryId, categoryId),
-      ),
-    )
-    .limit(1);
+    .where(eq(schema.productCategories.productId, productId));
 
-  if (!existing.length) {
-    await db.insert(schema.productCategories).values({
-      productId,
-      categoryId,
-    });
+  const alreadyAssigned = existingRelations.some(
+    (relation) => Number(relation.categoryId) === categoryId,
+  );
+
+  if (alreadyAssigned && existingRelations.length === 1) {
+    return;
   }
+
+  await db
+    .delete(schema.productCategories)
+    .where(eq(schema.productCategories.productId, productId));
+
+  await db.insert(schema.productCategories).values({
+    productId,
+    categoryId,
+  });
 }
 
 async function assignProductTax(
