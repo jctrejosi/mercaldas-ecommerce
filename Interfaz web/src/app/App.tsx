@@ -54,6 +54,7 @@ import { ProductDetailModal } from "./ProductDetailModal";
 import { Logo } from "./Logo";
 import { CatalogPage } from "./Views/CatalogView";
 import { ProductCard } from "./Views/CatalogView/ProductCard";
+import { SkeletonCard } from "./Views/CatalogView/SkeletonCard";
 import { SocialAuthButtons } from "./SocialAuthButtons";
 
 /* ─── Data ───────────────────────────────────────────────── */
@@ -1326,16 +1327,20 @@ export default function App() {
             </div>
 
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-4">
-              {featuredProducts.map((p) => (
-                <ProductCard
-                  key={p.id}
-                  product={p}
-                  cartItems={cartItems}
-                  onAdd={addToCart}
-                  onRemove={removeFromCart}
-                  onProductClick={setSelectedProduct}
-                />
-              ))}
+              {catalogLoading
+                ? Array.from({ length: 8 }).map((_, index) => (
+                    <SkeletonCard key={index} />
+                  ))
+                : featuredProducts.map((p) => (
+                    <ProductCard
+                      key={p.id}
+                      product={p}
+                      cartItems={cartItems}
+                      onAdd={addToCart}
+                      onRemove={removeFromCart}
+                      onProductClick={setSelectedProduct}
+                    />
+                  ))}
             </div>
 
             <div className="text-center mt-8">

@@ -3,6 +3,7 @@ import { Search, X } from "lucide-react";
 import { useCatalog } from "../../../hooks/useCatalog";
 import { InfiniteScrollTrigger } from "./InfiniteScrollTrigger";
 import { ProductCard } from "./ProductCard";
+import { SkeletonCard } from "./SkeletonCard";
 import type { CatalogCategory, CatalogPageProps, Product } from "../../types";
 
 const PRICE_RANGES = [
@@ -402,25 +403,25 @@ export function CatalogPage({
           )}
 
           {/* Grid */}
-          {filtered.length > 0 ? (
+          {catalogLoading ? (
+            <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3 flex-1">
+              {Array.from({ length: PAGE_SIZE }).map((_, index) => (
+                <SkeletonCard key={index} />
+              ))}
+            </div>
+          ) : filtered.length > 0 ? (
             <>
               <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3 flex-1">
-                {catalogLoading ? (
-                  <div className="col-span-full text-center py-12 text-sm text-muted-foreground">
-                    Cargando catálogo...
-                  </div>
-                ) : (
-                  visibleProducts.map((p) => (
-                    <ProductCard
-                      key={p.id}
-                      product={p}
-                      cartItems={cartItems}
-                      onAdd={onAdd}
-                      onRemove={onRemove}
-                      onProductClick={onProductClick}
-                    />
-                  ))
-                )}
+                {visibleProducts.map((p) => (
+                  <ProductCard
+                    key={p.id}
+                    product={p}
+                    cartItems={cartItems}
+                    onAdd={onAdd}
+                    onRemove={onRemove}
+                    onProductClick={onProductClick}
+                  />
+                ))}
               </div>
 
               {/* Sentinel + skeletons */}
