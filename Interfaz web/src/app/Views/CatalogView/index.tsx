@@ -45,7 +45,7 @@ export function CatalogPage({
   setMobileFiltersOpen,
 }: CatalogPageProps) {
   const { categories, products, loading: catalogLoading } = useCatalog({
-    categories: catalogCategory,
+    categoryIds: catalogCategory,
     onSale: catalogOnSale,
     priceRange: catalogPriceRange,
     sort: catalogSort,
@@ -65,11 +65,39 @@ export function CatalogPage({
     catalogSearch,
   ]);
 
-  const toggleCategory = (cat: string) => {
+  const categoriesByParentId = categories.reduce<Map<number | null, CatalogCategory[]>>(
+    (map, category) => {
+      const parentId = category.parentId ?? null;
+      const current = map.get(parentId) ?? [];
+      current.push(category);
+      map.set(parentId, current);
+      return map;
+    },
+    new Map(),
+  );
+
+  const getDescendantIds = (categoryId: number): number[] => {
+    const descendants = new Set<number>();
+    const stack = [categoryId];
+
+    while (stack.length > 0) {
+      const currentId = stack.pop()!;
+      if (descendants.has(currentId)) continue;
+      descendants.add(currentId);
+
+      for (const child of categoriesByParentId.get(currentId) ?? []) {
+        stack.push(child.id);
+      }
+    }
+
+    return Array.from(descendants);
+  };
+
+  const toggleCategory = (categoryId: number) => {
     setCatalogCategory(
-      catalogCategory.includes(cat)
-        ? catalogCategory.filter((c) => c !== cat)
-        : [...catalogCategory, cat],
+      catalogCategory.includes(categoryId)
+        ? catalogCategory.filter((id) => id !== categoryId)
+        : [...catalogCategory, categoryId],
     );
   };
 
@@ -84,7 +112,7 @@ export function CatalogPage({
   );
 
   const getChildCategories = (parentId: number) =>
-    catalogCategories.filter((category) => category.parentId === parentId);
+    categoriesByParentId.get(parentId) ?? [];
 
   const filtered = catalogProducts;
 
@@ -109,12 +137,11 @@ export function CatalogPage({
           {rootCategories.map((cat) => {
             const Icon = cat.icon;
             const childCategories = getChildCategories(cat.id);
+            const descendantIds = getDescendantIds(cat.id);
             const count = catalogProducts.filter(
-              (p) =>
-                p.categoryId === cat.id ||
-                childCategories.some((child) => child.id === p.categoryId),
+              (p) => p.categoryId !== undefined && descendantIds.includes(p.categoryId),
             ).length;
-            const checked = catalogCategory.includes(cat.name);
+            const checked = catalogCategory.includes(cat.id);
 
             return (
               <div key={cat.id} className="space-y-1">
@@ -125,7 +152,7 @@ export function CatalogPage({
                       borderColor: checked ? "#1A1A2E" : "#D1D5DB",
                       background: checked ? "#1A1A2E" : "white",
                     }}
-                    onClick={() => toggleCategory(cat.name)}
+                    onClick={() => toggleCategory(cat.id)}
                   >
                     {checked && (
                       <svg width="10" height="8" viewBox="0 0 10 8" fill="none">
@@ -156,7 +183,7 @@ export function CatalogPage({
                       color: checked ? "#1A1A2E" : "#6B7280",
                       fontWeight: checked ? 600 : 400,
                     }}
-                    onClick={() => toggleCategory(cat.name)}
+                    onClick={() => toggleCategory(cat.id)}
                   >
                     {cat.name}
                   </span>
@@ -168,50 +195,105 @@ export function CatalogPage({
                 {checked && childCategories.length > 0 && (
                   <div className="ml-7 space-y-1 border-l border-border pl-2">
                     {childCategories.map((child) => {
-                      const childChecked = catalogCategory.includes(child.name);
+                      const grandChildCategories = getChildCategories(child.id);
+                      const childDescendantIds = getDescendantIds(child.id);
+                      const childChecked = catalogCategory.includes(child.id);
                       const childCount = catalogProducts.filter(
-                        (p) => p.categoryId === child.id,
+                        (p) =>
+                          p.categoryId !== undefined &&
+                          childDescendantIds.includes(p.categoryId),
                       ).length;
 
                       return (
-                        <label
-                          key={child.id}
-                          className="flex items-center gap-2 py-1 px-2 rounded-lg cursor-pointer hover:bg-muted transition-colors"
-                        >
-                          <div
-                            className="w-4 h-4 rounded border flex items-center justify-center flex-shrink-0 transition-all"
-                            style={{
-                              borderColor: childChecked ? "#1A1A2E" : "#D1D5DB",
-                              background: childChecked ? "#1A1A2E" : "white",
-                            }}
-                            onClick={() => toggleCategory(child.name)}
-                          >
-                            {childChecked && (
-                              <svg width="8" height="6" viewBox="0 0 10 8" fill="none">
-                                <path
-                                  d="M1 4l2.5 2.5L9 1"
-                                  stroke="#FFF200"
-                                  strokeWidth="2"
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                />
-                              </svg>
-                            )}
-                          </div>
-                          <span
-                            className="text-xs flex-1"
-                            style={{
-                              color: childChecked ? "#1A1A2E" : "#6B7280",
-                              fontWeight: childChecked ? 600 : 400,
-                            }}
-                            onClick={() => toggleCategory(child.name)}
-                          >
-                            {child.name}
-                          </span>
-                          <span className="text-[11px] text-muted-foreground">
-                            {childCount}
-                          </span>
-                        </label>
+                        <div key={child.id} className="space-y-1">
+                          <label className="flex items-center gap-2 py-1 px-2 rounded-lg cursor-pointer hover:bg-muted transition-colors">
+                            <div
+                              className="w-4 h-4 rounded border flex items-center justify-center flex-shrink-0 transition-all"
+                              style={{
+                                borderColor: childChecked ? "#1A1A2E" : "#D1D5DB",
+                                background: childChecked ? "#1A1A2E" : "white",
+                              }}
+                              onClick={() => toggleCategory(child.id)}
+                            >
+                              {childChecked && (
+                                <svg width="8" height="6" viewBox="0 0 10 8" fill="none">
+                                  <path
+                                    d="M1 4l2.5 2.5L9 1"
+                                    stroke="#FFF200"
+                                    strokeWidth="2"
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                  />
+                                </svg>
+                              )}
+                            </div>
+                            <span
+                              className="text-xs flex-1"
+                              style={{
+                                color: childChecked ? "#1A1A2E" : "#6B7280",
+                                fontWeight: childChecked ? 600 : 400,
+                              }}
+                              onClick={() => toggleCategory(child.id)}
+                            >
+                              {child.name}
+                            </span>
+                            <span className="text-[11px] text-muted-foreground">
+                              {childCount}
+                            </span>
+                          </label>
+
+                          {childChecked && grandChildCategories.length > 0 && (
+                            <div className="ml-6 space-y-1 border-l border-border pl-2">
+                              {grandChildCategories.map((grandChild) => {
+                                const grandChildChecked = catalogCategory.includes(grandChild.id);
+                                const grandChildCount = catalogProducts.filter(
+                                  (p) => p.categoryId === grandChild.id,
+                                ).length;
+
+                                return (
+                                  <label
+                                    key={grandChild.id}
+                                    className="flex items-center gap-2 py-1 px-2 rounded-lg cursor-pointer hover:bg-muted transition-colors"
+                                  >
+                                    <div
+                                      className="w-4 h-4 rounded border flex items-center justify-center flex-shrink-0 transition-all"
+                                      style={{
+                                        borderColor: grandChildChecked ? "#1A1A2E" : "#D1D5DB",
+                                        background: grandChildChecked ? "#1A1A2E" : "white",
+                                      }}
+                                      onClick={() => toggleCategory(grandChild.id)}
+                                    >
+                                      {grandChildChecked && (
+                                        <svg width="8" height="6" viewBox="0 0 10 8" fill="none">
+                                          <path
+                                            d="M1 4l2.5 2.5L9 1"
+                                            stroke="#FFF200"
+                                            strokeWidth="2"
+                                            strokeLinecap="round"
+                                            strokeLinejoin="round"
+                                          />
+                                        </svg>
+                                      )}
+                                    </div>
+                                    <span
+                                      className="text-xs flex-1"
+                                      style={{
+                                        color: grandChildChecked ? "#1A1A2E" : "#6B7280",
+                                        fontWeight: grandChildChecked ? 600 : 400,
+                                      }}
+                                      onClick={() => toggleCategory(grandChild.id)}
+                                    >
+                                      {grandChild.name}
+                                    </span>
+                                    <span className="text-[11px] text-muted-foreground">
+                                      {grandChildCount}
+                                    </span>
+                                  </label>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
                       );
                     })}
                   </div>

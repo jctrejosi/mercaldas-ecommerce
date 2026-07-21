@@ -13,6 +13,7 @@ export function useCatalog(filters?: CatalogProductsQuery) {
   const [error, setError] = useState<string | null>(null);
 
   const categoriesKey = filters?.categories?.join("|") ?? "";
+  const categoryIdsKey = filters?.categoryIds?.join("|") ?? "";
 
   useEffect(() => {
     let mounted = true;
@@ -47,6 +48,7 @@ export function useCatalog(filters?: CatalogProductsQuery) {
     };
   }, [
     categoriesKey,
+    categoryIdsKey,
     filters?.onSale,
     filters?.priceRange,
     filters?.sort,

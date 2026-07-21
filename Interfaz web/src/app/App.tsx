@@ -247,7 +247,7 @@ export default function App() {
   const [cartOpen, setCartOpen] = useState(false);
   const [activeTab, setActiveTab] = useState("vendidos");
   // catalog filters
-  const [catalogCategory, setCatalogCategory] = useState<string[]>([]);
+  const [catalogCategory, setCatalogCategory] = useState<number[]>([]);
   const [catalogOnSale, setCatalogOnSale] = useState(false);
   const [catalogPriceRange, setCatalogPriceRange] = useState<string>("all");
   const [catalogSort, setCatalogSort] = useState("relevancia");
@@ -461,8 +461,8 @@ export default function App() {
   const deleteFromCart = (id: number) =>
     setCartItems((prev) => prev.filter((c) => c.id !== id));
 
-  const openCatalog = (category?: string) => {
-    setCatalogCategory(category ? [category] : []);
+  const openCatalog = (categoryId?: number) => {
+    setCatalogCategory(categoryId ? [categoryId] : []);
     setCatalogOnSale(false);
     setCatalogPriceRange("all");
     setCatalogSort("relevancia");
@@ -1279,7 +1279,7 @@ export default function App() {
                 return (
                   <button
                     key={cat.id}
-                    onClick={() => openCatalog(cat.name)}
+                    onClick={() => openCatalog(cat.id)}
                     className="flex-shrink-0 flex flex-col items-center gap-2 group"
                   >
                     <div

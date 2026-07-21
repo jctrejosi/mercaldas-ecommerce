@@ -90,13 +90,14 @@ export class CatalogService {
     query: CatalogProductsQueryDto,
   ): Promise<CatalogProductResponse[]> {
     const normalizedCategories = query.categories?.filter(Boolean) ?? [];
+    const normalizedCategoryIds = query.categoryIds?.filter((id) => Number.isFinite(id)) ?? [];
     const search = query.search?.trim();
     const sort = query.sort ?? 'relevancia';
     const limit = Math.min(Math.max(query.limit ?? 100, 1), 200);
 
     let allowedCategoryIds: number[] = [];
 
-    if (normalizedCategories.length > 0) {
+    if (normalizedCategories.length > 0 || normalizedCategoryIds.length > 0) {
       const categoryRows = await this.drizzleService.db
         .select({
           id: categories.id,
@@ -107,6 +108,7 @@ export class CatalogService {
         .where(and(eq(categories.isActive, true), isNull(categories.deletedAt)));
 
       const normalizedSet = new Set(normalizedCategories);
+      const normalizedIdSet = new Set(normalizedCategoryIds);
       const childrenByParentId = new Map<number, number[]>();
 
       for (const row of categoryRows) {
@@ -118,7 +120,9 @@ export class CatalogService {
       }
 
       const rootIds = categoryRows
-        .filter((row) => normalizedSet.has(row.name))
+        .filter(
+          (row) => normalizedSet.has(row.name) || normalizedIdSet.has(Number(row.id)),
+        )
         .map((row) => Number(row.id));
 
       const collectedIds = new Set<number>();
@@ -186,7 +190,7 @@ export class CatalogService {
           isNull(categories.deletedAt),
           allowedCategoryBigIntIds.length > 0
             ? inArray(categories.id, allowedCategoryBigIntIds)
-            : normalizedCategories.length > 0
+            : normalizedCategories.length > 0 || normalizedCategoryIds.length > 0
               ? sql`1 = 0`
               : undefined,
           query.onSale

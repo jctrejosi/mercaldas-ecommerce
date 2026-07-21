@@ -7,10 +7,10 @@ export interface CatalogPageProps {
   onAdd: (p: Product) => void;
   onRemove: (id: number) => void;
   onBack: () => void;
-  onOpenCategory: (cat: string) => void;
+  onOpenCategory: (categoryId?: number) => void;
   onProductClick: (p: Product) => void;
-  catalogCategory: string[];
-  setCatalogCategory: (v: string[]) => void;
+  catalogCategory: number[];
+  setCatalogCategory: (v: number[]) => void;
   catalogOnSale: boolean;
   setCatalogOnSale: (v: boolean) => void;
   catalogPriceRange: string;

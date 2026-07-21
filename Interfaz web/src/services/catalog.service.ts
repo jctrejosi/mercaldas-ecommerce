@@ -8,6 +8,7 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:3000";
 
 export type CatalogProductsQuery = {
   categories?: string[];
+  categoryIds?: number[];
   onSale?: boolean;
   priceRange?: string;
   sort?: string;
@@ -18,6 +19,7 @@ export type CatalogProductsQuery = {
 function buildProductsPayload(params?: CatalogProductsQuery) {
   return {
     categories: params?.categories?.length ? params.categories : undefined,
+    categoryIds: params?.categoryIds?.length ? params.categoryIds : undefined,
     onSale: params?.onSale || undefined,
     priceRange:
       params?.priceRange && params.priceRange !== "all"
@@ -78,7 +80,7 @@ export const catalogService = {
 
   async getRelatedProducts(product: Product): Promise<Product[]> {
     const products = await this.getProducts({
-      categories: [product.category],
+      categories: product.category ? [product.category] : undefined,
       limit: 20,
     });
 
