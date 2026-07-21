@@ -966,7 +966,7 @@ export const prices = pgTable(
     }).onDelete('cascade'),
     check(
       'prices_check',
-      sql`(compare_price IS NULL) OR (compare_price >= price)`,
+      sql`(compare_price IS NULL) OR (compare_price <= price)`,
     ),
     check('prices_cost_check', sql`(cost IS NULL) OR (cost >= (0)::numeric)`),
     check(

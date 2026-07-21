@@ -387,6 +387,24 @@ async function updateActivePrice(
   price: string,
   comparePrice: string | null,
 ) {
+  // ✅ Normalizar comparePrice: solo si existe y es >= price
+  let validComparePrice: string | null = null;
+  if (comparePrice !== null) {
+    const priceNum = Number.parseFloat(price);
+    const compareNum = Number.parseFloat(comparePrice);
+    if (compareNum <= priceNum) {
+      validComparePrice = comparePrice;
+    } else {
+      // ⚠️ Si comparePrice es menor, puedes intercambiarlos o ignorarlo
+      console.warn(
+        `⚠️ comparePrice (${comparePrice}) es mayor que price (${price}). Se usará solo price.`,
+      );
+      // Opcional: si quieres intercambiarlos:
+      // validComparePrice = price;
+      // price = comparePrice; // pero cuidado con esta lógica
+    }
+  }
+
   const currentActivePrice = await db
     .select({
       id: schema.prices.id,
@@ -407,7 +425,7 @@ async function updateActivePrice(
     const active = currentActivePrice[0];
     const samePrice = String(active.price) === price;
     const sameComparePrice =
-      String(active.comparePrice ?? '') === String(comparePrice ?? '');
+      String(active.comparePrice ?? '') === String(validComparePrice ?? '');
 
     if (samePrice && sameComparePrice) {
       return;
@@ -424,8 +442,8 @@ async function updateActivePrice(
       endDate: null,
       changedBy: adminUserId,
       changeReason: 'Actualización por importación de catálogo JSON',
-      price,
-      comparePrice,
+      price: price,
+      comparePrice: validComparePrice,
       version: (active.version ?? 1) + 1,
     });
 
@@ -438,8 +456,8 @@ async function updateActivePrice(
     endDate: null,
     changedBy: adminUserId,
     changeReason: 'Migración inicial desde catálogo JSON',
-    price,
-    comparePrice,
+    price: price,
+    comparePrice: validComparePrice,
     version: 1,
   });
 }
@@ -449,6 +467,9 @@ async function upsertInventory(
   branchId: number,
   stock: number,
 ) {
+  // ✅ Asegurar que el stock no sea negativo
+  const validStock = Math.max(0, stock);
+
   const existing = await db
     .select({ id: schema.inventory.id })
     .from(schema.inventory)
@@ -464,7 +485,7 @@ async function upsertInventory(
     await db
       .update(schema.inventory)
       .set({
-        stock,
+        stock: validStock,
         reservedStock: 0,
         reorderPoint: 5,
         minimumStock: 0,
@@ -478,7 +499,7 @@ async function upsertInventory(
   await db.insert(schema.inventory).values({
     productVariantId: variantId,
     branchId,
-    stock,
+    stock: validStock,
     reservedStock: 0,
     reorderPoint: 5,
     minimumStock: 0,
