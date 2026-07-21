@@ -677,6 +677,7 @@ export const products = pgTable(
     id: bigserial({ mode: 'bigint' }).primaryKey().notNull(),
     // You can use { mode: "bigint" } if numbers are exceeding js number limitations
     brandId: bigint('brand_id', { mode: 'number' }),
+    externalId: varchar('external_id', { length: 50 }),
     name: varchar({ length: 255 }).notNull(),
     slug: varchar({ length: 255 }).notNull(),
     description: text(),
@@ -701,6 +702,9 @@ export const products = pgTable(
     index('idx_products_brand')
       .using('btree', table.brandId.asc().nullsLast().op('int8_ops'))
       .where(sql`(deleted_at IS NULL)`),
+    uniqueIndex('idx_products_external_id')
+      .using('btree', table.externalId.asc().nullsLast().op('text_ops'))
+      .where(sql`(external_id IS NOT NULL AND deleted_at IS NULL)`),
     index('idx_products_search')
       .using(
         'gin',
@@ -3118,6 +3122,51 @@ export const productCategories = pgTable(
     primaryKey({
       columns: [table.productId, table.categoryId],
       name: 'product_categories_pkey',
+    }),
+  ],
+);
+
+export const productTypes = pgTable(
+  'product_types',
+  {
+    id: bigserial({ mode: 'bigint' }).primaryKey().notNull(),
+    code: varchar({ length: 10 }).notNull(),
+    name: varchar({ length: 100 }).notNull(),
+    description: text(),
+    isActive: boolean('is_active').default(true).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'string' })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [unique('product_types_code_key').on(table.code)],
+);
+
+export const productTypeAssignments = pgTable(
+  'product_type_assignments',
+  {
+    productId: bigint('product_id', { mode: 'number' }).notNull(),
+    productTypeId: bigint('product_type_id', { mode: 'number' }).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    foreignKey({
+      columns: [table.productId],
+      foreignColumns: [products.id],
+      name: 'product_type_assignments_product_id_fkey',
+    }).onDelete('cascade'),
+    foreignKey({
+      columns: [table.productTypeId],
+      foreignColumns: [productTypes.id],
+      name: 'product_type_assignments_product_type_id_fkey',
+    }).onDelete('cascade'),
+    primaryKey({
+      columns: [table.productId, table.productTypeId],
+      name: 'product_type_assignments_pkey',
     }),
   ],
 );

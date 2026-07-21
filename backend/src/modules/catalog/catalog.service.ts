@@ -16,6 +16,8 @@ import {
   media,
   productCategories,
   productImages,
+  productTypeAssignments,
+  productTypes,
   products,
   productVariants,
 } from '../../../drizzle/schema';
@@ -32,6 +34,7 @@ type CatalogCategoryResponse = {
 
 type CatalogProductResponse = {
   id: number;
+  externalId: string | null;
   slug: string;
   name: string;
   description: string | null;
@@ -41,6 +44,8 @@ type CatalogProductResponse = {
   images: string[];
   category: string;
   categoryId: number;
+  productTypeCode: string | null;
+  productTypeName: string | null;
   isActive: boolean;
   isFeatured: boolean;
   stock: number;
@@ -86,6 +91,7 @@ export class CatalogService {
     const rows = await this.drizzleService.db
       .select({
         id: products.id,
+        externalId: products.externalId,
         slug: products.slug,
         name: products.name,
         description: products.description,
@@ -96,6 +102,8 @@ export class CatalogService {
         price: productVariants.currentPrice,
         originalPrice: productVariants.currentComparePrice,
         image: media.path,
+        productTypeCode: productTypes.code,
+        productTypeName: productTypes.name,
       })
       .from(products)
       .innerJoin(productVariants, eq(productVariants.productId, products.id))
@@ -104,6 +112,11 @@ export class CatalogService {
         eq(productCategories.productId, products.id),
       )
       .innerJoin(categories, eq(categories.id, productCategories.categoryId))
+      .leftJoin(
+        productTypeAssignments,
+        eq(productTypeAssignments.productId, products.id),
+      )
+      .leftJoin(productTypes, eq(productTypes.id, productTypeAssignments.productTypeId))
       .leftJoin(
         productImages,
         and(
@@ -179,6 +192,7 @@ export class CatalogService {
 
       uniqueProducts.set(productId, {
         id: productId,
+        externalId: row.externalId,
         slug: row.slug,
         name: row.name,
         description: row.description,
@@ -188,6 +202,8 @@ export class CatalogService {
         images,
         category: row.categoryName,
         categoryId: Number(row.categoryId),
+        productTypeCode: row.productTypeCode,
+        productTypeName: row.productTypeName,
         isActive: row.isActive,
         isFeatured: row.isFeatured,
         stock: 0,

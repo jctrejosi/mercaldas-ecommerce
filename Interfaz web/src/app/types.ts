@@ -25,6 +25,7 @@ export interface CatalogPageProps {
 
 export interface Product {
   id: number;
+  externalId?: string | null;
   slug?: string;
   name: string;
   description?: string;
@@ -35,6 +36,8 @@ export interface Product {
   images?: string[];
   category: string;
   categoryId?: number;
+  productTypeCode?: string | null;
+  productTypeName?: string | null;
   badge?: string;
   tabs?: string[];
   unit?: string;

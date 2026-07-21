@@ -86,9 +86,12 @@ const taxCodeByTipoImp: Record<string, string> = {
 
 const taxMap = new Map<string, number>();
 const categoryIdByCode = new Map<string, number>();
+const productTypeIdByCode = new Map<string, number>();
 const tidtabNameByCode = new Map<string, string>(
   tidtabRows
-    .map((row) => [normalizeText(row.CODIGO), normalizeText(row.NOMBRE)] as const)
+    .map(
+      (row) => [normalizeText(row.CODIGO), normalizeText(row.NOMBRE)] as const,
+    )
     .filter(([code, name]) => code.length > 0 && name.length > 0),
 );
 
@@ -285,6 +288,50 @@ async function ensureAdminUserId(): Promise<number> {
   return Number(existing[0].id);
 }
 
+async function ensureProductTypes(products: CatalogProductRow[]) {
+  const productTypeCodes = Array.from(
+    new Set(products.map((product) => normalizeText(product.CATEGORIA)).filter(Boolean)),
+  );
+
+  for (const code of productTypeCodes) {
+    const existing = await db
+      .select({ id: schema.productTypes.id })
+      .from(schema.productTypes)
+      .where(eq(schema.productTypes.code, code))
+      .limit(1);
+
+    const name = `Tipo ${code}`;
+
+    if (existing.length > 0) {
+      const productTypeId = Number(existing[0].id);
+
+      await db
+        .update(schema.productTypes)
+        .set({
+          name,
+          description: `Clasificación transversal importada desde CATALOGO_0 (${code})`,
+          isActive: true,
+        })
+        .where(eq(schema.productTypes.id, BigInt(productTypeId)));
+
+      productTypeIdByCode.set(code, productTypeId);
+      continue;
+    }
+
+    const inserted = await db
+      .insert(schema.productTypes)
+      .values({
+        code,
+        name,
+        description: `Clasificación transversal importada desde CATALOGO_0 (${code})`,
+        isActive: true,
+      })
+      .returning({ id: schema.productTypes.id });
+
+    productTypeIdByCode.set(code, Number(inserted[0].id));
+  }
+}
+
 async function ensureCategories(products: CatalogProductRow[]) {
   const nodes = collectCategoryNodes(products);
 
@@ -297,17 +344,33 @@ async function ensureCategories(products: CatalogProductRow[]) {
       .where(eq(schema.categories.slug, slug))
       .limit(1);
 
+    const parentId = node.parentCode
+      ? (categoryIdByCode.get(node.parentCode) ?? null)
+      : null;
+
     if (existing.length > 0) {
-      categoryIdByCode.set(node.code, Number(existing[0].id));
+      const categoryId = Number(existing[0].id);
+
+      await db
+        .update(schema.categories)
+        .set({
+          parentId,
+          name: node.label,
+          description: `Importada desde catálogo JSON/TIDTAB (${node.code})`,
+          displayOrder: 0,
+          level: node.level,
+          isActive: true,
+        })
+        .where(eq(schema.categories.id, BigInt(categoryId)));
+
+      categoryIdByCode.set(node.code, categoryId);
       continue;
     }
 
     const inserted = await db
       .insert(schema.categories)
       .values({
-        parentId: node.parentCode
-          ? categoryIdByCode.get(node.parentCode) ?? null
-          : null,
+        parentId,
         name: node.label,
         slug,
         description: `Importada desde catálogo JSON/TIDTAB (${node.code})`,
@@ -357,6 +420,30 @@ async function assignProductCategory(productId: number, categoryId: number) {
   await db.insert(schema.productCategories).values({
     productId,
     categoryId,
+  });
+}
+
+async function assignProductType(productId: number, productTypeId: number) {
+  const existingRelations = await db
+    .select({ productTypeId: schema.productTypeAssignments.productTypeId })
+    .from(schema.productTypeAssignments)
+    .where(eq(schema.productTypeAssignments.productId, productId));
+
+  const alreadyAssigned = existingRelations.some(
+    (relation) => Number(relation.productTypeId) === productTypeId,
+  );
+
+  if (alreadyAssigned && existingRelations.length === 1) {
+    return;
+  }
+
+  await db
+    .delete(schema.productTypeAssignments)
+    .where(eq(schema.productTypeAssignments.productId, productId));
+
+  await db.insert(schema.productTypeAssignments).values({
+    productId,
+    productTypeId,
   });
 }
 
@@ -521,6 +608,7 @@ async function importProducts() {
   const defaultBrandId = await ensureDefaultBrand();
   const branchId = await ensureBranchId();
   const adminUserId = await ensureAdminUserId();
+  await ensureProductTypes(sourceProducts);
   await ensureCategories(sourceProducts);
 
   let createdCount = 0;
@@ -538,6 +626,10 @@ async function importProducts() {
       comparePriceNumber > 0 ? comparePriceNumber.toFixed(2) : null;
     const manufacturer = normalizeText(row.MARCA) || null;
     const productSlug = buildSlug([nombre, codigo.slice(-6)]);
+    const productTypeCode = normalizeText(row.CATEGORIA) || null;
+    const productTypeId = productTypeCode
+      ? (productTypeIdByCode.get(productTypeCode) ?? null)
+      : null;
     const leafCategoryCode = resolveLeafCategoryCode(row);
     const categoryId = leafCategoryCode
       ? (categoryIdByCode.get(leafCategoryCode) ?? null)
@@ -577,6 +669,7 @@ async function importProducts() {
           name: nombre,
           slug: productSlug,
           brandId: defaultBrandId,
+          externalId: codigo,
           manufacturer,
           isActive: true,
         })
@@ -598,6 +691,7 @@ async function importProducts() {
         .insert(schema.products)
         .values({
           brandId: defaultBrandId,
+          externalId: codigo,
           name: nombre,
           slug: productSlug,
           description: `Producto importado desde catálogo JSON. Código: ${codigo}`,
@@ -634,6 +728,10 @@ async function importProducts() {
 
     if (categoryId) {
       await assignProductCategory(productId, categoryId);
+    }
+
+    if (productTypeId) {
+      await assignProductType(productId, productTypeId);
     }
 
     await assignProductTax(productId, taxRateId, adminUserId);

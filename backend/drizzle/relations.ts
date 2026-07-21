@@ -60,6 +60,8 @@ import {
   userRoles,
   userBranches,
   productCategories,
+  productTypes,
+  productTypeAssignments,
   favorites,
   productTaxClasses,
   promotionProducts,
@@ -187,6 +189,7 @@ export const productsRelations = relations(products, ({ one, many }) => ({
   productAttributes: many(productAttributes),
   productVariants: many(productVariants),
   productCategories: many(productCategories),
+  productTypeAssignments: many(productTypeAssignments),
   favorites: many(favorites),
   productTaxClasses: many(productTaxClasses),
 }));
@@ -799,6 +802,24 @@ export const productCategoriesRelations = relations(
     product: one(products, {
       fields: [productCategories.productId],
       references: [products.id],
+    }),
+  }),
+);
+
+export const productTypesRelations = relations(productTypes, ({ many }) => ({
+  productTypeAssignments: many(productTypeAssignments),
+}));
+
+export const productTypeAssignmentsRelations = relations(
+  productTypeAssignments,
+  ({ one }) => ({
+    product: one(products, {
+      fields: [productTypeAssignments.productId],
+      references: [products.id],
+    }),
+    productType: one(productTypes, {
+      fields: [productTypeAssignments.productTypeId],
+      references: [productTypes.id],
     }),
   }),
 );
