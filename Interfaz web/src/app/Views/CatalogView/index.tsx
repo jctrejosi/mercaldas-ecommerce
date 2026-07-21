@@ -44,13 +44,17 @@ export function CatalogPage({
   mobileFiltersOpen,
   setMobileFiltersOpen,
 }: CatalogPageProps) {
-  const { categories, products, loading: catalogLoading } = useCatalog({
+  const {
+    categories,
+    products,
+    loading: catalogLoading,
+  } = useCatalog({
     categoryIds: catalogCategory,
     onSale: catalogOnSale,
     priceRange: catalogPriceRange,
     sort: catalogSort,
     search: catalogSearch,
-    limit: 200,
+    limit: 20,
   });
   const PAGE_SIZE = 12;
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
@@ -65,16 +69,15 @@ export function CatalogPage({
     catalogSearch,
   ]);
 
-  const categoriesByParentId = categories.reduce<Map<number | null, CatalogCategory[]>>(
-    (map, category) => {
-      const parentId = category.parentId ?? null;
-      const current = map.get(parentId) ?? [];
-      current.push(category);
-      map.set(parentId, current);
-      return map;
-    },
-    new Map(),
-  );
+  const categoriesByParentId = categories.reduce<
+    Map<number | null, CatalogCategory[]>
+  >((map, category) => {
+    const parentId = category.parentId ?? null;
+    const current = map.get(parentId) ?? [];
+    current.push(category);
+    map.set(parentId, current);
+    return map;
+  }, new Map());
 
   const getDescendantIds = (categoryId: number): number[] => {
     const descendants = new Set<number>();
@@ -100,8 +103,6 @@ export function CatalogPage({
         : [...catalogCategory, categoryId],
     );
   };
-
-
 
   const catalogProducts = products.length > 0 ? products : EMPTY_PRODUCTS;
   const catalogCategories =
@@ -139,7 +140,9 @@ export function CatalogPage({
             const childCategories = getChildCategories(cat.id);
             const descendantIds = getDescendantIds(cat.id);
             const count = catalogProducts.filter(
-              (p) => p.categoryId !== undefined && descendantIds.includes(p.categoryId),
+              (p) =>
+                p.categoryId !== undefined &&
+                descendantIds.includes(p.categoryId),
             ).length;
             const checked = catalogCategory.includes(cat.id);
 
@@ -210,13 +213,20 @@ export function CatalogPage({
                             <div
                               className="w-4 h-4 rounded border flex items-center justify-center flex-shrink-0 transition-all"
                               style={{
-                                borderColor: childChecked ? "#1A1A2E" : "#D1D5DB",
+                                borderColor: childChecked
+                                  ? "#1A1A2E"
+                                  : "#D1D5DB",
                                 background: childChecked ? "#1A1A2E" : "white",
                               }}
                               onClick={() => toggleCategory(child.id)}
                             >
                               {childChecked && (
-                                <svg width="8" height="6" viewBox="0 0 10 8" fill="none">
+                                <svg
+                                  width="8"
+                                  height="6"
+                                  viewBox="0 0 10 8"
+                                  fill="none"
+                                >
                                   <path
                                     d="M1 4l2.5 2.5L9 1"
                                     stroke="#FFF200"
@@ -245,7 +255,8 @@ export function CatalogPage({
                           {childChecked && grandChildCategories.length > 0 && (
                             <div className="ml-6 space-y-1 border-l border-border pl-2">
                               {grandChildCategories.map((grandChild) => {
-                                const grandChildChecked = catalogCategory.includes(grandChild.id);
+                                const grandChildChecked =
+                                  catalogCategory.includes(grandChild.id);
                                 const grandChildCount = catalogProducts.filter(
                                   (p) => p.categoryId === grandChild.id,
                                 ).length;
@@ -258,13 +269,24 @@ export function CatalogPage({
                                     <div
                                       className="w-4 h-4 rounded border flex items-center justify-center flex-shrink-0 transition-all"
                                       style={{
-                                        borderColor: grandChildChecked ? "#1A1A2E" : "#D1D5DB",
-                                        background: grandChildChecked ? "#1A1A2E" : "white",
+                                        borderColor: grandChildChecked
+                                          ? "#1A1A2E"
+                                          : "#D1D5DB",
+                                        background: grandChildChecked
+                                          ? "#1A1A2E"
+                                          : "white",
                                       }}
-                                      onClick={() => toggleCategory(grandChild.id)}
+                                      onClick={() =>
+                                        toggleCategory(grandChild.id)
+                                      }
                                     >
                                       {grandChildChecked && (
-                                        <svg width="8" height="6" viewBox="0 0 10 8" fill="none">
+                                        <svg
+                                          width="8"
+                                          height="6"
+                                          viewBox="0 0 10 8"
+                                          fill="none"
+                                        >
                                           <path
                                             d="M1 4l2.5 2.5L9 1"
                                             stroke="#FFF200"
@@ -278,10 +300,16 @@ export function CatalogPage({
                                     <span
                                       className="text-xs flex-1"
                                       style={{
-                                        color: grandChildChecked ? "#1A1A2E" : "#6B7280",
-                                        fontWeight: grandChildChecked ? 600 : 400,
+                                        color: grandChildChecked
+                                          ? "#1A1A2E"
+                                          : "#6B7280",
+                                        fontWeight: grandChildChecked
+                                          ? 600
+                                          : 400,
                                       }}
-                                      onClick={() => toggleCategory(grandChild.id)}
+                                      onClick={() =>
+                                        toggleCategory(grandChild.id)
+                                      }
                                     >
                                       {grandChild.name}
                                     </span>

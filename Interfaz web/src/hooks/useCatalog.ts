@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import type { CatalogCategory, Product } from "../app/types";
-import { apiStatusService } from "../services/api-status.service";
 import {
   catalogService,
   type CatalogProductsQuery,
@@ -22,7 +21,6 @@ export function useCatalog(filters?: CatalogProductsQuery) {
       try {
         setLoading(true);
         setError(null);
-        await apiStatusService.waitUntilReady();
         const data = await catalogService.getCatalogData(filters);
         if (mounted) {
           setCategories(data.categories);

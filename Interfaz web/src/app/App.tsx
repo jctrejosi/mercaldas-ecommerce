@@ -63,7 +63,6 @@ import { SocialAuthButtons } from "./SocialAuthButtons";
 
 /* ─── Data ───────────────────────────────────────────────── */
 
-
 const HERO_SLIDES: Slide[] = [
   {
     id: 1,
@@ -301,8 +300,12 @@ export default function App() {
   });
   const [lastOrderId, setLastOrderId] = useState("");
   const [cardGateway, setCardGateway] = useState<"epayco" | "wompi">("epayco");
-  const [epaycoConfig, setEpaycoConfig] = useState<EpaycoConfigResponse | null>(null);
-  const [wompiConfig, setWompiConfig] = useState<WompiConfigResponse | null>(null);
+  const [epaycoConfig, setEpaycoConfig] = useState<EpaycoConfigResponse | null>(
+    null,
+  );
+  const [wompiConfig, setWompiConfig] = useState<WompiConfigResponse | null>(
+    null,
+  );
   const [wompiAcceptance, setWompiAcceptance] = useState({
     terms: false,
     personalData: false,
@@ -310,10 +313,19 @@ export default function App() {
   const [checkoutLoading, setCheckoutLoading] = useState(false);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
 
-  const { customer, loading: customerLoading, login, register, socialLogin } =
-    useCustomerAuth();
-  const { categories, products, loading: catalogLoading } = useCatalog({
-    limit: 200,
+  const {
+    customer,
+    loading: customerLoading,
+    login,
+    register,
+    socialLogin,
+  } = useCustomerAuth();
+  const {
+    categories,
+    products,
+    loading: catalogLoading,
+  } = useCatalog({
+    limit: 20,
   });
   const { products: catalogProducts } = useCatalog({
     categories: catalogCategory,
@@ -321,7 +333,7 @@ export default function App() {
     priceRange: catalogPriceRange,
     sort: catalogSort,
     search: catalogSearch,
-    limit: 200,
+    limit: 20,
   });
 
   // Estado local para errores en el modal
@@ -612,7 +624,9 @@ export default function App() {
       setCheckoutStep(4);
     } catch (error) {
       setCheckoutError(
-        error instanceof Error ? error.message : "No se pudo procesar el pedido",
+        error instanceof Error
+          ? error.message
+          : "No se pudo procesar el pedido",
       );
     } finally {
       setCheckoutLoading(false);
@@ -844,7 +858,9 @@ export default function App() {
                                   {Icon ? (
                                     <Icon
                                       className="w-3.5 h-3.5"
-                                      style={{ color: cat.color ?? "currentColor" }}
+                                      style={{
+                                        color: cat.color ?? "currentColor",
+                                      }}
                                     />
                                   ) : null}
                                 </div>
@@ -882,7 +898,9 @@ export default function App() {
                                   {Icon ? (
                                     <Icon
                                       className="w-3 h-3"
-                                      style={{ color: cat.color ?? "currentColor" }}
+                                      style={{
+                                        color: cat.color ?? "currentColor",
+                                      }}
                                     />
                                   ) : null}
                                   {cat.name}
@@ -1038,7 +1056,9 @@ export default function App() {
               <span className="hidden lg:inline">
                 {customerLoading
                   ? "Cargando..."
-                  : customer?.firstName || customer?.fullName || "Iniciar sesión"}
+                  : customer?.firstName ||
+                    customer?.fullName ||
+                    "Iniciar sesión"}
               </span>
             </button>
             <button
@@ -2644,7 +2664,9 @@ export default function App() {
                     </div>
                     <div className="grid grid-cols-3 gap-2">
                       <div>
-                        <label className="text-xs font-semibold block mb-1">MM</label>
+                        <label className="text-xs font-semibold block mb-1">
+                          MM
+                        </label>
                         <input
                           type="text"
                           inputMode="numeric"
@@ -2653,7 +2675,9 @@ export default function App() {
                           onChange={(e) =>
                             setCardPayment((prev) => ({
                               ...prev,
-                              expiryMonth: e.target.value.replace(/\D/g, "").slice(0, 2),
+                              expiryMonth: e.target.value
+                                .replace(/\D/g, "")
+                                .slice(0, 2),
                             }))
                           }
                           placeholder="08"
@@ -2661,7 +2685,9 @@ export default function App() {
                         />
                       </div>
                       <div>
-                        <label className="text-xs font-semibold block mb-1">AA</label>
+                        <label className="text-xs font-semibold block mb-1">
+                          AA
+                        </label>
                         <input
                           type="text"
                           inputMode="numeric"
@@ -2670,7 +2696,9 @@ export default function App() {
                           onChange={(e) =>
                             setCardPayment((prev) => ({
                               ...prev,
-                              expiryYear: e.target.value.replace(/\D/g, "").slice(0, 2),
+                              expiryYear: e.target.value
+                                .replace(/\D/g, "")
+                                .slice(0, 2),
                             }))
                           }
                           placeholder="29"
@@ -2678,7 +2706,9 @@ export default function App() {
                         />
                       </div>
                       <div>
-                        <label className="text-xs font-semibold block mb-1">CVV</label>
+                        <label className="text-xs font-semibold block mb-1">
+                          CVV
+                        </label>
                         <input
                           type="password"
                           inputMode="numeric"
@@ -2687,7 +2717,9 @@ export default function App() {
                           onChange={(e) =>
                             setCardPayment((prev) => ({
                               ...prev,
-                              cvv: e.target.value.replace(/\D/g, "").slice(0, 4),
+                              cvv: e.target.value
+                                .replace(/\D/g, "")
+                                .slice(0, 4),
                             }))
                           }
                           placeholder="123"
@@ -2791,7 +2823,9 @@ export default function App() {
                             <span>
                               Autorizo el tratamiento de datos personales según{" "}
                               <a
-                                href={wompiConfig?.personalDataAuthPermalink ?? "#"}
+                                href={
+                                  wompiConfig?.personalDataAuthPermalink ?? "#"
+                                }
                                 target="_blank"
                                 rel="noreferrer"
                                 className="underline text-foreground"
@@ -2811,11 +2845,16 @@ export default function App() {
                   <div className="bg-white rounded-2xl border border-border p-4 space-y-3">
                     <h3 className="text-sm font-bold">Pago con PSE</h3>
                     <div>
-                      <label className="text-xs font-semibold block mb-1">Banco</label>
+                      <label className="text-xs font-semibold block mb-1">
+                        Banco
+                      </label>
                       <select
                         value={psePayment.bank}
                         onChange={(e) =>
-                          setPsePayment((prev) => ({ ...prev, bank: e.target.value }))
+                          setPsePayment((prev) => ({
+                            ...prev,
+                            bank: e.target.value,
+                          }))
                         }
                         className="w-full px-3 py-2.5 rounded-xl border border-border bg-muted/50 text-sm focus:outline-none"
                       >
@@ -2837,11 +2876,16 @@ export default function App() {
                             key={type}
                             type="button"
                             onClick={() =>
-                              setPsePayment((prev) => ({ ...prev, personType: type }))
+                              setPsePayment((prev) => ({
+                                ...prev,
+                                personType: type,
+                              }))
                             }
                             className={`px-3 py-2.5 rounded-xl border text-sm font-semibold ${psePayment.personType === type ? "border-yellow-400 bg-yellow-50" : "border-border bg-white"}`}
                           >
-                            {type === "natural" ? "Persona natural" : "Persona jurídica"}
+                            {type === "natural"
+                              ? "Persona natural"
+                              : "Persona jurídica"}
                           </button>
                         ))}
                       </div>
@@ -2862,7 +2906,9 @@ export default function App() {
                         value={nequiPayment.phone}
                         onChange={(e) =>
                           setNequiPayment({
-                            phone: e.target.value.replace(/\D/g, "").slice(0, 10),
+                            phone: e.target.value
+                              .replace(/\D/g, "")
+                              .slice(0, 10),
                           })
                         }
                         placeholder="3001234567"
@@ -2917,7 +2963,9 @@ export default function App() {
                   className="w-full py-4 rounded-2xl font-black text-base hover:brightness-95 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                   style={{ background: "#FFF200", color: "#1A1A2E" }}
                 >
-                  {checkoutLoading ? "Procesando pedido..." : "Confirmar pedido →"}
+                  {checkoutLoading
+                    ? "Procesando pedido..."
+                    : "Confirmar pedido →"}
                 </button>
               </>
             )}

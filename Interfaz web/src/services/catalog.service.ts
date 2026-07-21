@@ -7,7 +7,7 @@ import type {
 const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:3000";
 
 export type CatalogProductsQuery = {
-  categories?: string[];
+  categories?: number[];
   categoryIds?: number[];
   onSale?: boolean;
   priceRange?: string;
@@ -45,7 +45,9 @@ async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
 }
 
 export const catalogService = {
-  async getCatalogData(params?: CatalogProductsQuery): Promise<CatalogDataResponse> {
+  async getCatalogData(
+    params?: CatalogProductsQuery,
+  ): Promise<CatalogDataResponse> {
     const [categories, products] = await Promise.all([
       this.getCategories(),
       this.getProducts(params),
@@ -64,17 +66,20 @@ export const catalogService = {
 
   async getProducts(params?: CatalogProductsQuery): Promise<Product[]> {
     const payload = buildProductsPayload(params);
-    const products = await fetchJson<Product[]>(`${API_BASE_URL}/catalog/products`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
+    const products = await fetchJson<Product[]>(
+      `${API_BASE_URL}/catalog/products`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      },
+    );
 
     return products.map((product) => ({ ...product }));
   },
 
   async getProductById(id: number): Promise<Product | undefined> {
-    const products = await this.getProducts({ limit: 200 });
+    const products = await this.getProducts({ limit: 20 });
     return products.find((product) => product.id === id);
   },
 
