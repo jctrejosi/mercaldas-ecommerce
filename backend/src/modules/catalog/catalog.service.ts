@@ -34,6 +34,11 @@ type CatalogCategoryResponse = {
   isActive: boolean;
 };
 
+type CategoryCountResponse = {
+  categoryId: number;
+  count: number;
+};
+
 type CatalogProductResponse = {
   id: number;
   externalId: string | null;
@@ -83,6 +88,34 @@ export class CatalogService {
       description: row.description,
       image: row.image,
       isActive: row.isActive,
+    }));
+  }
+
+  async getCategoryCounts(): Promise<CategoryCountResponse[]> {
+    const rows = await this.drizzleService.db
+      .select({
+        categoryId: categories.id,
+        count: sql<number>`count(DISTINCT ${products.id})`,
+      })
+      .from(categories)
+      .innerJoin(productCategories, eq(productCategories.categoryId, categories.id))
+      .innerJoin(products, eq(products.id, productCategories.productId))
+      .innerJoin(productVariants, eq(productVariants.productId, products.id))
+      .where(
+        and(
+          eq(categories.isActive, true),
+          isNull(categories.deletedAt),
+          eq(products.isActive, true),
+          isNull(products.deletedAt),
+          eq(productVariants.isActive, true),
+          isNull(productVariants.deletedAt),
+        ),
+      )
+      .groupBy(categories.id);
+
+    return rows.map((row) => ({
+      categoryId: Number(row.categoryId),
+      count: Number(row.count),
     }));
   }
 

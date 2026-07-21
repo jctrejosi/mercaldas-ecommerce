@@ -64,6 +64,14 @@ export const catalogService = {
     return categories.map((category) => ({ ...category }));
   },
 
+  async getCategoryCounts(): Promise<Map<number, number>> {
+    const counts = await fetchJson<{ categoryId: number; count: number }[]>(
+      `${API_BASE_URL}/catalog/categories/counts`,
+    );
+
+    return new Map(counts.map((c) => [c.categoryId, c.count]));
+  },
+
   async getProducts(params?: CatalogProductsQuery): Promise<Product[]> {
     const payload = buildProductsPayload(params);
     const products = await fetchJson<Product[]>(
@@ -85,7 +93,7 @@ export const catalogService = {
 
   async getRelatedProducts(product: Product): Promise<Product[]> {
     const products = await this.getProducts({
-      categories: product.category ? [product.category] : undefined,
+      categoryIds: product.categoryId ? [product.categoryId] : undefined,
       limit: 20,
     });
 

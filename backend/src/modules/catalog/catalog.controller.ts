@@ -18,6 +18,14 @@ export class CatalogController {
   }
 
   @Public()
+  @Get('categories/counts')
+  @ApiOperation({ summary: 'Obtener conteo de productos por categoría' })
+  @ApiResponse({ status: 200, description: 'Conteo de productos por categoría' })
+  getCategoryCounts() {
+    return this.catalogService.getCategoryCounts();
+  }
+
+  @Public()
   @Post('products')
   @ApiOperation({ summary: 'Obtener productos del catálogo con filtros' })
   @ApiResponse({ status: 200, description: 'Listado de productos' })

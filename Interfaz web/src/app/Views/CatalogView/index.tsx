@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Search, X } from "lucide-react";
 import { useCatalog } from "../../../hooks/useCatalog";
+import { catalogService } from "../../../services/catalog.service";
 import { InfiniteScrollTrigger } from "./InfiniteScrollTrigger";
 import { ProductCard } from "./ProductCard";
 import { SkeletonCard } from "./SkeletonCard";
@@ -56,8 +57,13 @@ export function CatalogPage({
     search: catalogSearch,
     limit: 20,
   });
+  const [categoryCounts, setCategoryCounts] = useState<Map<number, number>>(new Map());
   const PAGE_SIZE = 12;
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+
+  useEffect(() => {
+    void catalogService.getCategoryCounts().then(setCategoryCounts);
+  }, []);
 
   useEffect(() => {
     setVisibleCount(PAGE_SIZE);
@@ -94,6 +100,11 @@ export function CatalogPage({
     }
 
     return Array.from(descendants);
+  };
+
+  const getCategoryCount = (categoryId: number): number => {
+    const descendantIds = getDescendantIds(categoryId);
+    return descendantIds.reduce((sum, id) => sum + (categoryCounts.get(id) ?? 0), 0);
   };
 
   const toggleCategory = (categoryId: number) => {
@@ -138,12 +149,7 @@ export function CatalogPage({
           {rootCategories.map((cat) => {
             const Icon = cat.icon;
             const childCategories = getChildCategories(cat.id);
-            const descendantIds = getDescendantIds(cat.id);
-            const count = catalogProducts.filter(
-              (p) =>
-                p.categoryId !== undefined &&
-                descendantIds.includes(p.categoryId),
-            ).length;
+            const count = getCategoryCount(cat.id);
             const checked = catalogCategory.includes(cat.id);
 
             return (
@@ -199,13 +205,8 @@ export function CatalogPage({
                   <div className="ml-7 space-y-1 border-l border-border pl-2">
                     {childCategories.map((child) => {
                       const grandChildCategories = getChildCategories(child.id);
-                      const childDescendantIds = getDescendantIds(child.id);
                       const childChecked = catalogCategory.includes(child.id);
-                      const childCount = catalogProducts.filter(
-                        (p) =>
-                          p.categoryId !== undefined &&
-                          childDescendantIds.includes(p.categoryId),
-                      ).length;
+                      const childCount = getCategoryCount(child.id);
 
                       return (
                         <div key={child.id} className="space-y-1">
@@ -257,9 +258,7 @@ export function CatalogPage({
                               {grandChildCategories.map((grandChild) => {
                                 const grandChildChecked =
                                   catalogCategory.includes(grandChild.id);
-                                const grandChildCount = catalogProducts.filter(
-                                  (p) => p.categoryId === grandChild.id,
-                                ).length;
+                                const grandChildCount = getCategoryCount(grandChild.id);
 
                                 return (
                                   <label
