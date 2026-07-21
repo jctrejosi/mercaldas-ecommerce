@@ -42,6 +42,10 @@ export class CreateOrderAddressDto {
 }
 
 export class CardPaymentDetailsDto {
+  @IsOptional()
+  @IsString()
+  provider?: 'epayco' | 'wompi';
+
   @IsString()
   @IsNotEmpty()
   cardholderName!: string;
@@ -50,13 +54,13 @@ export class CardPaymentDetailsDto {
   @IsNotEmpty()
   cardToken!: string;
 
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  acceptanceToken!: string;
+  acceptanceToken?: string;
 
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  acceptPersonalAuth!: string;
+  acceptPersonalAuth?: string;
 
   @IsString()
   @IsNotEmpty()

@@ -51,6 +51,14 @@ export interface WompiConfig {
   redirectUrl: string;
 }
 
+export interface EpaycoConfig {
+  publicKey: string;
+  privateKey: string;
+  apiUrl: string;
+  checkoutUrl: string;
+  test: boolean;
+}
+
 export type CrossOriginResourcePolicy =
   'cross-origin' | 'same-origin' | 'same-site';
 

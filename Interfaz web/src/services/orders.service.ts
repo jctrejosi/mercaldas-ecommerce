@@ -15,11 +15,14 @@ export type CheckoutAddress = {
   notes?: string;
 };
 
+export type CardPaymentProvider = "epayco" | "wompi";
+
 export type CardPaymentDetails = {
+  provider?: CardPaymentProvider;
   cardholderName: string;
   cardToken: string;
-  acceptanceToken: string;
-  acceptPersonalAuth: string;
+  acceptanceToken?: string;
+  acceptPersonalAuth?: string;
   last4: string;
   brand: string;
   installments?: number;
@@ -56,12 +59,13 @@ export type CheckoutResponse = {
   shippingType: CheckoutPayload["shippingType"];
   address: CheckoutAddress;
   status: string;
-  wompiTransaction?: {
-    id?: string | number;
-    status?: string;
-    status_message?: string;
-    payment_method_type?: string;
-  };
+  cardTransaction?: Record<string, unknown>;
+};
+
+export type EpaycoConfigResponse = {
+  publicKey: string;
+  checkoutUrl: string;
+  test: boolean;
 };
 
 export type WompiConfigResponse = {
@@ -94,6 +98,30 @@ async function fetchJson<T>(input: string, init?: RequestInit): Promise<T> {
 }
 
 export const ordersService = {
+  async getEpaycoConfig(): Promise<EpaycoConfigResponse> {
+    return fetchJson<EpaycoConfigResponse>(`${API_BASE_URL}/payments/epayco/config`, {
+      credentials: "include",
+    });
+  },
+
+  async tokenizeEpaycoCard(input: {
+    cardNumber: string;
+    expYear: string;
+    expMonth: string;
+    cvc: string;
+    cardHolder: string;
+  }): Promise<{ id: string; brand: string; last4: string }> {
+    return fetchJson<{ id: string; brand: string; last4: string }>(
+      `${API_BASE_URL}/payments/epayco/tokenize-card`,
+      {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(input),
+      },
+    );
+  },
+
   async getWompiConfig(): Promise<WompiConfigResponse> {
     return fetchJson<WompiConfigResponse>(`${API_BASE_URL}/payments/wompi/config`, {
       credentials: "include",

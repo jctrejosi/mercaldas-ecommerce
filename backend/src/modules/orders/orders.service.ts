@@ -20,12 +20,14 @@ import {
 } from '../../../drizzle/schema';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { WompiService } from '../payments/wompi.service';
+import { EpaycoService } from '../payments/epayco.service';
 
 @Injectable()
 export class OrdersService {
   constructor(
     private readonly drizzleService: DrizzleService,
     private readonly wompiService: WompiService,
+    private readonly epaycoService: EpaycoService,
   ) {}
 
   private get db() {
@@ -107,24 +109,46 @@ export class OrdersService {
     const amountInCents = grandTotal * 100;
     const referenceCode = this.buildReferenceCode();
 
-    const wompiTransaction =
+    const cardProvider = dto.paymentDetails?.card?.provider ?? 'epayco';
+
+    const cardTransaction =
       dto.paymentMethod === 'tarjeta'
-        ? await this.wompiService.createCardTransaction({
-            amountInCents,
-            customerEmail: customer.email,
-            reference: referenceCode,
-            acceptanceToken: dto.paymentDetails!.card!.acceptanceToken,
-            acceptPersonalAuth: dto.paymentDetails!.card!.acceptPersonalAuth,
-            cardToken: dto.paymentDetails!.card!.cardToken,
-            installments: dto.paymentDetails!.card!.installments ?? 1,
-            customerData: {
-              phone_number: dto.address.phone,
-              full_name: dto.address.name,
-            },
-          })
+        ? cardProvider === 'wompi'
+          ? await this.wompiService.createCardTransaction({
+              amountInCents,
+              customerEmail: customer.email,
+              reference: referenceCode,
+              acceptanceToken: dto.paymentDetails!.card!.acceptanceToken!,
+              acceptPersonalAuth: dto.paymentDetails!.card!.acceptPersonalAuth!,
+              cardToken: dto.paymentDetails!.card!.cardToken,
+              installments: dto.paymentDetails!.card!.installments ?? 1,
+              customerData: {
+                phone_number: dto.address.phone,
+                full_name: dto.address.name,
+              },
+            })
+          : await this.epaycoService.createCardCharge({
+              tokenCard: dto.paymentDetails!.card!.cardToken,
+              customerEmail: customer.email,
+              amount: grandTotal,
+              tax: 0,
+              taxBase: grandTotal,
+              description: `Pedido ${referenceCode}`,
+              invoice: referenceCode,
+              installments: dto.paymentDetails!.card!.installments ?? 1,
+              name: dto.address.name,
+              address: dto.address.address,
+              phone: dto.address.phone,
+              city: dto.address.city,
+            })
         : null;
 
-    const isApprovedCardPayment = wompiTransaction?.status === 'APPROVED';
+    const isApprovedCardPayment =
+      cardProvider === 'wompi'
+        ? cardTransaction?.status === 'APPROVED'
+        : ['Aceptada', 'Aprobada', 'APPROVED', 'approved'].includes(
+            String(cardTransaction?.status ?? cardTransaction?.respuesta ?? ''),
+          );
     const orderStatus =
       dto.paymentMethod === 'efectivo'
         ? 'created'
@@ -210,13 +234,16 @@ export class OrdersService {
           currency: 'COP',
           providerName: this.mapPaymentProvider(dto.paymentMethod),
           providerTransactionId:
-            wompiTransaction?.id?.toString() ?? `pi_${referenceCode}`,
+            cardTransaction?.id?.toString() ??
+            cardTransaction?.ref_payco?.toString() ??
+            `pi_${referenceCode}`,
           providerResponse: {
             paymentMethod: dto.paymentMethod,
             simulated: dto.paymentMethod !== 'tarjeta',
+            provider: dto.paymentMethod === 'tarjeta' ? cardProvider : this.mapPaymentProvider(dto.paymentMethod),
             shippingType: dto.shippingType,
             paymentDetails: this.buildPaymentResponse(dto),
-            wompiTransaction,
+            cardTransaction,
           },
           idempotencyKey: `checkout-${referenceCode}`,
         })
@@ -226,7 +253,9 @@ export class OrdersService {
         orderId,
         paymentIntentId: Number(insertedPaymentIntent[0].id),
         providerTransactionId:
-          wompiTransaction?.id?.toString() ?? `pay_${referenceCode}`,
+          cardTransaction?.id?.toString() ??
+          cardTransaction?.ref_payco?.toString() ??
+          `pay_${referenceCode}`,
         providerName: this.mapPaymentProvider(dto.paymentMethod),
         amount: String(grandTotal),
         currency: 'COP',
@@ -251,7 +280,7 @@ export class OrdersService {
         shippingType: dto.shippingType,
         address: dto.address,
         status: orderStatus,
-        wompiTransaction,
+        cardTransaction,
       };
     });
 
@@ -281,10 +310,10 @@ export class OrdersService {
       if (
         !card?.cardholderName ||
         !card.cardToken ||
-        !card.acceptanceToken ||
-        !card.acceptPersonalAuth ||
         !card.last4 ||
-        !card.brand
+        !card.brand ||
+        (card.provider === 'wompi' &&
+          (!card.acceptanceToken || !card.acceptPersonalAuth))
       ) {
         throw new BadRequestException(
           'Debes completar y tokenizar los datos de la tarjeta',
@@ -315,6 +344,7 @@ export class OrdersService {
     if (dto.paymentMethod === 'tarjeta') {
       const card = dto.paymentDetails?.card;
       return {
+        provider: card?.provider ?? 'epayco',
         cardholderName: card?.cardholderName,
         last4: card?.last4,
         brand: card?.brand,
@@ -371,7 +401,7 @@ export class OrdersService {
   private mapPaymentProvider(method: CreateOrderDto['paymentMethod']) {
     switch (method) {
       case 'tarjeta':
-        return 'wompi';
+        return 'card_gateway';
       case 'pse':
         return 'pse';
       case 'nequi':

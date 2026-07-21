@@ -17,6 +17,7 @@ import {
   helmetConfig,
   cloudinaryConfig,
   wompiConfig,
+  epaycoConfig,
 } from './config';
 
 @Module({
@@ -30,6 +31,7 @@ import {
         helmetConfig,
         cloudinaryConfig,
         wompiConfig,
+        epaycoConfig,
       ],
       isGlobal: true,
     }),
