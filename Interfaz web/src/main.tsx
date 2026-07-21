@@ -3,6 +3,7 @@ import "./styles/index.css";
 import React from "react";
 import ReactDOM from "react-dom/client";
 import { GoogleOAuthProvider } from "@react-oauth/google";
+import { BrowserRouter } from "react-router";
 import App from "./app/App.tsx";
 import { apiStatusService } from "./services/api-status.service";
 
@@ -16,7 +17,9 @@ const renderApp = async () => {
   ReactDOM.createRoot(document.getElementById("root")!).render(
     <React.StrictMode>
       <GoogleOAuthProvider clientId={import.meta.env.VITE_GOOGLE_CLIENT_ID}>
-        <App />
+        <BrowserRouter>
+          <App />
+        </BrowserRouter>
       </GoogleOAuthProvider>
     </React.StrictMode>,
   );

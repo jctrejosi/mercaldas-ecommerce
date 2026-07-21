@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { Routes, Route, useNavigate, useLocation, useSearchParams } from "react-router";
 import {
   Search,
   ShoppingCart,
@@ -240,18 +241,36 @@ const PRODUCT_TABS = [
 
 /* ─── Main App ───────────────────────────────────────────── */
 export default function App() {
-  const [currentView, setCurrentView] = useState<"home" | "catalog">("home");
+  const location = useLocation();
+  const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  
+  const isCatalogRoute = location.pathname === "/catalog";
+  const [currentView, setCurrentView] = useState<"home" | "catalog">(
+    isCatalogRoute ? "catalog" : "home"
+  );
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [cartHydrated, setCartHydrated] = useState(false);
   const [cartOpen, setCartOpen] = useState(false);
   const [activeTab, setActiveTab] = useState("vendidos");
-  // catalog filters
-  const [catalogCategory, setCatalogCategory] = useState<number[]>([]);
-  const [catalogOnSale, setCatalogOnSale] = useState(false);
-  const [catalogPriceRange, setCatalogPriceRange] = useState<string>("all");
-  const [catalogSort, setCatalogSort] = useState("relevancia");
+  // catalog filters - sync with URL
+  const [catalogCategory, setCatalogCategory] = useState<number[]>(() => {
+    const categoryIds = searchParams.get("categoryIds");
+    return categoryIds ? categoryIds.split(",").map(Number) : [];
+  });
+  const [catalogOnSale, setCatalogOnSale] = useState(() => 
+    searchParams.get("onSale") === "true"
+  );
+  const [catalogPriceRange, setCatalogPriceRange] = useState<string>(() => 
+    searchParams.get("priceRange") || "all"
+  );
+  const [catalogSort, setCatalogSort] = useState(() => 
+    searchParams.get("sort") || "relevancia"
+  );
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
-  const [catalogSearch, setCatalogSearch] = useState("");
+  const [catalogSearch, setCatalogSearch] = useState(() => 
+    searchParams.get("search") || ""
+  );
   const [searchQuery, setSearchQuery] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
   const searchRef = useRef<HTMLDivElement>(null);
@@ -448,6 +467,33 @@ export default function App() {
     );
   }, [cartHydrated, cartItems, customer]);
 
+  // Sync filters with URL
+  useEffect(() => {
+    if (!isCatalogRoute) return;
+    
+    const params = new URLSearchParams();
+    if (catalogCategory.length > 0) {
+      params.set("categoryIds", catalogCategory.join(","));
+    }
+    if (catalogOnSale) {
+      params.set("onSale", "true");
+    }
+    if (catalogPriceRange !== "all") {
+      params.set("priceRange", catalogPriceRange);
+    }
+    if (catalogSort !== "relevancia") {
+      params.set("sort", catalogSort);
+    }
+    if (catalogSearch) {
+      params.set("search", catalogSearch);
+    }
+    
+    const newUrl = params.toString() ? `/catalog?${params.toString()}` : "/catalog";
+    if (newUrl !== location.pathname + location.search) {
+      navigate(newUrl, { replace: true });
+    }
+  }, [catalogCategory, catalogOnSale, catalogPriceRange, catalogSort, catalogSearch, isCatalogRoute]);
+
   const addToCart = (product: Product) => {
     setCartItems((prev) => {
       const ex = prev.find((c) => c.id === product.id);
@@ -474,12 +520,11 @@ export default function App() {
     setCartItems((prev) => prev.filter((c) => c.id !== id));
 
   const openCatalog = (categoryId?: number) => {
-    setCatalogCategory(categoryId ? [categoryId] : []);
-    setCatalogOnSale(false);
-    setCatalogPriceRange("all");
-    setCatalogSort("relevancia");
-    setCatalogSearch("");
-    setCurrentView("catalog");
+    const params = new URLSearchParams();
+    if (categoryId) {
+      params.set("categoryIds", categoryId.toString());
+    }
+    navigate(`/catalog${params.toString() ? `?${params.toString()}` : ""}`);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
@@ -1157,7 +1202,7 @@ export default function App() {
           cartItems={cartItems}
           onAdd={addToCart}
           onRemove={removeFromCart}
-          onBack={() => setCurrentView("home")}
+          onBack={() => navigate("/")}
           onProductClick={setSelectedProduct}
           onOpenCategory={openCatalog}
           catalogCategory={catalogCategory}
@@ -1176,7 +1221,6 @@ export default function App() {
       )}
 
       <main className={currentView === "catalog" ? "hidden" : ""}>
-        {/* ── Hero Carousel ── */}
         <section
           className="relative overflow-hidden"
           style={{ background: slide.bg, transition: "background 0.5s ease" }}
