@@ -1,6 +1,6 @@
 const { exec } = require('child_process');
 const { promisify } = require('util');
-const { Pool } = require('pg');
+const path = require('path');
 
 const execAsync = promisify(exec);
 
@@ -11,70 +11,84 @@ if (!DATABASE_URL) {
   process.exit(1);
 }
 
-async function tableExists(pool, tableName) {
-  const result = await pool.query(
+function runCommand(command, label) {
+  return new Promise((resolve, reject) => {
+    console.log(`🚀 ${label}...`);
+    const child = exec(command, {
+      cwd: path.join(__dirname, '..'),
+      env: { ...process.env, DATABASE_URL },
+    });
+
+    child.stdout.on('data', (data) => process.stdout.write(data));
+    child.stderr.on('data', (data) => process.stderr.write(data));
+
+    child.on('close', (code) => {
+      if (code === 0) {
+        console.log(`✅ ${label} completado`);
+        resolve();
+      } else {
+        console.error(`❌ ${label} falló con código ${code}`);
+        reject(new Error(`${label} salió con código ${code}`));
+      }
+    });
+  });
+}
+
+async function tableExists(client, tableName) {
+  const result = await client.query(
     `SELECT EXISTS (
       SELECT FROM information_schema.tables
-      WHERE table_schema = 'public'
-      AND table_name = $1
+      WHERE table_schema = 'public' AND table_name = $1
     )`,
     [tableName],
   );
   return result.rows[0]?.exists === true;
 }
 
-async function hasData(pool, tableName) {
-  const result = await pool.query(`SELECT COUNT(*) FROM ${tableName}`);
-  return parseInt(result.rows[0].count) > 0;
-}
-
-async function runCommand(command, label) {
-  console.log(`🚀 ${label}...`);
-  try {
-    const { stdout, stderr } = await execAsync(command, {
-      env: { ...process.env, DATABASE_URL },
-    });
-    if (stdout) console.log(stdout);
-    if (stderr) console.warn(stderr);
-    console.log(`✅ ${label} completado`);
-  } catch (error) {
-    console.error(`❌ ${label} falló:`);
-    if (error.stdout) console.log(error.stdout);
-    if (error.stderr) console.error(error.stderr);
-    throw error;
-  }
-}
-
 async function migrate() {
+  const { Pool } = require('pg');
   const pool = new Pool({ connectionString: DATABASE_URL });
 
   try {
-    const productsTableExists = await tableExists(pool, 'products');
+    const client = await pool.connect();
+    const productsTableExists = await tableExists(client, 'products');
+    client.release();
 
     if (!productsTableExists) {
-      console.log('🆕 Base de datos nueva detectada. Ejecutando migración completa...');
-      await runCommand('yarn db:push', 'Creación de tablas (db:push)');
-      await runCommand('yarn seed:run', 'Seed de usuarios (seed:run)');
-      await runCommand('yarn import:run', 'Importación de productos (import:run)');
-    } else {
-      const hasProductData = await hasData(pool, 'products');
+      console.log('🆕 BD nueva. Ejecutando migración completa...');
 
-      if (!hasProductData) {
-        console.log('📋 Tabla products existe pero está vacía. Ejecutando seed + import...');
-        await runCommand('yarn seed:run', 'Seed de usuarios (seed:run)');
-        await runCommand('yarn import:run', 'Importación de productos (import:run)');
-      } else {
-        console.log('♻️ Base de datos existente con productos. Solo actualizando esquema...');
-        await runCommand('yarn db:push', 'Actualización de esquema (db:push)');
+      // 1. Crear tablas
+      await runCommand('yarn db:push', 'db:push (crear tablas)');
+
+      // Verificar que las tablas se crearon
+      const verifyClient = await pool.connect();
+      const storeExists = await tableExists(verifyClient, 'store');
+      verifyClient.release();
+
+      if (!storeExists) {
+        throw new Error(
+          'db:push no creó las tablas. Verifica DATABASE_URL y la conexión a PostgreSQL.'
+        );
       }
+      console.log('✅ Tablas verificadas (store existe)');
+
+      // 2. Seed de usuarios
+      await runCommand('yarn seed:run', 'seed:run (usuarios)');
+
+      // 3. Importar productos
+      await runCommand('yarn import:run', 'import:run (productos)');
+    } else {
+      console.log('♻️ BD existente con productos. Solo actualizando esquema...');
+      await runCommand('yarn db:push', 'db:push (actualizar esquema)');
     }
 
     console.log('✅ Migración completada exitosamente');
   } catch (error) {
-    console.error('❌ Error en migración:', error.message);
+    console.error('❌ Error fatal en migración:', error.message);
+    process.exit(1);
   } finally {
     await pool.end();
   }
 }
 
-migrate().then(() => process.exit(0));
+migrate();
