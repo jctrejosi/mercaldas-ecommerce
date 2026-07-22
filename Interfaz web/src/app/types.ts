@@ -59,6 +59,7 @@ export interface CatalogCategory {
   color?: string;
   bg?: string;
   isActive?: boolean;
+  count?: number;
 }
 
 export interface CatalogDataResponse {

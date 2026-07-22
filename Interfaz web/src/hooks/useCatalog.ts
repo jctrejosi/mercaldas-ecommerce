@@ -14,22 +14,48 @@ export function useCatalog(filters?: CatalogProductsQuery) {
   const categoriesKey = filters?.categories?.join("|") ?? "";
   const categoryIdsKey = filters?.categoryIds?.join("|") ?? "";
 
+  // Load categories only once
   useEffect(() => {
     let mounted = true;
 
-    const loadCatalog = async () => {
+    const loadCategories = async () => {
       try {
-        setLoading(true);
-        setError(null);
-        const data = await catalogService.getCatalogData(filters);
+        const data = await catalogService.getCategories();
         if (mounted) {
-          setCategories(data.categories);
-          setProducts(data.products);
+          setCategories(data);
         }
       } catch (err) {
         if (mounted) {
           setError(
-            err instanceof Error ? err.message : "Error cargando catálogo",
+            err instanceof Error ? err.message : "Error cargando categorías",
+          );
+        }
+      }
+    };
+
+    void loadCategories();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  // Load products when filters change
+  useEffect(() => {
+    let mounted = true;
+
+    const loadProducts = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        const data = await catalogService.getProducts(filters);
+        if (mounted) {
+          setProducts(data);
+        }
+      } catch (err) {
+        if (mounted) {
+          setError(
+            err instanceof Error ? err.message : "Error cargando productos",
           );
         }
       } finally {
@@ -39,7 +65,7 @@ export function useCatalog(filters?: CatalogProductsQuery) {
       }
     };
 
-    void loadCatalog();
+    void loadProducts();
 
     return () => {
       mounted = false;

@@ -14,6 +14,7 @@ export type CatalogProductsQuery = {
   sort?: string;
   search?: string;
   limit?: number;
+  offset?: number;
 };
 
 function buildProductsPayload(params?: CatalogProductsQuery) {
@@ -28,6 +29,7 @@ function buildProductsPayload(params?: CatalogProductsQuery) {
     sort: params?.sort || undefined,
     search: params?.search?.trim() ? params.search.trim() : undefined,
     limit: params?.limit || undefined,
+    offset: params?.offset || undefined,
   };
 }
 

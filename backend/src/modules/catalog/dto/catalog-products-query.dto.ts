@@ -79,4 +79,14 @@ export class CatalogProductsQueryDto {
   })
   @IsNumber()
   limit?: number;
+
+  @IsOptional()
+  @Transform(({ value }) => {
+    if (value === undefined || value === null || value === '') {
+      return undefined;
+    }
+    return Number(value);
+  })
+  @IsNumber()
+  offset?: number;
 }

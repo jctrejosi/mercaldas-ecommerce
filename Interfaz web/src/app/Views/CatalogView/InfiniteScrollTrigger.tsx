@@ -4,38 +4,49 @@ import { SkeletonCard } from "./SkeletonCard";
 export function InfiniteScrollTrigger({
   onIntersect,
   count,
+  disabled = false,
 }: {
   onIntersect: () => void;
   count: number;
+  disabled?: boolean;
 }) {
   const sentinelRef = useRef<HTMLDivElement>(null);
-  const firedRef = useRef(false);
+  const loadingRef = useRef(false);
 
   useEffect(() => {
-    firedRef.current = false;
+    loadingRef.current = false;
+  }, [onIntersect]);
+
+  useEffect(() => {
     const el = sentinelRef.current;
-    if (!el) return;
+    if (!el || disabled) return;
+    
     const observer = new IntersectionObserver(
       ([entry]) => {
-        if (entry.isIntersecting && !firedRef.current) {
-          firedRef.current = true;
-          setTimeout(onIntersect, 600);
+        if (entry.isIntersecting && !loadingRef.current) {
+          loadingRef.current = true;
+          onIntersect();
         }
       },
-      { rootMargin: "200px" },
+      { rootMargin: "300px" },
     );
+    
     observer.observe(el);
     return () => observer.disconnect();
-  }, [onIntersect]);
+  }, [onIntersect, disabled]);
+
+  if (disabled) return null;
 
   return (
     <div>
-      {/* Skeleton grid shown while scrolling into view */}
-      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3 mt-3">
-        {Array.from({ length: count }).map((_, i) => (
-          <SkeletonCard key={i} />
-        ))}
-      </div>
+      {/* Skeleton grid shown while loading */}
+      {count > 0 && (
+        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3 mt-3">
+          {Array.from({ length: count }).map((_, i) => (
+            <SkeletonCard key={i} />
+          ))}
+        </div>
+      )}
       {/* Invisible sentinel at the bottom */}
       <div ref={sentinelRef} className="h-1 w-full" />
       <style>{`

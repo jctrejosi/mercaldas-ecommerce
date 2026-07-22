@@ -32,6 +32,7 @@ type CatalogCategoryResponse = {
   description: string | null;
   image: string | null;
   isActive: boolean;
+  count: number;
 };
 
 type CategoryCountResponse = {
@@ -63,6 +64,25 @@ export class CatalogService {
   constructor(private readonly drizzleService: DrizzleService) {}
 
   async getCategories(): Promise<CatalogCategoryResponse[]> {
+    const countSubquery = this.drizzleService.db
+      .select({
+        categoryId: productCategories.categoryId,
+        count: sql<number>`count(DISTINCT ${products.id})`.as('count'),
+      })
+      .from(productCategories)
+      .innerJoin(products, eq(products.id, productCategories.productId))
+      .innerJoin(productVariants, eq(productVariants.productId, products.id))
+      .where(
+        and(
+          eq(products.isActive, true),
+          isNull(products.deletedAt),
+          eq(productVariants.isActive, true),
+          isNull(productVariants.deletedAt),
+        ),
+      )
+      .groupBy(productCategories.categoryId)
+      .as('category_counts');
+
     const rows = await this.drizzleService.db
       .select({
         id: categories.id,
@@ -73,9 +93,11 @@ export class CatalogService {
         description: categories.description,
         image: media.path,
         isActive: categories.isActive,
+        count: sql<number>`COALESCE(${countSubquery.count}, 0)`,
       })
       .from(categories)
       .leftJoin(media, eq(categories.imageMediaId, media.id))
+      .leftJoin(countSubquery, eq(countSubquery.categoryId, categories.id))
       .where(and(eq(categories.isActive, true), isNull(categories.deletedAt)))
       .orderBy(asc(categories.displayOrder), asc(categories.name));
 
@@ -88,6 +110,7 @@ export class CatalogService {
       description: row.description,
       image: row.image,
       isActive: row.isActive,
+      count: Number(row.count ?? 0),
     }));
   }
 
@@ -126,7 +149,8 @@ export class CatalogService {
     const normalizedCategoryIds = query.categoryIds?.filter((id) => Number.isFinite(id)) ?? [];
     const search = query.search?.trim();
     const sort = query.sort ?? 'relevancia';
-    const limit = Math.min(Math.max(query.limit ?? 100, 1), 200);
+    const limit = Math.min(Math.max(query.limit ?? 20, 1), 100);
+    const offset = Math.max(query.offset ?? 0, 0);
 
     let allowedCategoryIds: number[] = [];
 
@@ -240,7 +264,8 @@ export class CatalogService {
         ),
       )
       .orderBy(...this.buildSort(sort))
-      .limit(limit);
+      .limit(limit)
+      .offset(offset);
 
     const productIds = Array.from(new Set(rows.map((row) => Number(row.id))));
     if (productIds.length === 0) {

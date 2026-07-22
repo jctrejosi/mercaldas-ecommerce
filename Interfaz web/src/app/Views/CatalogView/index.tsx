@@ -45,6 +45,12 @@ export function CatalogPage({
   mobileFiltersOpen,
   setMobileFiltersOpen,
 }: CatalogPageProps) {
+  const [allProducts, setAllProducts] = useState<Product[]>([]);
+  const [offset, setOffset] = useState(0);
+  const [hasMore, setHasMore] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const PAGE_SIZE = 20;
+
   const {
     categories,
     products,
@@ -55,18 +61,20 @@ export function CatalogPage({
     priceRange: catalogPriceRange,
     sort: catalogSort,
     search: catalogSearch,
-    limit: 20,
+    limit: PAGE_SIZE,
+    offset,
   });
-  const [categoryCounts, setCategoryCounts] = useState<Map<number, number>>(new Map());
-  const PAGE_SIZE = 12;
-  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
 
-  useEffect(() => {
-    void catalogService.getCategoryCounts().then(setCategoryCounts);
-  }, []);
+  const getCategoryName = (categoryId: number): string => {
+    const category = categories.find((c) => c.id === categoryId);
+    return category?.name || String(categoryId);
+  };
 
+  // Reset products when filters change
   useEffect(() => {
-    setVisibleCount(PAGE_SIZE);
+    setAllProducts([]);
+    setOffset(0);
+    setHasMore(true);
   }, [
     catalogCategory,
     catalogOnSale,
@@ -74,6 +82,23 @@ export function CatalogPage({
     catalogSort,
     catalogSearch,
   ]);
+
+  // Accumulate products when new ones arrive
+  useEffect(() => {
+    if (offset === 0) {
+      setAllProducts(products);
+    } else {
+      setAllProducts((prev) => [...prev, ...products]);
+    }
+    setHasMore(products.length === PAGE_SIZE);
+    setLoadingMore(false);
+  }, [products, offset]);
+
+  const loadMore = () => {
+    if (!hasMore || loadingMore) return;
+    setLoadingMore(true);
+    setOffset((prev) => prev + PAGE_SIZE);
+  };
 
   const categoriesByParentId = categories.reduce<
     Map<number | null, CatalogCategory[]>
@@ -104,7 +129,10 @@ export function CatalogPage({
 
   const getCategoryCount = (categoryId: number): number => {
     const descendantIds = getDescendantIds(categoryId);
-    return descendantIds.reduce((sum, id) => sum + (categoryCounts.get(id) ?? 0), 0);
+    return descendantIds.reduce((sum, id) => {
+      const category = categories.find((c) => c.id === id);
+      return sum + (category?.count ?? 0);
+    }, 0);
   };
 
   const toggleCategory = (categoryId: number) => {
@@ -125,8 +153,6 @@ export function CatalogPage({
 
   const getChildCategories = (parentId: number) =>
     categoriesByParentId.get(parentId) ?? [];
-
-  const filtered = catalogProducts;
 
   const activeFilterCount =
     catalogCategory.length +
@@ -149,7 +175,6 @@ export function CatalogPage({
           {rootCategories.map((cat) => {
             const Icon = cat.icon;
             const childCategories = getChildCategories(cat.id);
-            const count = getCategoryCount(cat.id);
             const checked = catalogCategory.includes(cat.id);
 
             return (
@@ -196,9 +221,6 @@ export function CatalogPage({
                   >
                     {cat.name}
                   </span>
-                  <span className="text-xs text-muted-foreground ml-auto">
-                    {count}
-                  </span>
                 </label>
 
                 {checked && childCategories.length > 0 && (
@@ -206,7 +228,6 @@ export function CatalogPage({
                     {childCategories.map((child) => {
                       const grandChildCategories = getChildCategories(child.id);
                       const childChecked = catalogCategory.includes(child.id);
-                      const childCount = getCategoryCount(child.id);
 
                       return (
                         <div key={child.id} className="space-y-1">
@@ -248,9 +269,6 @@ export function CatalogPage({
                             >
                               {child.name}
                             </span>
-                            <span className="text-[11px] text-muted-foreground">
-                              {childCount}
-                            </span>
                           </label>
 
                           {childChecked && grandChildCategories.length > 0 && (
@@ -258,7 +276,6 @@ export function CatalogPage({
                               {grandChildCategories.map((grandChild) => {
                                 const grandChildChecked =
                                   catalogCategory.includes(grandChild.id);
-                                const grandChildCount = getCategoryCount(grandChild.id);
 
                                 return (
                                   <label
@@ -311,9 +328,6 @@ export function CatalogPage({
                                       }
                                     >
                                       {grandChild.name}
-                                    </span>
-                                    <span className="text-[11px] text-muted-foreground">
-                                      {grandChildCount}
                                     </span>
                                   </label>
                                 );
@@ -405,25 +419,19 @@ export function CatalogPage({
     </div>
   );
 
-  const visibleProducts = filtered.slice(0, visibleCount);
-  const hasMore = visibleCount < filtered.length;
+  const filtered = allProducts;
 
   return (
-    <div className="bg-muted/40" style={{ minHeight: "calc(100vh - 108px)" }}>
+    <div className="bg-muted/40" style={{ height: "calc(100vh - 108px)", overflow: "hidden" }}>
       {/* ── Two-column body ── */}
-      <div className="max-w-7xl mx-auto px-4 py-5 flex gap-5 items-start">
+      <div className="max-w-7xl mx-auto px-4 py-5 flex gap-5 h-full">
         {/* Desktop sidebar */}
         <aside
-          className="hidden md:flex flex-col w-56 flex-shrink-0 bg-white rounded-xl border border-border overflow-hidden"
-          style={{
-            position: "sticky",
-            top: "80px",
-            maxHeight: "calc(100vh - 96px)",
-            overflowY: "auto",
-          }}
+          className="hidden md:flex flex-col w-56 flex-shrink-0 bg-white rounded-xl border border-border overflow-y-auto"
+          style={{ height: "calc(100vh - 148px)" }}
         >
           {/* Search inside sidebar */}
-          <div className="p-3 border-b border-border">
+          <div className="p-3 border-b border-border sticky top-0 bg-white z-10">
             <div className="relative">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
               <input
@@ -450,15 +458,11 @@ export function CatalogPage({
 
         {/* Products column */}
         <div
-          className="flex-1 min-w-0 flex flex-col"
-          style={{ minHeight: "calc(100vh - 200px)" }}
+          className="flex-1 min-w-0 flex flex-col overflow-hidden"
         >
           {/* Sort row + mobile filters trigger */}
-          <div className="flex items-center justify-between gap-3 mb-4">
-            <p className="text-sm text-muted-foreground hidden md:block">
-              <strong className="text-foreground">{filtered.length}</strong>{" "}
-              productos
-            </p>
+          <div className="flex items-center justify-between gap-3 mb-4 flex-shrink-0">
+
             <div className="flex items-center gap-2 ml-auto">
               {/* Mobile filters button */}
               <button
@@ -519,7 +523,7 @@ export function CatalogPage({
                   key={cat}
                   className="flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold border-2 border-foreground text-foreground"
                 >
-                  {cat}
+                  {getCategoryName(cat)}
                   <button
                     onClick={() => toggleCategory(cat)}
                     className="hover:opacity-60 ml-0.5"
@@ -574,59 +578,60 @@ export function CatalogPage({
           )}
 
           {/* Grid */}
-          {catalogLoading ? (
-            <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3 flex-1">
-              {Array.from({ length: PAGE_SIZE }).map((_, index) => (
-                <SkeletonCard key={index} />
-              ))}
-            </div>
-          ) : filtered.length > 0 ? (
-            <>
-              <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3 flex-1">
-                {visibleProducts.map((p) => (
-                  <ProductCard
-                    key={p.id}
-                    product={p}
-                    cartItems={cartItems}
-                    onAdd={onAdd}
-                    onRemove={onRemove}
-                    onProductClick={onProductClick}
-                  />
+          <div className="flex-1 overflow-y-auto" style={{ height: "calc(100vh - 220px)" }}>
+            {catalogLoading ? (
+              <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3">
+                {Array.from({ length: PAGE_SIZE }).map((_, index) => (
+                  <SkeletonCard key={index} />
                 ))}
               </div>
+            ) : filtered.length > 0 ? (
+              <>
+                <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3">
+                  {filtered.map((p) => (
+                    <ProductCard
+                      key={p.id}
+                      product={p}
+                      cartItems={cartItems}
+                      onAdd={onAdd}
+                      onRemove={onRemove}
+                      onProductClick={onProductClick}
+                    />
+                  ))}
+                </div>
 
-              {/* Sentinel + skeletons */}
-              {hasMore && (
+                {/* Sentinel + skeletons */}
                 <InfiniteScrollTrigger
-                  onIntersect={() => setVisibleCount((c) => c + PAGE_SIZE)}
-                  count={Math.min(PAGE_SIZE, filtered.length - visibleCount)}
+                  onIntersect={loadMore}
+                  count={loadingMore ? PAGE_SIZE : 0}
+                  disabled={!hasMore || loadingMore}
                 />
-              )}
 
-              {!hasMore && filtered.length > PAGE_SIZE && (
-                <p className="text-center text-xs text-muted-foreground mt-10 pb-8">
-                  ✓ Has visto todos los {filtered.length} productos
+                {!hasMore && allProducts.length > 0 && (
+                  <p className="text-center text-xs text-muted-foreground mt-10 pb-8">
+                    ✓ Has visto todos los {allProducts.length} productos
+                  </p>
+                )}
+              </>
+            ) : (
+              <div className="flex flex-col items-center justify-center text-center py-20">
+                <div className="w-16 h-16 rounded-2xl bg-muted flex items-center justify-center mb-4">
+                  <Search className="w-7 h-7 text-muted-foreground" />
+                </div>
+                <p className="font-bold text-foreground">Sin resultados</p>
+                <p className="text-sm text-muted-foreground mt-1 mb-4">
+                  Intenta con otros filtros o categorías.
                 </p>
-              )}
-            </>
-          ) : (
-            <div className="flex flex-col items-center justify-center flex-1 text-center py-20">
-              <div className="w-16 h-16 rounded-2xl bg-muted flex items-center justify-center mb-4">
-                <Search className="w-7 h-7 text-muted-foreground" />
+                <button
+                  onClick={clearAll}
+                  className="px-5 py-2.5 rounded-xl text-sm font-bold transition-all hover:brightness-95"
+                  style={{ background: "#FFF200", color: "#1A1A2E" }}
+                >
+                  Limpiar filtros
+                </button>
               </div>
-              <p className="font-bold text-foreground">Sin resultados</p>
-              <p className="text-sm text-muted-foreground mt-1 mb-4">
-                Intenta con otros filtros o categorías.
-              </p>
-              <button
-                onClick={clearAll}
-                className="px-5 py-2.5 rounded-xl text-sm font-bold transition-all hover:brightness-95"
-                style={{ background: "#FFF200", color: "#1A1A2E" }}
-              >
-                Limpiar filtros
-              </button>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       </div>
 

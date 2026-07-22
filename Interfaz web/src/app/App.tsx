@@ -243,8 +243,6 @@ const PRODUCT_TABS = [
 export default function App() {
   const location = useLocation();
   const navigate = useNavigate();
-  const [searchParams, setSearchParams] = useSearchParams();
-  
   const isCatalogRoute = location.pathname === "/catalog";
   const [currentView, setCurrentView] = useState<"home" | "catalog">(
     isCatalogRoute ? "catalog" : "home"
@@ -253,24 +251,13 @@ export default function App() {
   const [cartHydrated, setCartHydrated] = useState(false);
   const [cartOpen, setCartOpen] = useState(false);
   const [activeTab, setActiveTab] = useState("vendidos");
-  // catalog filters - sync with URL
-  const [catalogCategory, setCatalogCategory] = useState<number[]>(() => {
-    const categoryIds = searchParams.get("categoryIds");
-    return categoryIds ? categoryIds.split(",").map(Number) : [];
-  });
-  const [catalogOnSale, setCatalogOnSale] = useState(() => 
-    searchParams.get("onSale") === "true"
-  );
-  const [catalogPriceRange, setCatalogPriceRange] = useState<string>(() => 
-    searchParams.get("priceRange") || "all"
-  );
-  const [catalogSort, setCatalogSort] = useState(() => 
-    searchParams.get("sort") || "relevancia"
-  );
+  // catalog filters
+  const [catalogCategory, setCatalogCategory] = useState<number[]>([]);
+  const [catalogOnSale, setCatalogOnSale] = useState(false);
+  const [catalogPriceRange, setCatalogPriceRange] = useState<string>("all");
+  const [catalogSort, setCatalogSort] = useState("relevancia");
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
-  const [catalogSearch, setCatalogSearch] = useState(() => 
-    searchParams.get("search") || ""
-  );
+  const [catalogSearch, setCatalogSearch] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
   const searchRef = useRef<HTMLDivElement>(null);
@@ -339,21 +326,6 @@ export default function App() {
     register,
     socialLogin,
   } = useCustomerAuth();
-  const {
-    categories,
-    products,
-    loading: catalogLoading,
-  } = useCatalog({
-    limit: 20,
-  });
-  const { products: catalogProducts } = useCatalog({
-    categories: catalogCategory,
-    onSale: catalogOnSale,
-    priceRange: catalogPriceRange,
-    sort: catalogSort,
-    search: catalogSearch,
-    limit: 20,
-  });
 
   // Estado local para errores en el modal
   const [authError, setAuthError] = useState<string | null>(null);
@@ -467,32 +439,6 @@ export default function App() {
     );
   }, [cartHydrated, cartItems, customer]);
 
-  // Sync filters with URL
-  useEffect(() => {
-    if (!isCatalogRoute) return;
-    
-    const params = new URLSearchParams();
-    if (catalogCategory.length > 0) {
-      params.set("categoryIds", catalogCategory.join(","));
-    }
-    if (catalogOnSale) {
-      params.set("onSale", "true");
-    }
-    if (catalogPriceRange !== "all") {
-      params.set("priceRange", catalogPriceRange);
-    }
-    if (catalogSort !== "relevancia") {
-      params.set("sort", catalogSort);
-    }
-    if (catalogSearch) {
-      params.set("search", catalogSearch);
-    }
-    
-    const newUrl = params.toString() ? `/catalog?${params.toString()}` : "/catalog";
-    if (newUrl !== location.pathname + location.search) {
-      navigate(newUrl, { replace: true });
-    }
-  }, [catalogCategory, catalogOnSale, catalogPriceRange, catalogSort, catalogSearch, isCatalogRoute]);
 
   const addToCart = (product: Product) => {
     setCartItems((prev) => {
@@ -520,11 +466,12 @@ export default function App() {
     setCartItems((prev) => prev.filter((c) => c.id !== id));
 
   const openCatalog = (categoryId?: number) => {
-    const params = new URLSearchParams();
     if (categoryId) {
-      params.set("categoryIds", categoryId.toString());
+      setCatalogCategory([categoryId]);
+    } else {
+      setCatalogCategory([]);
     }
-    navigate(`/catalog${params.toString() ? `?${params.toString()}` : ""}`);
+    setCurrentView("catalog");
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
@@ -708,27 +655,9 @@ export default function App() {
     "Huevos",
     "Café Juan Valdez",
   ];
-  const suggestedCategoriesForSearch = categories.slice(0, 6);
 
-  const searchResults =
-    searchQuery.trim().length >= 2
-      ? products
-          .filter(
-            (p) =>
-              p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-              p.category.toLowerCase().includes(searchQuery.toLowerCase()),
-          )
-          .slice(0, 5)
-      : [];
-
-  const suggestedCategories =
-    searchQuery.trim().length >= 2
-      ? categories
-          .filter((c) =>
-            c.name.toLowerCase().includes(searchQuery.toLowerCase()),
-          )
-          .slice(0, 3)
-      : [];
+  const searchResults: Product[] = [];
+  const suggestedCategories: CatalogCategory[] = [];
 
   const startSlideTimer = () => {
     if (intervalRef.current) clearInterval(intervalRef.current);
@@ -749,11 +678,7 @@ export default function App() {
     startSlideTimer();
   };
 
-  const featuredProducts = (
-    products.some((p) => p.isFeatured)
-      ? products.filter((p) => p.isFeatured)
-      : products
-  ).slice(0, 8);
+  const featuredProducts: Product[] = [];
 
   const handleNewsletterSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -879,42 +804,6 @@ export default function App() {
                               {q}
                             </button>
                           ))}
-                        </div>
-                      </div>
-                      <div>
-                        <p className="text-xs font-bold text-muted-foreground uppercase tracking-wide px-1 mb-2">
-                          Categorías destacadas
-                        </p>
-                        <div className="grid grid-cols-3 gap-1">
-                          {suggestedCategoriesForSearch.map((cat) => {
-                            const Icon = cat.icon;
-                            return (
-                              <button
-                                key={cat.id}
-                                className="flex items-center gap-2 px-2 py-2 rounded-lg hover:bg-muted transition-colors text-left"
-                                onClick={() => {
-                                  setSearchQuery(cat.name);
-                                }}
-                              >
-                                <div
-                                  className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
-                                  style={{ background: cat.bg ?? "#F3F4F6" }}
-                                >
-                                  {Icon ? (
-                                    <Icon
-                                      className="w-3.5 h-3.5"
-                                      style={{
-                                        color: cat.color ?? "currentColor",
-                                      }}
-                                    />
-                                  ) : null}
-                                </div>
-                                <span className="text-xs font-medium text-foreground leading-tight">
-                                  {cat.name}
-                                </span>
-                              </button>
-                            );
-                          })}
                         </div>
                       </div>
                     </div>
@@ -1338,34 +1227,7 @@ export default function App() {
               className="flex gap-4 overflow-x-auto pb-2"
               style={{ scrollbarWidth: "none" }}
             >
-              {categories.map((cat) => {
-                const Icon = cat.icon;
-                return (
-                  <button
-                    key={cat.id}
-                    onClick={() => openCatalog(cat.id)}
-                    className="flex-shrink-0 flex flex-col items-center gap-2 group"
-                  >
-                    <div
-                      className="w-14 h-14 md:w-16 md:h-16 rounded-2xl flex items-center justify-center transition-transform duration-200 group-hover:scale-110"
-                      style={{ background: cat.bg ?? "#F3F4F6" }}
-                    >
-                      {Icon ? (
-                        <Icon
-                          className="w-6 h-6 md:w-7 md:h-7"
-                          style={{ color: cat.color ?? "currentColor" }}
-                        />
-                      ) : null}
-                    </div>
-                    <span
-                      className="text-xs font-medium text-center leading-tight text-foreground"
-                      style={{ maxWidth: "72px" }}
-                    >
-                      {cat.name}
-                    </span>
-                  </button>
-                );
-              })}
+              {/* Las categorías se muestran en CatalogView */}
             </div>
           </div>
         </section>
@@ -1428,20 +1290,7 @@ export default function App() {
             </div>
 
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-4">
-              {catalogLoading
-                ? Array.from({ length: 8 }).map((_, index) => (
-                    <SkeletonCard key={index} />
-                  ))
-                : featuredProducts.map((p) => (
-                    <ProductCard
-                      key={p.id}
-                      product={p}
-                      cartItems={cartItems}
-                      onAdd={addToCart}
-                      onRemove={removeFromCart}
-                      onProductClick={setSelectedProduct}
-                    />
-                  ))}
+              {/* Los productos se muestran en CatalogView */}
             </div>
 
             <div className="text-center mt-8">
