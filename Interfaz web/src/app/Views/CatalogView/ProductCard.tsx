@@ -1,4 +1,6 @@
 import { Minus, Plus, ShoppingCart } from "lucide-react";
+import { useState } from "react";
+import { ProductCardProps } from "../../types";
 
 /* ─── Helpers ────────────────────────────────────────────── */
 const fmt = (n: number) =>
@@ -16,7 +18,11 @@ export function ProductCard({
   onProductClick,
 }: ProductCardProps) {
   const inCart = cartItems.find((c) => c.id === product.id);
-  const qty = inCart?.quantity ?? 0;
+  const cartQty = inCart?.quantity ?? 0;
+  const [localQty, setLocalQty] = useState(1);
+
+  // Reset local quantity when product changes
+  // (Only if the component remounts, which happens on filter changes)
 
   return (
     <div className="bg-card border border-border rounded-xl overflow-hidden group hover:shadow-md transition-shadow duration-200 flex flex-col">
@@ -62,42 +68,42 @@ export function ProductCard({
             </span>
           )}
         </div>
-        {/* Quantity stepper — always visible */}
+        {/* Local quantity stepper — solo controla el estado local */}
         <div className="flex items-center justify-between border border-border rounded-lg overflow-hidden mt-2">
           <button
             onClick={(e) => {
               e.stopPropagation();
-              onRemove(product.id);
+              setLocalQty((prev) => Math.max(1, prev - 1));
             }}
-            disabled={qty === 0}
+            disabled={localQty <= 1}
             className="flex-1 flex items-center justify-center py-1.5 transition-colors disabled:opacity-25 hover:bg-muted"
           >
             <Minus className="w-3.5 h-3.5" />
           </button>
           <span className="font-bold text-sm w-8 text-center tabular-nums">
-            {qty}
+            {localQty}
           </span>
           <button
             onClick={(e) => {
               e.stopPropagation();
-              onAdd(product);
+              setLocalQty((prev) => prev + 1);
             }}
             className="flex-1 flex items-center justify-center py-1.5 hover:bg-muted transition-colors"
           >
             <Plus className="w-3.5 h-3.5" />
           </button>
         </div>
-        {/* Agregar button — always visible */}
+        {/* Agregar button — agrega la cantidad local al carrito */}
         <button
           onClick={(e) => {
             e.stopPropagation();
-            onAdd(product);
+            onAdd(product, localQty);
           }}
           className="w-full flex items-center justify-center gap-1.5 py-1.5 rounded-lg font-semibold text-sm mt-1.5 transition-all hover:brightness-95 active:scale-95"
           style={{ background: "#FFF200", color: "#1A1A2E" }}
         >
           <ShoppingCart className="w-3.5 h-3.5" />
-          {qty === 0 ? "Agregar" : "Agregar uno más"}
+          {cartQty === 0 ? `Agregar ${localQty}` : `Agregar ${localQty} más`}
         </button>
       </div>
     </div>

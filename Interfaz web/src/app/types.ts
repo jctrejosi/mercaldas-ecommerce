@@ -4,7 +4,7 @@ export interface CartItem extends Product {
 
 export interface CatalogPageProps {
   cartItems: CartItem[];
-  onAdd: (p: Product) => void;
+  onAdd: (p: Product, quantity?: number) => void;
   onRemove: (id: number) => void;
   onBack: () => void;
   onOpenCategory: (categoryId?: number) => void;
@@ -91,7 +91,7 @@ export interface Order {
 export interface ProductCardProps {
   product: Product;
   cartItems: CartItem[];
-  onAdd: (p: Product) => void;
+  onAdd: (p: Product, quantity?: number) => void;
   onRemove: (id: number) => void;
   onProductClick: (p: Product) => void;
 }
@@ -99,7 +99,7 @@ export interface ProductCardProps {
 export interface ProductDetailModalProps {
   product: Product | null;
   cartItems: CartItem[];
-  onAdd: (p: Product) => void;
+  onAdd: (p: Product, quantity?: number) => void;
   onRemove: (id: number) => void;
   onClose: () => void;
 }

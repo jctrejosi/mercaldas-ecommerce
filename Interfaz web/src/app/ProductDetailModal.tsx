@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ProductDetailModalProps, Product } from "./types";
+import { CartItem, ProductDetailModalProps, Product } from "./types";
 import { Minus, Plus, ShoppingCart, TrendingUp, X } from "lucide-react";
 import { catalogService } from "../services/catalog.service";
 
@@ -101,8 +101,14 @@ export function ProductDetailModal({
   onClose,
 }: ProductDetailModalProps) {
   const [relatedProducts, setRelatedProducts] = useState<Product[]>([]);
+  const [localQty, setLocalQty] = useState(1);
   const inCart = product ? cartItems.find((c) => c.id === product.id) : null;
-  const qty = inCart?.quantity ?? 0;
+  const cartQty = inCart?.quantity ?? 0;
+
+  // Reset localQty when product changes
+  useEffect(() => {
+    setLocalQty(1);
+  }, [product?.id]);
 
   useEffect(() => {
     if (!product) return;
@@ -237,40 +243,42 @@ export function ProductDetailModal({
                 )}
               </div>
 
-              {/* Stepper */}
+              {/* Stepper local */}
               <div className="flex items-center gap-3 mt-1">
                 <div className="flex items-center border border-border rounded-xl overflow-hidden flex-shrink-0">
                   <button
-                    onClick={() => onRemove(product.id)}
-                    disabled={qty === 0}
+                    onClick={() => setLocalQty((prev) => Math.max(1, prev - 1))}
+                    disabled={localQty <= 1}
                     className="w-10 h-10 flex items-center justify-center hover:bg-muted transition-colors disabled:opacity-25"
                   >
                     <Minus className="w-4 h-4" />
                   </button>
                   <span className="w-10 text-center font-bold text-base tabular-nums">
-                    {qty}
+                    {localQty}
                   </span>
                   <button
-                    onClick={() => onAdd(product)}
+                    onClick={() => setLocalQty((prev) => prev + 1)}
                     className="w-10 h-10 flex items-center justify-center hover:bg-muted transition-colors"
                   >
                     <Plus className="w-4 h-4" />
                   </button>
                 </div>
                 <button
-                  onClick={() => onAdd(product)}
+                  onClick={() => onAdd(product, localQty)}
                   className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl font-bold text-sm transition-all hover:brightness-95 active:scale-[0.98]"
                   style={{ background: "#FFF200", color: "#1A1A2E" }}
                 >
                   <ShoppingCart className="w-4 h-4" />
-                  {qty === 0 ? "Agregar al carrito" : "Agregar uno más"}
+                  {cartQty === 0
+                    ? `Agregar ${localQty}`
+                    : `Agregar ${localQty} más`}
                 </button>
               </div>
 
-              {qty > 0 && (
+              {cartQty > 0 && (
                 <p className="text-xs text-muted-foreground text-center">
-                  {qty} {qty === 1 ? "unidad" : "unidades"} en el carrito ·
-                  subtotal {fmt(product.price * qty)}
+                  {cartQty} {cartQty === 1 ? "unidad" : "unidades"} en el
+                  carrito · subtotal {fmt(product.price * cartQty)}
                 </p>
               )}
 
@@ -310,61 +318,89 @@ export function ProductDetailModal({
                 Productos relacionados
               </p>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                {relatedProducts.map((rp) => {
-                  const rpInCart = cartItems.find((c) => c.id === rp.id);
-                  const rpQty = rpInCart?.quantity ?? 0;
-                  return (
-                    <div
-                      key={rp.id}
-                      className="border border-border rounded-xl overflow-hidden"
-                    >
-                      <div className="aspect-square bg-muted">
-                        <img
-                          src={rp.image}
-                          alt={rp.name}
-                          className="w-full h-full object-cover"
-                        />
-                      </div>
-                      <div className="p-2">
-                        <p className="text-xs font-semibold line-clamp-2 text-foreground leading-snug">
-                          {rp.name}
-                        </p>
-                        <p
-                          className="text-xs font-bold mt-1"
-                          style={{
-                            fontFamily: "'Bricolage Grotesque', sans-serif",
-                          }}
-                        >
-                          {fmt(rp.price)}
-                        </p>
-                        <div className="flex items-center border border-border rounded-lg overflow-hidden mt-1.5">
-                          <button
-                            onClick={() => onRemove(rp.id)}
-                            disabled={rpQty === 0}
-                            className="flex-1 flex items-center justify-center py-1 disabled:opacity-25 hover:bg-muted transition-colors"
-                          >
-                            <Minus className="w-3 h-3" />
-                          </button>
-                          <span className="text-xs font-bold w-6 text-center">
-                            {rpQty}
-                          </span>
-                          <button
-                            onClick={() => onAdd(rp)}
-                            className="flex-1 flex items-center justify-center py-1 hover:bg-muted transition-colors"
-                          >
-                            <Plus className="w-3 h-3" />
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
+                {relatedProducts.map((rp) => (
+                  <RelatedProductCard
+                    key={rp.id}
+                    product={rp}
+                    cartItems={cartItems}
+                    onAdd={onAdd}
+                    onRemove={onRemove}
+                  />
+                ))}
               </div>
             </div>
           )}
         </div>
       </div>
       <style>{`@keyframes slideUp { from { opacity:0; transform:translateY(40px) scale(0.97); } to { opacity:1; transform:translateY(0) scale(1); } }`}</style>
+    </div>
+  );
+}
+
+/* ─── RelatedProductCard ─────────────────────────────────── */
+function RelatedProductCard({
+  product: rp,
+  cartItems,
+  onAdd,
+  onRemove,
+}: {
+  product: Product;
+  cartItems: CartItem[];
+  onAdd: (p: Product, quantity?: number) => void;
+  onRemove: (id: number) => void;
+}) {
+  const [localQty, setLocalQty] = useState(1);
+  const rpInCart = cartItems.find((c) => c.id === rp.id);
+  const rpCartQty = rpInCart?.quantity ?? 0;
+
+  return (
+    <div className="border border-border rounded-xl overflow-hidden">
+      <div className="aspect-square bg-muted">
+        <img
+          src={rp.image}
+          alt={rp.name}
+          className="w-full h-full object-cover"
+        />
+      </div>
+      <div className="p-2">
+        <p className="text-xs font-semibold line-clamp-2 text-foreground leading-snug">
+          {rp.name}
+        </p>
+        <p
+          className="text-xs font-bold mt-1"
+          style={{
+            fontFamily: "'Bricolage Grotesque', sans-serif",
+          }}
+        >
+          {fmt(rp.price)}
+        </p>
+        {/* Local quantity stepper */}
+        <div className="flex items-center border border-border rounded-lg overflow-hidden mt-1.5">
+          <button
+            onClick={() => setLocalQty((prev) => Math.max(1, prev - 1))}
+            disabled={localQty <= 1}
+            className="flex-1 flex items-center justify-center py-1 disabled:opacity-25 hover:bg-muted transition-colors"
+          >
+            <Minus className="w-3 h-3" />
+          </button>
+          <span className="text-xs font-bold w-6 text-center">{localQty}</span>
+          <button
+            onClick={() => setLocalQty((prev) => prev + 1)}
+            className="flex-1 flex items-center justify-center py-1 hover:bg-muted transition-colors"
+          >
+            <Plus className="w-3 h-3" />
+          </button>
+        </div>
+        {/* Agregar button */}
+        <button
+          onClick={() => onAdd(rp, localQty)}
+          className="w-full flex items-center justify-center gap-1 py-1 rounded-lg font-semibold text-xs mt-1.5 transition-all hover:brightness-95 active:scale-95"
+          style={{ background: "#FFF200", color: "#1A1A2E" }}
+        >
+          <ShoppingCart className="w-3 h-3" />
+          Agregar {localQty}
+        </button>
+      </div>
     </div>
   );
 }

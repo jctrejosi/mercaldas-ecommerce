@@ -1,5 +1,11 @@
 import { useState, useEffect, useRef } from "react";
-import { Routes, Route, useNavigate, useLocation, useSearchParams } from "react-router";
+import {
+  Routes,
+  Route,
+  useNavigate,
+  useLocation,
+  useSearchParams,
+} from "react-router";
 import {
   Search,
   ShoppingCart,
@@ -245,7 +251,7 @@ export default function App() {
   const navigate = useNavigate();
   const isCatalogRoute = location.pathname === "/catalog";
   const [currentView, setCurrentView] = useState<"home" | "catalog">(
-    isCatalogRoute ? "catalog" : "home"
+    isCatalogRoute ? "catalog" : "home",
   );
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [cartHydrated, setCartHydrated] = useState(false);
@@ -444,15 +450,14 @@ export default function App() {
     );
   }, [cartHydrated, cartItems, customer]);
 
-
-  const addToCart = (product: Product) => {
+  const addToCart = (product: Product, quantity: number = 1) => {
     setCartItems((prev) => {
       const ex = prev.find((c) => c.id === product.id);
       if (ex)
         return prev.map((c) =>
-          c.id === product.id ? { ...c, quantity: c.quantity + 1 } : c,
+          c.id === product.id ? { ...c, quantity: c.quantity + quantity } : c,
         );
-      return [...prev, { ...product, quantity: 1 }];
+      return [...prev, { ...product, quantity }];
     });
   };
 
