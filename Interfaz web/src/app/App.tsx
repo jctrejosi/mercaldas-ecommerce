@@ -47,7 +47,7 @@ import {
   Smartphone,
 } from "lucide-react";
 import { useCustomerAuth } from "../hooks/useCustomerAuth";
-import { useCatalog } from "../hooks/useCatalog";
+import { catalogService } from "../services/catalog.service";
 import {
   ordersService,
   type EpaycoConfigResponse,
@@ -260,6 +260,11 @@ export default function App() {
   const [catalogSearch, setCatalogSearch] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
+  const [searchResults, setSearchResults] = useState<Product[]>([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [searchCategories, setSearchCategories] = useState<CatalogCategory[]>(
+    [],
+  );
   const searchRef = useRef<HTMLDivElement>(null);
   const [currentSlide, setCurrentSlide] = useState(0);
   const [loginModal, setLoginModal] = useState(false);
@@ -656,8 +661,52 @@ export default function App() {
     "Café Juan Valdez",
   ];
 
-  const searchResults: Product[] = [];
-  const suggestedCategories: CatalogCategory[] = [];
+  useEffect(() => {
+    void catalogService
+      .getCategories()
+      .then(setSearchCategories)
+      .catch(() => null);
+  }, []);
+
+  useEffect(() => {
+    const query = searchQuery.trim();
+    if (query.length < 2) {
+      setSearchResults([]);
+      setSearchLoading(false);
+      return;
+    }
+
+    setSearchLoading(true);
+    let cancelled = false;
+
+    const timer = setTimeout(() => {
+      void catalogService
+        .getProducts({ search: query, limit: 8 })
+        .then((products) => {
+          if (!cancelled) setSearchResults(products);
+        })
+        .catch(() => {
+          if (!cancelled) setSearchResults([]);
+        })
+        .finally(() => {
+          if (!cancelled) setSearchLoading(false);
+        });
+    }, 400);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [searchQuery]);
+
+  const suggestedCategories =
+    searchQuery.trim().length >= 2
+      ? searchCategories
+          .filter((cat) =>
+            cat.name.toLowerCase().includes(searchQuery.trim().toLowerCase()),
+          )
+          .slice(0, 5)
+      : [];
 
   const startSlideTimer = () => {
     if (intervalRef.current) clearInterval(intervalRef.current);
@@ -750,6 +799,13 @@ export default function App() {
                     setSearchOpen(true);
                   }}
                   onFocus={() => setSearchOpen(true)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && searchQuery.trim().length >= 2) {
+                      setSearchOpen(false);
+                      setCatalogSearch(searchQuery.trim());
+                      openCatalog();
+                    }
+                  }}
                   placeholder="Busca productos, marcas y categorías..."
                   className="w-full pl-10 pr-10 py-2.5 rounded-xl border border-border bg-muted/60 text-sm focus:outline-none transition-all"
                   style={
@@ -846,7 +902,13 @@ export default function App() {
                       )}
 
                       {/* Productos encontrados */}
-                      {searchResults.length > 0 ? (
+                      {searchLoading ? (
+                        <div className="px-4 py-6 text-center">
+                          <p className="text-sm text-muted-foreground">
+                            Buscando productos...
+                          </p>
+                        </div>
+                      ) : searchResults.length > 0 ? (
                         <div>
                           <p className="text-xs font-bold text-muted-foreground uppercase tracking-wide px-3 pt-3 pb-1.5">
                             Productos ({searchResults.length})
@@ -861,12 +923,16 @@ export default function App() {
                                   key={p.id}
                                   className="flex items-center gap-3 px-3 py-2.5 hover:bg-muted/60 transition-colors border-b border-border last:border-0"
                                 >
-                                  <div className="w-11 h-11 rounded-lg bg-muted overflow-hidden flex-shrink-0">
-                                    <img
-                                      src={p.image}
-                                      alt={p.name}
-                                      className="w-full h-full object-cover"
-                                    />
+                                  <div className="w-11 h-11 rounded-lg bg-muted overflow-hidden flex-shrink-0 flex items-center justify-center">
+                                    {p.image ? (
+                                      <img
+                                        src={p.image}
+                                        alt={p.name}
+                                        className="w-full h-full object-cover"
+                                      />
+                                    ) : (
+                                      <Package className="w-5 h-5 text-muted-foreground" />
+                                    )}
                                   </div>
                                   <div className="flex-1 min-w-0">
                                     <p className="text-sm font-semibold text-foreground truncate">
