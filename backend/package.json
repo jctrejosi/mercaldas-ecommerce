@@ -16,7 +16,7 @@
     "migrate:prod": "node scripts/migrate.js",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
-    "db:push": "yes | drizzle-kit push",
+    "db:push": "script -q -c \"drizzle-kit push\" /dev/null",
     "db:studio": "drizzle-kit studio",
     "seed:run": "npx ts-node -P tsconfig.json scripts/seed.ts",
     "import:run": "npx ts-node -P tsconfig.json scripts/import-products-from-json.ts",

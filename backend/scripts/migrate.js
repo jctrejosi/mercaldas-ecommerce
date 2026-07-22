@@ -1,8 +1,5 @@
 const { exec } = require('child_process');
-const { promisify } = require('util');
 const path = require('path');
-
-const execAsync = promisify(exec);
 
 const DATABASE_URL = process.env.DATABASE_URL;
 
@@ -57,18 +54,17 @@ async function migrate() {
     if (!productsTableExists) {
       console.log('🆕 BD nueva. Ejecutando migración completa...');
 
-      // 1. Crear tablas
-      await runCommand('yarn db:push', 'db:push (crear tablas)');
+      // 1. Generar migración y aplicar
+      // drizzle-kit migrate aplica los archivos de drizzle/migrate/ sin pedir TTY
+      await runCommand('yarn db:generate', 'db:generate (generar SQL)');
+      await runCommand('yarn db:migrate', 'db:migrate (aplicar migraciones)');
 
-      // Verificar que las tablas se crearon
+      // Verificar
       const verifyClient = await pool.connect();
       const storeExists = await tableExists(verifyClient, 'store');
       verifyClient.release();
-
       if (!storeExists) {
-        throw new Error(
-          'db:push no creó las tablas. Verifica DATABASE_URL y la conexión a PostgreSQL.'
-        );
+        throw new Error('Las migraciones no crearon las tablas. Verifica la conexión a PostgreSQL.');
       }
       console.log('✅ Tablas verificadas (store existe)');
 
@@ -78,8 +74,10 @@ async function migrate() {
       // 3. Importar productos
       await runCommand('yarn import:run', 'import:run (productos)');
     } else {
-      console.log('♻️ BD existente con productos. Solo actualizando esquema...');
-      await runCommand('yarn db:push', 'db:push (actualizar esquema)');
+      console.log('♻️ BD existente. Solo actualizando esquema...');
+      // En BD existente: generate + migrate (más seguro que push en CI)
+      await runCommand('yarn db:generate', 'db:generate (actualizar SQL)');
+      await runCommand('yarn db:migrate', 'db:migrate (aplicar migraciones)');
     }
 
     console.log('✅ Migración completada exitosamente');
