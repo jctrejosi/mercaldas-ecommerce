@@ -10,6 +10,7 @@ import {
   TrendingUp,
   ArrowUpRight,
   ChevronDown,
+  ChevronRight,
   X,
   Plus,
   Minus,
@@ -20,6 +21,7 @@ import { catalogService } from "../../services/catalog.service";
 
 interface HeaderProps {
   cartCount: number;
+  categories: CatalogCategory[];
   customer: { firstName?: string; fullName?: string } | null;
   customerLoading: boolean;
   ordersCount: number;
@@ -45,6 +47,7 @@ const POPULAR_SEARCHES = [
 
 export function Header({
   cartCount,
+  categories,
   customer,
   customerLoading,
   ordersCount,
@@ -67,6 +70,8 @@ export function Header({
   );
   const searchRef = useRef<HTMLDivElement>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [categoriesOpen, setCategoriesOpen] = useState(false);
+  const categoriesRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -75,6 +80,20 @@ export function Header({
         !searchRef.current.contains(e.target as Node)
       ) {
         setSearchOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  // Close categories dropdown on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (
+        categoriesRef.current &&
+        !categoriesRef.current.contains(e.target as Node)
+      ) {
+        setCategoriesOpen(false);
       }
     };
     document.addEventListener("mousedown", handler);
@@ -143,6 +162,86 @@ export function Header({
     }
   };
 
+  // Build category tree for the dropdown menu
+  const categoriesByParentId = categories.reduce<
+    Map<number | null, CatalogCategory[]>
+  >((map, cat) => {
+    const parentId = cat.parentId ?? null;
+    const existing = map.get(parentId) ?? [];
+    existing.push(cat);
+    map.set(parentId, existing);
+    return map;
+  }, new Map());
+
+  const rootCategories = categories.filter((cat) => !cat.parentId);
+
+  // Recursive component for rendering category tree
+  function CategoryTreeItem({
+    category,
+    depth = 0,
+  }: {
+    category: CatalogCategory;
+    depth?: number;
+  }) {
+    const Icon = category.icon;
+    const children = categoriesByParentId.get(category.id) ?? [];
+    const hasChildren = children.length > 0;
+
+    return (
+      <div>
+        <button
+          onClick={() => {
+            onOpenCatalog(category.id);
+            setCategoriesOpen(false);
+          }}
+          className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-muted transition-colors text-left"
+          style={{ paddingLeft: `${12 + depth * 16}px` }}
+        >
+          {hasChildren ? (
+            <ChevronRight className="w-3 h-3 text-muted-foreground flex-shrink-0" />
+          ) : (
+            <div className="w-3 h-3 flex-shrink-0" />
+          )}
+          <div
+            className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
+            style={{
+              background: category.bg || "#F4F4F6",
+              color: category.color || "#6B7280",
+            }}
+          >
+            {Icon ? (
+              <Icon className="w-3.5 h-3.5" />
+            ) : (
+              <span className="font-bold text-[10px]">
+                {category.name.charAt(0)}
+              </span>
+            )}
+          </div>
+          <div className="flex-1 min-w-0">
+            <p
+              className={`text-foreground ${depth === 0 ? "text-sm font-medium" : "text-xs font-medium"}`}
+            >
+              {category.name}
+            </p>
+            {category.count !== undefined && depth === 0 && (
+              <p className="text-xs text-muted-foreground">
+                {category.count} producto{category.count !== 1 ? "s" : ""}
+              </p>
+            )}
+          </div>
+        </button>
+        {hasChildren &&
+          children.map((child) => (
+            <CategoryTreeItem
+              key={child.id}
+              category={child}
+              depth={depth + 1}
+            />
+          ))}
+      </div>
+    );
+  }
+
   return (
     <header className="sticky top-0 z-50 bg-white border-b border-border shadow-sm">
       {/* Top strip */}
@@ -189,7 +288,7 @@ export function Header({
           <div className="relative">
             {/* Input */}
             <div className="relative flex items-center">
-              {/* Search button - now clickable! */}
+              {/* Search button */}
               <button
                 onClick={handleSearch}
                 className="absolute left-3 z-10 p-0.5 rounded-full hover:bg-muted transition-colors"
@@ -515,14 +614,44 @@ export function Header({
       {/* ── NavBar ── */}
       <nav className="hidden md:block bg-white border-b border-border">
         <div className="max-w-7xl mx-auto px-4 flex items-center">
-          <button
-            className="flex items-center gap-2 px-4 py-3 text-sm font-semibold text-white"
-            style={{ background: "#1A1A2E" }}
-          >
-            <Menu className="w-4 h-4" />
-            Todas las categorías
-            <ChevronDown className="w-3.5 h-3.5" />
-          </button>
+          {/* Categories dropdown trigger */}
+          <div className="relative" ref={categoriesRef}>
+            <button
+              className="flex items-center gap-2 px-4 py-3 text-sm font-semibold text-white transition-colors"
+              style={{ background: "#1A1A2E" }}
+              onClick={() => setCategoriesOpen(!categoriesOpen)}
+            >
+              <Menu className="w-4 h-4" />
+              Todas las categorías
+              <ChevronDown
+                className={`w-3.5 h-3.5 transition-transform ${categoriesOpen ? "rotate-180" : ""}`}
+              />
+            </button>
+
+            {/* Dropdown mega menu */}
+            {categoriesOpen && (
+              <div
+                className="absolute top-full left-0 bg-white border border-border rounded-b-xl shadow-xl z-50 overflow-hidden"
+                style={{ minWidth: "280px" }}
+              >
+                <div className="py-2 max-h-[70vh] overflow-y-auto">
+                  {rootCategories.length > 0 ? (
+                    rootCategories.map((cat) => (
+                      <CategoryTreeItem
+                        key={cat.id}
+                        category={cat}
+                        depth={0}
+                      />
+                    ))
+                  ) : (
+                    <div className="px-4 py-6 text-center text-sm text-muted-foreground">
+                      Cargando categorías...
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
 
           {["Inicio", "Promociones", "Marketplace", "Ayuda"].map((item) => (
             <a

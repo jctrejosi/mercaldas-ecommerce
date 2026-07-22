@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   useNavigate,
   useLocation,
@@ -7,15 +7,18 @@ import {
   ChevronRight,
 } from "lucide-react";
 import { useCustomerAuth } from "../hooks/useCustomerAuth";
+import { catalogService } from "../services/catalog.service";
 import { ordersService } from "../services/orders.service";
 import { cartService } from "../services/cart.service";
-import type { CartItem, Order, Product } from "./types";
+import type { CartItem, CatalogCategory, Order, Product } from "./types";
 import type {
   EpaycoConfigResponse,
   WompiConfigResponse,
 } from "../services/orders.service";
 import { ProductDetailModal } from "./ProductDetailModal";
 import { CatalogPage } from "./Views/CatalogView";
+import { ProductCard } from "./Views/CatalogView/ProductCard";
+import { SkeletonCard } from "./Views/CatalogView/SkeletonCard";
 
 import { Header } from "./components/Header";
 import { HeroSection } from "./components/HeroSection";
@@ -44,14 +47,33 @@ const PRODUCT_TABS = [
   { id: "novedades", label: "Novedades" },
 ];
 
+type CatalogProductsQuery = {
+  categories?: number[];
+  categoryIds?: number[];
+  onSale?: boolean;
+  priceRange?: string;
+  sort?: string;
+  search?: string;
+  limit?: number;
+  offset?: number;
+};
+
 /* ─── Main App ───────────────────────────────────────────── */
 export default function App() {
   const location = useLocation();
   const navigate = useNavigate();
-  const isCatalogRoute = location.pathname === "/catalog";
   const [currentView, setCurrentView] = useState<"home" | "catalog">(
-    isCatalogRoute ? "catalog" : "home",
+    location.pathname === "/catalog" ? "catalog" : "home",
   );
+
+  // Sync currentView with URL changes (e.g. browser back/forward)
+  useEffect(() => {
+    if (location.pathname === "/catalog") {
+      setCurrentView("catalog");
+    } else {
+      setCurrentView("home");
+    }
+  }, [location.pathname]);
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [cartHydrated, setCartHydrated] = useState(false);
   const [cartOpen, setCartOpen] = useState(false);
@@ -116,6 +138,13 @@ export default function App() {
   const [checkoutLoading, setCheckoutLoading] = useState(false);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
 
+  // Landing page data
+  const [landingCategories, setLandingCategories] = useState<CatalogCategory[]>(
+    [],
+  );
+  const [landingProducts, setLandingProducts] = useState<Product[]>([]);
+  const [landingLoading, setLandingLoading] = useState(true);
+
   const {
     customer,
     loading: customerLoading,
@@ -128,7 +157,46 @@ export default function App() {
   const [authError, setAuthError] = useState<string | null>(null);
   const [authLoading, setAuthLoading] = useState(false);
 
-  // 3. Crear handlers para login y registro
+  // ── Cargar categorías (solo una vez al montar) ──
+  useEffect(() => {
+    void catalogService.getCategories().then(setLandingCategories).catch(() => {});
+  }, []);
+
+  // ── Cargar productos de la landing cuando cambia el tab ──
+  const fetchLandingProducts = useCallback(async (tab: string) => {
+    setLandingLoading(true);
+    try {
+      let params: CatalogProductsQuery = { limit: 8 };
+
+      switch (tab) {
+        case "vendidos":
+          break;
+        case "promociones":
+          params.onSale = true;
+          params.sort = "descuento";
+          break;
+        case "recomendados":
+          params.sort = "relevancia";
+          break;
+        case "novedades":
+          break;
+      }
+
+      const products = await catalogService.getProducts(params);
+      setLandingProducts(products);
+    } catch {
+      setLandingProducts([]);
+    } finally {
+      setLandingLoading(false);
+    }
+  }, []);
+
+  // Cargar productos al montar y al cambiar de tab
+  useEffect(() => {
+    void fetchLandingProducts(activeTab);
+  }, [activeTab, fetchLandingProducts]);
+
+  // ── Handlers ──
   const handleLoginSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setAuthError(null);
@@ -152,7 +220,6 @@ export default function App() {
     }
   };
 
-  // Handler para registro
   const handleRegisterSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setAuthError(null);
@@ -260,10 +327,12 @@ export default function App() {
   const openCatalog = (categoryId?: number) => {
     if (categoryId) {
       setCatalogCategory([categoryId]);
+      setCatalogSearch(""); // Reset search when opening a category
     } else {
       setCatalogCategory([]);
     }
     setCurrentView("catalog");
+    navigate("/catalog");
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
@@ -444,6 +513,7 @@ export default function App() {
     >
       <Header
         cartCount={cartCount}
+        categories={landingCategories}
         customer={customer}
         customerLoading={customerLoading}
         ordersCount={orders.length}
@@ -466,7 +536,10 @@ export default function App() {
           cartItems={cartItems}
           onAdd={addToCart}
           onRemove={removeFromCart}
-          onBack={() => navigate("/")}
+          onBack={() => {
+            navigate("/");
+            setCurrentView("home");
+          }}
           onProductClick={setSelectedProduct}
           onOpenCategory={openCatalog}
           catalogCategory={catalogCategory}
@@ -497,18 +570,46 @@ export default function App() {
               >
                 Categorías
               </h2>
-              <a
-                href="#"
+              <button
+                onClick={() => openCatalog()}
                 className="text-xs font-medium text-muted-foreground flex items-center gap-1 hover:text-foreground transition-colors"
               >
                 Ver todas <ChevronRight className="w-3.5 h-3.5" />
-              </a>
+              </button>
             </div>
             <div
               className="flex gap-4 overflow-x-auto pb-2"
               style={{ scrollbarWidth: "none" }}
             >
-              {/* Las categorías se muestran en CatalogView */}
+              {landingCategories.map((cat) => {
+                const Icon = cat.icon;
+                return (
+                  <button
+                    key={cat.id}
+                    onClick={() => openCatalog(cat.id)}
+                    className="flex flex-col items-center gap-2 flex-shrink-0 p-3 rounded-xl hover:bg-muted transition-colors min-w-[90px]"
+                  >
+                    <div
+                      className="w-12 h-12 rounded-xl flex items-center justify-center text-lg"
+                      style={{
+                        background: cat.bg || "#F4F4F6",
+                        color: cat.color || "#6B7280",
+                      }}
+                    >
+                      {Icon ? (
+                        <Icon className="w-5 h-5" />
+                      ) : (
+                        <span className="font-bold text-sm">
+                          {cat.name.charAt(0)}
+                        </span>
+                      )}
+                    </div>
+                    <span className="text-xs font-medium text-center text-foreground leading-tight">
+                      {cat.name}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
           </div>
         </section>
@@ -554,9 +655,31 @@ export default function App() {
               ))}
             </div>
 
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-4">
-              {/* Los productos se muestran en CatalogView */}
-            </div>
+            {/* Product grid */}
+            {landingLoading ? (
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-4">
+                {Array.from({ length: 8 }).map((_, i) => (
+                  <SkeletonCard key={i} />
+                ))}
+              </div>
+            ) : landingProducts.length > 0 ? (
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-4">
+                {landingProducts.map((p) => (
+                  <ProductCard
+                    key={p.id}
+                    product={p}
+                    cartItems={cartItems}
+                    onAdd={addToCart}
+                    onRemove={removeFromCart}
+                    onProductClick={setSelectedProduct}
+                  />
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-12 text-muted-foreground text-sm">
+                No hay productos disponibles en esta categoría.
+              </div>
+            )}
 
             <div className="text-center mt-8">
               <button

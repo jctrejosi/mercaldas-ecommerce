@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import {
   customerAuthService,
+  getCustomerAccessToken,
   CustomerAuthResponse,
 } from "../services/customer-auth.service";
 
@@ -13,6 +14,12 @@ export function useCustomerAuth() {
   const hasLoadedProfileRef = useRef(false);
 
   const loadProfile = useCallback(async () => {
+    // Si no hay token, no tiene sentido llamar al endpoint /me
+    if (!getCustomerAccessToken()) {
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     try {
       const profile = await customerAuthService.getProfile();
