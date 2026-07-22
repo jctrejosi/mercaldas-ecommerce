@@ -38,7 +38,6 @@ async function tableExists(client, tableName) {
 }
 
 function splitSQL(sql) {
-  // Divide el SQL en statements individuales, ignorando ; dentro de strings/comentarios
   const statements = [];
   let current = '';
   let inString = false;
@@ -50,9 +49,7 @@ function splitSQL(sql) {
 
     if (inString) {
       current += ch;
-      if (ch === stringChar && sql[i - 1] !== '\\') {
-        inString = false;
-      }
+      if (ch === stringChar && sql[i - 1] !== '\\') inString = false;
     } else if (ch === "'" || ch === '"') {
       current += ch;
       inString = true;
@@ -69,7 +66,6 @@ function splitSQL(sql) {
 
   const last = current.trim();
   if (last) statements.push(last);
-
   return statements;
 }
 
@@ -85,11 +81,10 @@ async function applyMigrations(client) {
     .sort();
 
   if (files.length === 0) {
-    console.log('⚠️ No se encontraron archivos .sql en drizzle/migrate');
+    console.log('⚠️ No se encontraron archivos .sql');
     return;
   }
 
-  // Tabla de tracking de migraciones
   await client.query(`
     CREATE TABLE IF NOT EXISTS drizzle.__drizzle_migrations (
       hash text PRIMARY KEY,
@@ -117,7 +112,6 @@ async function applyMigrations(client) {
       try {
         await client.query(stmt);
       } catch (err) {
-        // Si la tabla/índice ya existe, ignorar error y continuar
         if (err.code === '42P07' || err.code === '42P16' || err.code === '42710') {
           console.log(`   ⚠️ Ya existe: ${stmt.substring(0, 60)}...`);
           continue;
@@ -134,6 +128,9 @@ async function applyMigrations(client) {
 async function migrate() {
   let client;
   try {
+    // 0. Instalar extensiones de PostgreSQL (uuid-ossp)
+    await runCommand('node scripts/install-extensions.js', 'Extensiones PG');
+
     client = await pool.connect();
     const exists = await tableExists(client, 'products');
 
@@ -143,11 +140,9 @@ async function migrate() {
       await runCommand('yarn db:generate', 'db:generate');
       await applyMigrations(client);
 
-      // Verificar
       const ok = await tableExists(client, 'store');
-      if (!ok) throw new Error('Las tablas no se crearon. Revisa DATABASE_URL.');
+      if (!ok) throw new Error('Las tablas no se crearon.');
 
-      // Liberar cliente antes de procesos largos
       client.release(); client = null;
 
       await runCommand('yarn seed:run', 'seed:run');
