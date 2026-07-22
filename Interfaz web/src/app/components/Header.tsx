@@ -175,7 +175,24 @@ export function Header({
 
   const rootCategories = categories.filter((cat) => !cat.parentId);
 
-  // Recursive component for rendering category tree
+  // Track which parent categories are expanded
+  const [expandedCategories, setExpandedCategories] = useState<Set<number>>(
+    new Set(),
+  );
+
+  const toggleExpand = (categoryId: number) => {
+    setExpandedCategories((prev) => {
+      const next = new Set(prev);
+      if (next.has(categoryId)) {
+        next.delete(categoryId);
+      } else {
+        next.add(categoryId);
+      }
+      return next;
+    });
+  };
+
+  // Recursive component for rendering category tree with accordion behavior
   function CategoryTreeItem({
     category,
     depth = 0,
@@ -186,19 +203,28 @@ export function Header({
     const Icon = category.icon;
     const children = categoriesByParentId.get(category.id) ?? [];
     const hasChildren = children.length > 0;
+    const isExpanded = expandedCategories.has(category.id);
+
+    const handleClick = () => {
+      if (hasChildren) {
+        toggleExpand(category.id);
+      } else {
+        onOpenCatalog(category.id);
+        setCategoriesOpen(false);
+      }
+    };
 
     return (
       <div>
         <button
-          onClick={() => {
-            onOpenCatalog(category.id);
-            setCategoriesOpen(false);
-          }}
+          onClick={handleClick}
           className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-muted transition-colors text-left"
           style={{ paddingLeft: `${12 + depth * 16}px` }}
         >
           {hasChildren ? (
-            <ChevronRight className="w-3 h-3 text-muted-foreground flex-shrink-0" />
+            <ChevronRight
+              className={`w-3 h-3 text-muted-foreground flex-shrink-0 transition-transform ${isExpanded ? "rotate-90" : ""}`}
+            />
           ) : (
             <div className="w-3 h-3 flex-shrink-0" />
           )}
@@ -230,14 +256,17 @@ export function Header({
             )}
           </div>
         </button>
-        {hasChildren &&
-          children.map((child) => (
-            <CategoryTreeItem
-              key={child.id}
-              category={child}
-              depth={depth + 1}
-            />
-          ))}
+        {hasChildren && isExpanded && (
+          <div className="border-l border-border ml-5">
+            {children.map((child) => (
+              <CategoryTreeItem
+                key={child.id}
+                category={child}
+                depth={depth + 1}
+              />
+            ))}
+          </div>
+        )}
       </div>
     );
   }
