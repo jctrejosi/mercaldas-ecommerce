@@ -1,42 +1,80 @@
 const { exec } = require('child_process');
 const { promisify } = require('util');
+const { Pool } = require('pg');
+
 const execAsync = promisify(exec);
 
-async function runMigrations() {
-  console.log('🔄 Ejecutando generate + push...');
-  
-  try {
-    // 1️⃣ PRIMERO: Generar la migración
-    console.log('📝 Generando archivos de migración...');
-    const { stdout: genStdout, stderr: genStderr } = await execAsync('yarn db:generate');
-    
-    if (genStdout) {
-      console.log('✅ Migración generada:', genStdout);
-    }
-    if (genStderr) {
-      console.warn('⚠️ Advertencias de generación:', genStderr);
-    }
+const DATABASE_URL = process.env.DATABASE_URL;
 
-    // 2️⃣ LUEGO: Aplicar la migración con push --force
-    console.log('🔄 Aplicando migraciones con push --force...');
-    const { stdout: pushStdout, stderr: pushStderr } = await execAsync('yarn db:push --force');
-    
-    if (pushStdout) {
-      console.log('✅ Migraciones aplicadas:', pushStdout);
-    }
-    if (pushStderr) {
-      console.warn('⚠️ Advertencias de aplicación:', pushStderr);
-    }
-
-    console.log('✅ Proceso completado exitosamente');
-    
-  } catch (error) {
-    console.error(error?.stdout || 'no stdout');
-    console.error(error?.stderr || 'no stderr');
-    console.log('⚠️ Error en el proceso (ignorado):', error.message);
-  }
-  
-  process.exit(0);
+if (!DATABASE_URL) {
+  console.error('❌ DATABASE_URL no está definida');
+  process.exit(1);
 }
 
-runMigrations();
+async function tableExists(pool, tableName) {
+  const result = await pool.query(
+    `SELECT EXISTS (
+      SELECT FROM information_schema.tables
+      WHERE table_schema = 'public'
+      AND table_name = $1
+    )`,
+    [tableName],
+  );
+  return result.rows[0]?.exists === true;
+}
+
+async function hasData(pool, tableName) {
+  const result = await pool.query(`SELECT COUNT(*) FROM ${tableName}`);
+  return parseInt(result.rows[0].count) > 0;
+}
+
+async function runCommand(command, label) {
+  console.log(`🚀 ${label}...`);
+  try {
+    const { stdout, stderr } = await execAsync(command, {
+      env: { ...process.env, DATABASE_URL },
+    });
+    if (stdout) console.log(stdout);
+    if (stderr) console.warn(stderr);
+    console.log(`✅ ${label} completado`);
+  } catch (error) {
+    console.error(`❌ ${label} falló:`);
+    if (error.stdout) console.log(error.stdout);
+    if (error.stderr) console.error(error.stderr);
+    throw error;
+  }
+}
+
+async function migrate() {
+  const pool = new Pool({ connectionString: DATABASE_URL });
+
+  try {
+    const productsTableExists = await tableExists(pool, 'products');
+
+    if (!productsTableExists) {
+      console.log('🆕 Base de datos nueva detectada. Ejecutando migración completa...');
+      await runCommand('yarn db:push', 'Creación de tablas (db:push)');
+      await runCommand('yarn seed:run', 'Seed de usuarios (seed:run)');
+      await runCommand('yarn import:run', 'Importación de productos (import:run)');
+    } else {
+      const hasProductData = await hasData(pool, 'products');
+
+      if (!hasProductData) {
+        console.log('📋 Tabla products existe pero está vacía. Ejecutando seed + import...');
+        await runCommand('yarn seed:run', 'Seed de usuarios (seed:run)');
+        await runCommand('yarn import:run', 'Importación de productos (import:run)');
+      } else {
+        console.log('♻️ Base de datos existente con productos. Solo actualizando esquema...');
+        await runCommand('yarn db:push', 'Actualización de esquema (db:push)');
+      }
+    }
+
+    console.log('✅ Migración completada exitosamente');
+  } catch (error) {
+    console.error('❌ Error en migración:', error.message);
+  } finally {
+    await pool.end();
+  }
+}
+
+migrate().then(() => process.exit(0));
