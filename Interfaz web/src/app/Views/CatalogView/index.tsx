@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { Search, X } from "lucide-react";
 import { useCatalog } from "../../../hooks/useCatalog";
 import { catalogService } from "../../../services/catalog.service";
@@ -49,6 +49,7 @@ export function CatalogPage({
   const [offset, setOffset] = useState(0);
   const [hasMore, setHasMore] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [searchInput, setSearchInput] = useState(catalogSearch);
   const PAGE_SIZE = 20;
 
   const {
@@ -82,6 +83,20 @@ export function CatalogPage({
     catalogSort,
     catalogSearch,
   ]);
+
+  // Debounce search input
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setCatalogSearch(searchInput);
+    }, 1000);
+
+    return () => clearTimeout(timer);
+  }, [searchInput]);
+
+  // Sync search input when catalogSearch changes externally
+  useEffect(() => {
+    setSearchInput(catalogSearch);
+  }, [catalogSearch]);
 
   // Accumulate products when new ones arrive
   useEffect(() => {
@@ -422,7 +437,10 @@ export function CatalogPage({
   const filtered = allProducts;
 
   return (
-    <div className="bg-muted/40" style={{ height: "calc(100vh - 108px)", overflow: "hidden" }}>
+    <div
+      className="bg-muted/40"
+      style={{ height: "calc(100vh - 108px)", overflow: "hidden" }}
+    >
       {/* ── Two-column body ── */}
       <div className="max-w-7xl mx-auto px-4 py-5 flex gap-5 h-full">
         {/* Desktop sidebar */}
@@ -432,12 +450,17 @@ export function CatalogPage({
         >
           {/* Search inside sidebar */}
           <div className="p-3 border-b border-border sticky top-0 bg-white z-10">
-            <div className="relative">
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+              }}
+              className="relative"
+            >
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
               <input
                 type="text"
-                value={catalogSearch}
-                onChange={(e) => setCatalogSearch(e.target.value)}
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
                 placeholder="Buscar en catálogo..."
                 className="w-full pl-8 pr-3 py-2 text-xs rounded-lg border border-border bg-muted/60 focus:outline-none"
                 onFocus={(e) => {
@@ -449,7 +472,7 @@ export function CatalogPage({
                   e.target.style.borderColor = "";
                 }}
               />
-            </div>
+            </form>
           </div>
           <div className="p-4">
             <SidebarContent />
@@ -457,12 +480,9 @@ export function CatalogPage({
         </aside>
 
         {/* Products column */}
-        <div
-          className="flex-1 min-w-0 flex flex-col overflow-hidden"
-        >
+        <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
           {/* Sort row + mobile filters trigger */}
           <div className="flex items-center justify-between gap-3 mb-4 flex-shrink-0">
-
             <div className="flex items-center gap-2 ml-auto">
               {/* Mobile filters button */}
               <button
@@ -578,7 +598,10 @@ export function CatalogPage({
           )}
 
           {/* Grid */}
-          <div className="flex-1 overflow-y-auto" style={{ height: "calc(100vh - 220px)" }}>
+          <div
+            className="flex-1 overflow-y-auto"
+            style={{ height: "calc(100vh - 220px)" }}
+          >
             {catalogLoading ? (
               <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3">
                 {Array.from({ length: PAGE_SIZE }).map((_, index) => (
