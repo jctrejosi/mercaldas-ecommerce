@@ -34,6 +34,7 @@ interface HeaderProps {
   onAddToCart: (product: Product, quantity?: number) => void;
   onRemoveFromCart: (id: number) => void;
   onHome: () => void;
+  onAccount?: () => void;
   fmt: (n: number) => string;
 }
 
@@ -61,6 +62,7 @@ export function Header({
   onAddToCart,
   onRemoveFromCart,
   onHome,
+  onAccount,
   fmt,
 }: HeaderProps) {
   const [searchQuery, setSearchQuery] = useState("");
@@ -585,6 +587,7 @@ export function Header({
           <button
             onClick={() => {
               if (customer) {
+                if (onAccount) { onAccount(); return; }
                 onOrdersOpen();
                 return;
               }
