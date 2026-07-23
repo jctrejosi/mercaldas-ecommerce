@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate, useLocation } from "react-router";
-import { ChevronRight } from "lucide-react";
 import { useCustomerAuth } from "../hooks/useCustomerAuth";
 import { catalogService } from "../services/catalog.service";
 import { ordersService } from "../services/orders.service";
@@ -9,18 +8,8 @@ import type { CartItem, CatalogCategory, Order, Product } from "./types";
 import type { EpaycoConfigResponse, WompiConfigResponse } from "../services/orders.service";
 import { ProductDetailModal } from "./ProductDetailModal";
 import { CatalogPage } from "./Views/CatalogView";
-import { ProductCard } from "./Views/CatalogView/ProductCard";
-import { SkeletonCard } from "./Views/CatalogView/SkeletonCard";
-
+import { LandingView } from "./Views/LandingView";
 import { Header } from "./components/Header";
-import { HeroSection } from "./components/HeroSection";
-import { AdvertisingBanner } from "./components/AdvertisingBanner";
-import { PromoBanner } from "./components/PromoBanner";
-import { BenefitsSection } from "./components/BenefitsSection";
-import { NewsletterSection } from "./components/NewsletterSection";
-import { BrandsSection } from "./components/BrandsSection";
-import { SucursalesSection } from "./components/SucursalesSection";
-import { DailyDealsSection } from "./components/DailyDealsSection";
 import { Footer } from "./components/Footer";
 import { CartDrawer } from "./components/CartDrawer";
 import { AuthModal } from "./components/AuthModal";
@@ -33,13 +22,6 @@ const fmt = (n: number) =>
     currency: "COP",
     minimumFractionDigits: 0,
   }).format(n);
-
-const PRODUCT_TABS = [
-  { id: "vendidos", label: "Más Vendidos" },
-  { id: "promociones", label: "Promociones" },
-  { id: "recomendados", label: "Recomendados" },
-  { id: "novedades", label: "Novedades" },
-];
 
 type CatalogProductsQuery = {
   categories?: number[];
@@ -151,12 +133,9 @@ export default function App() {
     const formData = new FormData(form);
     try {
       await register({
-        email: formData.get("email") as string,
-        password: formData.get("password") as string,
-        firstName: formData.get("firstName") as string,
-        lastName: formData.get("lastName") as string,
-        phone: formData.get("phone") as string,
-        acceptsTerms: true,
+        email: formData.get("email") as string, password: formData.get("password") as string,
+        firstName: formData.get("firstName") as string, lastName: formData.get("lastName") as string,
+        phone: formData.get("phone") as string, acceptsTerms: true,
       });
       setLoginModal(false); setAuthLoading(false);
     } catch (error: any) { setAuthError(error.message || "Error al registrarse"); setAuthLoading(false); }
@@ -262,8 +241,7 @@ export default function App() {
         items: [...cartItems], total: response.grandTotal, shipping: response.shippingCost,
         address: `${response.address.address}, ${response.address.city}`, paymentMethod: response.paymentMethod, status: "preparando",
       };
-      setOrders((prev) => [newOrder, ...prev]);
-      setLastOrderId(response.referenceCode); setCartItems([]); setCheckoutStep(4);
+      setOrders((prev) => [newOrder, ...prev]); setLastOrderId(response.referenceCode); setCartItems([]); setCheckoutStep(4);
     } catch (error) { setCheckoutError(error instanceof Error ? error.message : "No se pudo procesar el pedido"); }
     finally { setCheckoutLoading(false); }
   };
@@ -303,89 +281,20 @@ export default function App() {
       )}
 
       <main className={currentView === "catalog" ? "hidden" : ""}>
-        <HeroSection />
-
-        <AdvertisingBanner onShop={() => openCatalog()} />
-
-        <section className="py-8 bg-white border-b border-border">
-          <div className="max-w-7xl mx-auto px-4">
-            <div className="flex items-center justify-between mb-5">
-              <h2 className="font-black text-lg text-foreground" style={{ fontFamily: "'Bricolage Grotesque', sans-serif" }}>Categorías</h2>
-              <button onClick={() => openCatalog()} className="text-xs font-medium text-muted-foreground flex items-center gap-1 hover:text-foreground transition-colors">
-                Ver todas <ChevronRight className="w-3.5 h-3.5" />
-              </button>
-            </div>
-            <div className="flex gap-4 overflow-x-auto pb-2" style={{ scrollbarWidth: "none" }}>
-              {landingCategories.map((cat) => {
-                const Icon = cat.icon;
-                return (
-                  <button key={cat.id} onClick={() => openCatalog(cat.id)} className="flex flex-col items-center gap-2 flex-shrink-0 p-3 rounded-xl hover:bg-muted transition-colors min-w-[90px]">
-                    <div className="w-12 h-12 rounded-xl flex items-center justify-center text-lg"
-                      style={{ background: cat.bg || "#F4F4F6", color: cat.color || "#6B7280" }}>
-                      {Icon ? <Icon className="w-5 h-5" /> : <span className="font-bold text-sm">{cat.name.charAt(0)}</span>}
-                    </div>
-                    <span className="text-xs font-medium text-center text-foreground leading-tight">{cat.name}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        </section>
-
-        <section className="py-10 bg-background">
-          <div className="max-w-7xl mx-auto px-4">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="font-black text-2xl text-foreground" style={{ fontFamily: "'Bricolage Grotesque', sans-serif" }}>Productos Destacados</h2>
-              <button onClick={() => openCatalog()} className="hidden md:flex items-center gap-1 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
-                Ver catálogo completo <ChevronRight className="w-4 h-4" />
-              </button>
-            </div>
-            <div className="flex gap-2 mb-6 overflow-x-auto pb-1" style={{ scrollbarWidth: "none" }}>
-              {PRODUCT_TABS.map((tab) => (
-                <button key={tab.id} onClick={() => setActiveTab(tab.id)}
-                  className="flex-shrink-0 px-4 py-2 rounded-xl text-sm font-semibold transition-all duration-150"
-                  style={activeTab === tab.id ? { background: "#FFF200", color: "#1A1A2E" } : { background: "#F4F4F6", color: "#6B7280" }}>
-                  {tab.label}
-                </button>
-              ))}
-            </div>
-            {landingLoading ? (
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-4">
-                {Array.from({ length: 8 }).map((_, i) => <SkeletonCard key={i} />)}
-              </div>
-            ) : landingProducts.length > 0 ? (
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-4">
-                {landingProducts.map((p) => (
-                  <ProductCard key={p.id} product={p} cartItems={cartItems} onAdd={addToCart} onRemove={removeFromCart} onProductClick={setSelectedProduct} />
-                ))}
-              </div>
-            ) : (
-              <div className="text-center py-12 text-muted-foreground text-sm">No hay productos disponibles en esta categoría.</div>
-            )}
-            <div className="text-center mt-8">
-              <button onClick={() => openCatalog()}
-                className="px-8 py-3 rounded-xl font-bold text-sm border-2 transition-all hover:bg-foreground hover:text-white"
-                style={{ borderColor: "#1A1A2E", color: "#1A1A2E" }}>
-                Ver todos los productos
-              </button>
-            </div>
-          </div>
-        </section>
-
-        <PromoBanner />
-
-        <DailyDealsSection
+        <LandingView
+          categories={landingCategories}
+          products={landingProducts}
+          loading={landingLoading}
+          activeTab={activeTab}
+          dealProducts={dealProducts}
           cartItems={cartItems}
+          onTabChange={setActiveTab}
           onAdd={addToCart}
           onRemove={removeFromCart}
           onProductClick={setSelectedProduct}
-          dealProducts={dealProducts}
+          onCategoryClick={openCatalog}
+          onViewCatalog={openCatalog}
         />
-
-        <BrandsSection />
-        <SucursalesSection />
-        <BenefitsSection />
-        <NewsletterSection />
       </main>
 
       <Footer categories={landingCategories} onCategoryClick={handleCategoryClick} />
