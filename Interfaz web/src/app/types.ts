@@ -19,6 +19,8 @@ export interface CatalogPageProps {
   setCatalogSort: (v: string) => void;
   catalogSearch: string;
   setCatalogSearch: (v: string) => void;
+  catalogProductType: string;
+  setCatalogProductType: (v: string) => void;
   mobileFiltersOpen: boolean;
   setMobileFiltersOpen: (v: boolean) => void;
 }
@@ -58,6 +60,8 @@ export interface CatalogCategory {
   iconName?: string;
   color?: string;
   bg?: string;
+  image?: string;
+  productTypeCode?: string | null;
   isActive?: boolean;
   count?: number;
 }

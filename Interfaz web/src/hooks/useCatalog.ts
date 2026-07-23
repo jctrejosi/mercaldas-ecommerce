@@ -73,6 +73,7 @@ export function useCatalog(filters?: CatalogProductsQuery) {
   }, [
     categoriesKey,
     categoryIdsKey,
+    filters?.productTypeCode,
     filters?.onSale,
     filters?.priceRange,
     filters?.sort,

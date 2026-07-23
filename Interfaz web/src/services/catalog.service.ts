@@ -9,6 +9,7 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:3000";
 export type CatalogProductsQuery = {
   categories?: number[];
   categoryIds?: number[];
+  productTypeCode?: string;
   onSale?: boolean;
   priceRange?: string;
   sort?: string;
@@ -21,6 +22,7 @@ function buildProductsPayload(params?: CatalogProductsQuery) {
   return {
     categories: params?.categories?.length ? params.categories : undefined,
     categoryIds: params?.categoryIds?.length ? params.categoryIds : undefined,
+    productTypeCode: params?.productTypeCode || undefined,
     onSale: params?.onSale || undefined,
     priceRange:
       params?.priceRange && params.priceRange !== "all"

@@ -5,6 +5,7 @@ import {
   Bone as Youtube,
 } from "lucide-react";
 import { Logo } from "../Logo";
+import type { CatalogCategory } from "../types";
 
 const PAYMENT_ICONS = [
   "Visa",
@@ -15,7 +16,18 @@ const PAYMENT_ICONS = [
   "Efecty",
 ];
 
-export function Footer() {
+interface FooterProps {
+  categories: CatalogCategory[];
+  onCategoryClick: (categoryName: string) => void;
+}
+
+export function Footer({ categories, onCategoryClick }: FooterProps) {
+  // Tomar las primeras 6 categorías raíz para el footer
+  const footerCategories = categories
+    .filter((c) => !c.parentId)
+    .slice(0, 6)
+    .map((c) => c.name);
+
   return (
     <footer className="pt-12 pb-6" style={{ background: "#111827" }}>
       <div className="max-w-7xl mx-auto px-4">
@@ -51,22 +63,15 @@ export function Footer() {
               Categorías
             </h4>
             <ul className="space-y-2">
-              {[
-                "Frutas y Verduras",
-                "Carnes y Pollo",
-                "Lácteos",
-                "Despensa",
-                "Limpieza",
-                "Cuidado Personal",
-              ].map((c) => (
+              {footerCategories.map((c) => (
                 <li key={c}>
-                  <a
-                    href="#"
-                    className="text-xs hover:text-white transition-colors"
+                  <button
+                    onClick={() => onCategoryClick(c)}
+                    className="text-xs hover:text-white transition-colors text-left"
                     style={{ color: "rgba(255,255,255,0.5)" }}
                   >
                     {c}
-                  </a>
+                  </button>
                 </li>
               ))}
             </ul>

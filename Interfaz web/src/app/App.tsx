@@ -1,20 +1,12 @@
 import { useState, useEffect, useCallback } from "react";
-import {
-  useNavigate,
-  useLocation,
-} from "react-router";
-import {
-  ChevronRight,
-} from "lucide-react";
+import { useNavigate, useLocation } from "react-router";
+import { ChevronRight } from "lucide-react";
 import { useCustomerAuth } from "../hooks/useCustomerAuth";
 import { catalogService } from "../services/catalog.service";
 import { ordersService } from "../services/orders.service";
 import { cartService } from "../services/cart.service";
 import type { CartItem, CatalogCategory, Order, Product } from "./types";
-import type {
-  EpaycoConfigResponse,
-  WompiConfigResponse,
-} from "../services/orders.service";
+import type { EpaycoConfigResponse, WompiConfigResponse } from "../services/orders.service";
 import { ProductDetailModal } from "./ProductDetailModal";
 import { CatalogPage } from "./Views/CatalogView";
 import { ProductCard } from "./Views/CatalogView/ProductCard";
@@ -22,17 +14,19 @@ import { SkeletonCard } from "./Views/CatalogView/SkeletonCard";
 
 import { Header } from "./components/Header";
 import { HeroSection } from "./components/HeroSection";
+import { AdvertisingBanner } from "./components/AdvertisingBanner";
 import { PromoBanner } from "./components/PromoBanner";
 import { BenefitsSection } from "./components/BenefitsSection";
 import { NewsletterSection } from "./components/NewsletterSection";
+import { BrandsSection } from "./components/BrandsSection";
 import { SucursalesSection } from "./components/SucursalesSection";
+import { DailyDealsSection } from "./components/DailyDealsSection";
 import { Footer } from "./components/Footer";
 import { CartDrawer } from "./components/CartDrawer";
 import { AuthModal } from "./components/AuthModal";
 import { CheckoutModal } from "./components/CheckoutModal";
 import { OrdersPanel } from "./components/OrdersPanel";
 
-/* ─── Helpers ────────────────────────────────────────────── */
 const fmt = (n: number) =>
   new Intl.NumberFormat("es-CO", {
     style: "currency",
@@ -50,6 +44,7 @@ const PRODUCT_TABS = [
 type CatalogProductsQuery = {
   categories?: number[];
   categoryIds?: number[];
+  productTypeCode?: string;
   onSale?: boolean;
   priceRange?: string;
   sort?: string;
@@ -58,7 +53,6 @@ type CatalogProductsQuery = {
   offset?: number;
 };
 
-/* ─── Main App ───────────────────────────────────────────── */
 export default function App() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -66,19 +60,15 @@ export default function App() {
     location.pathname === "/catalog" ? "catalog" : "home",
   );
 
-  // Sync currentView with URL changes (e.g. browser back/forward)
   useEffect(() => {
-    if (location.pathname === "/catalog") {
-      setCurrentView("catalog");
-    } else {
-      setCurrentView("home");
-    }
+    if (location.pathname === "/catalog") setCurrentView("catalog");
+    else setCurrentView("home");
   }, [location.pathname]);
+
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [cartHydrated, setCartHydrated] = useState(false);
   const [cartOpen, setCartOpen] = useState(false);
   const [activeTab, setActiveTab] = useState("vendidos");
-  // catalog filters
   const [catalogCategory, setCatalogCategory] = useState<number[]>([]);
   const [catalogOnSale, setCatalogOnSale] = useState(false);
   const [catalogPriceRange, setCatalogPriceRange] = useState<string>("all");
@@ -86,9 +76,7 @@ export default function App() {
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
   const [catalogSearch, setCatalogSearch] = useState("");
   const [loginModal, setLoginModal] = useState(false);
-  const [modalView, setModalView] = useState<"choice" | "login" | "register">(
-    "choice",
-  );
+  const [modalView, setModalView] = useState<"choice" | "login" | "register">("choice");
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [checkoutStep, setCheckoutStep] = useState(1);
@@ -96,517 +84,247 @@ export default function App() {
   const [ordersOpen, setOrdersOpen] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [checkoutAddress, setCheckoutAddress] = useState({
-    name: "",
-    phone: "",
-    address: "",
-    city: "Manizales",
-    notes: "",
+    name: "", phone: "", address: "", city: "Manizales", notes: "",
   });
-  const [checkoutShipping, setCheckoutShipping] = useState<
-    "standard" | "express"
-  >("standard");
-  const [checkoutPayment, setCheckoutPayment] = useState<
-    "efectivo" | "tarjeta" | "nequi" | "pse"
-  >("efectivo");
+  const [checkoutShipping, setCheckoutShipping] = useState<"standard" | "express">("standard");
+  const [checkoutPayment, setCheckoutPayment] = useState<"efectivo" | "tarjeta" | "nequi" | "pse">("efectivo");
   const [cardPayment, setCardPayment] = useState({
-    cardholderName: "",
-    cardNumber: "",
-    expiryMonth: "",
-    expiryYear: "",
-    cvv: "",
-    installments: "1",
+    cardholderName: "", cardNumber: "", expiryMonth: "", expiryYear: "", cvv: "", installments: "1",
   });
-  const [psePayment, setPsePayment] = useState({
-    bank: "",
-    personType: "natural" as "natural" | "juridica",
-  });
-  const [nequiPayment, setNequiPayment] = useState({
-    phone: "",
-  });
+  const [psePayment, setPsePayment] = useState({ bank: "", personType: "natural" as "natural" | "juridica" });
+  const [nequiPayment, setNequiPayment] = useState({ phone: "" });
   const [lastOrderId, setLastOrderId] = useState("");
   const [cardGateway, setCardGateway] = useState<"epayco" | "wompi">("epayco");
-  const [epaycoConfig, setEpaycoConfig] = useState<EpaycoConfigResponse | null>(
-    null,
-  );
-  const [wompiConfig, setWompiConfig] = useState<WompiConfigResponse | null>(
-    null,
-  );
-  const [wompiAcceptance, setWompiAcceptance] = useState({
-    terms: false,
-    personalData: false,
-  });
+  const [epaycoConfig, setEpaycoConfig] = useState<EpaycoConfigResponse | null>(null);
+  const [wompiConfig, setWompiConfig] = useState<WompiConfigResponse | null>(null);
+  const [wompiAcceptance, setWompiAcceptance] = useState({ terms: false, personalData: false });
   const [checkoutLoading, setCheckoutLoading] = useState(false);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
 
-  // Landing page data
-  const [landingCategories, setLandingCategories] = useState<CatalogCategory[]>(
-    [],
-  );
+  const [landingCategories, setLandingCategories] = useState<CatalogCategory[]>([]);
   const [landingProducts, setLandingProducts] = useState<Product[]>([]);
   const [landingLoading, setLandingLoading] = useState(true);
+  const [dealProducts, setDealProducts] = useState<Product[]>([]);
 
-  const {
-    customer,
-    loading: customerLoading,
-    login,
-    register,
-    socialLogin,
-  } = useCustomerAuth();
-
-  // Estado local para errores en el modal
+  const { customer, loading: customerLoading, login, register, socialLogin } = useCustomerAuth();
   const [authError, setAuthError] = useState<string | null>(null);
   const [authLoading, setAuthLoading] = useState(false);
 
-  // ── Cargar categorías (solo una vez al montar) ──
   useEffect(() => {
     void catalogService.getCategories().then(setLandingCategories).catch(() => {});
+    void catalogService.getProducts({ onSale: true, sort: "descuento", limit: 8 }).then(setDealProducts).catch(() => {});
   }, []);
 
-  // ── Cargar productos de la landing cuando cambia el tab ──
   const fetchLandingProducts = useCallback(async (tab: string) => {
     setLandingLoading(true);
     try {
       let params: CatalogProductsQuery = { limit: 8 };
-
       switch (tab) {
-        case "vendidos":
-          break;
-        case "promociones":
-          params.onSale = true;
-          params.sort = "descuento";
-          break;
-        case "recomendados":
-          params.sort = "relevancia";
-          break;
-        case "novedades":
-          break;
+        case "promociones": params.onSale = true; params.sort = "descuento"; break;
+        case "recomendados": params.sort = "relevancia"; break;
+        default: break;
       }
-
       const products = await catalogService.getProducts(params);
       setLandingProducts(products);
-    } catch {
-      setLandingProducts([]);
-    } finally {
-      setLandingLoading(false);
-    }
+    } catch { setLandingProducts([]); }
+    finally { setLandingLoading(false); }
   }, []);
 
-  // Cargar productos al montar y al cambiar de tab
-  useEffect(() => {
-    void fetchLandingProducts(activeTab);
-  }, [activeTab, fetchLandingProducts]);
+  useEffect(() => { void fetchLandingProducts(activeTab); }, [activeTab, fetchLandingProducts]);
 
-  // ── Handlers ──
   const handleLoginSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    setAuthError(null);
-    setAuthLoading(true);
-
+    setAuthError(null); setAuthLoading(true);
     const formData = new FormData(e.currentTarget);
-    const email = formData.get("email") as string;
-    const password = formData.get("password") as string;
-
     try {
-      await login(email, password);
+      await login(formData.get("email") as string, formData.get("password") as string);
       setLoginModal(false);
-      if (cartItems.length > 0) {
-        setCheckoutStep(1);
-        setCheckoutOpen(true);
-      }
-    } catch (error: any) {
-      setAuthError(error.message || "Error al iniciar sesión");
-    } finally {
-      setAuthLoading(false);
-    }
+      if (cartItems.length > 0) { setCheckoutStep(1); setCheckoutOpen(true); }
+    } catch (error: any) { setAuthError(error.message || "Error al iniciar sesión"); }
+    finally { setAuthLoading(false); }
   };
 
   const handleRegisterSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setAuthError(null);
-    setAuthLoading(true);
-
+    setAuthError(null); setAuthLoading(true);
     const form = e.currentTarget as HTMLFormElement;
     const formData = new FormData(form);
-
-    const data = {
-      email: formData.get("email") as string,
-      password: formData.get("password") as string,
-      firstName: formData.get("firstName") as string,
-      lastName: formData.get("lastName") as string,
-      phone: formData.get("phone") as string,
-      acceptsTerms: true,
-    };
-
     try {
-      await register(data);
-      setLoginModal(false);
-      setAuthLoading(false);
-    } catch (error: any) {
-      setAuthError(error.message || "Error al registrarse");
-      setAuthLoading(false);
-    }
+      await register({
+        email: formData.get("email") as string,
+        password: formData.get("password") as string,
+        firstName: formData.get("firstName") as string,
+        lastName: formData.get("lastName") as string,
+        phone: formData.get("phone") as string,
+        acceptsTerms: true,
+      });
+      setLoginModal(false); setAuthLoading(false);
+    } catch (error: any) { setAuthError(error.message || "Error al registrarse"); setAuthLoading(false); }
   };
 
   useEffect(() => {
     if (customerLoading) return;
-
-    if (!customer) {
-      setCartHydrated(true);
-      return;
-    }
-
-    void cartService
-      .getCart()
+    if (!customer) { setCartHydrated(true); return; }
+    void cartService.getCart()
       .then((response) => {
         setCartItems((prev) => {
           const merged = new Map<number, CartItem>();
-
-          for (const item of response.items) {
-            merged.set(item.id, {
-              ...item,
-            });
-          }
-
+          for (const item of response.items) merged.set(item.id, { ...item });
           for (const item of prev) {
-            const existing = merged.get(item.id);
-            if (existing) {
-              merged.set(item.id, {
-                ...existing,
-                quantity: existing.quantity + item.quantity,
-              });
-            } else {
-              merged.set(item.id, item);
-            }
+            const ex = merged.get(item.id);
+            if (ex) merged.set(item.id, { ...ex, quantity: ex.quantity + item.quantity });
+            else merged.set(item.id, item);
           }
-
           return Array.from(merged.values());
         });
         setCartHydrated(true);
       })
-      .catch(() => {
-        setCartHydrated(true);
-      });
+      .catch(() => setCartHydrated(true));
   }, [customer, customerLoading]);
 
   useEffect(() => {
     if (!customer || !cartHydrated) return;
-
-    void cartService.updateCart(
-      cartItems.map((item) => ({
-        productId: item.id,
-        quantity: item.quantity,
-      })),
-    );
+    void cartService.updateCart(cartItems.map((item) => ({ productId: item.id, quantity: item.quantity })));
   }, [cartHydrated, cartItems, customer]);
 
   const addToCart = (product: Product, quantity: number = 1) => {
     setCartItems((prev) => {
       const ex = prev.find((c) => c.id === product.id);
-      if (ex)
-        return prev.map((c) =>
-          c.id === product.id ? { ...c, quantity: c.quantity + quantity } : c,
-        );
-      return [...prev, { ...product, quantity }];
+      return ex
+        ? prev.map((c) => (c.id === product.id ? { ...c, quantity: c.quantity + quantity } : c))
+        : [...prev, { ...product, quantity }];
     });
   };
-
   const removeFromCart = (id: number) => {
     setCartItems((prev) => {
       const ex = prev.find((c) => c.id === id);
       if (!ex) return prev;
-      if (ex.quantity === 1) return prev.filter((c) => c.id !== id);
-      return prev.map((c) =>
-        c.id === id ? { ...c, quantity: c.quantity - 1 } : c,
-      );
+      return ex.quantity === 1 ? prev.filter((c) => c.id !== id) : prev.map((c) => (c.id === id ? { ...c, quantity: c.quantity - 1 } : c));
     });
   };
-
-  const deleteFromCart = (id: number) =>
-    setCartItems((prev) => prev.filter((c) => c.id !== id));
+  const deleteFromCart = (id: number) => setCartItems((prev) => prev.filter((c) => c.id !== id));
 
   const openCatalog = (categoryId?: number) => {
-    if (categoryId) {
-      setCatalogCategory([categoryId]);
-      setCatalogSearch(""); // Reset search when opening a category
-    } else {
-      setCatalogCategory([]);
-    }
+    if (categoryId) { setCatalogCategory([categoryId]); setCatalogSearch(""); }
+    else setCatalogCategory([]);
     setCurrentView("catalog");
     navigate("/catalog");
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   const openModal = (view: "choice" | "login" | "register") => {
-    if (customer) {
-      setLoginModal(false);
-      return;
-    }
-
-    setModalView(view);
-    setLoginModal(true);
+    if (customer) { setLoginModal(false); return; }
+    setModalView(view); setLoginModal(true);
   };
-
   const closeModal = () => setLoginModal(false);
-
   const cartTotal = cartItems.reduce((s, c) => s + c.price * c.quantity, 0);
   const cartCount = cartItems.reduce((s, c) => s + c.quantity, 0);
 
+  const handleCategoryClick = (categoryName: string) => {
+    setCatalogSearch(categoryName);
+    setCurrentView("catalog");
+    navigate("/catalog");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
   const placeOrder = async () => {
-    if (!customer) {
-      setCheckoutError("Debes iniciar sesión para completar el pedido");
-      return;
-    }
-
+    if (!customer) { setCheckoutError("Debes iniciar sesión para completar el pedido"); return; }
     try {
-      setCheckoutLoading(true);
-      setCheckoutError(null);
-
-      const cardDetails =
-        checkoutPayment === "tarjeta"
-          ? await (async () => {
-              if (cardGateway === "wompi") {
-                if (!wompiConfig?.publicKey) {
-                  throw new Error("Wompi no está configurado correctamente");
-                }
-
-                if (
-                  !wompiAcceptance.terms ||
-                  !wompiAcceptance.personalData ||
-                  !wompiConfig.acceptanceToken ||
-                  !wompiConfig.personalDataAuthToken
-                ) {
-                  throw new Error(
-                    "Debes aceptar los términos y el tratamiento de datos para pagar con tarjeta",
-                  );
-                }
-
-                const tokenizedCard = await ordersService.tokenizeWompiCard({
-                  publicKey: wompiConfig.publicKey,
-                  number: cardPayment.cardNumber.replace(/\s+/g, ""),
-                  cvc: cardPayment.cvv,
-                  expMonth: cardPayment.expiryMonth,
-                  expYear: cardPayment.expiryYear,
-                  cardHolder: cardPayment.cardholderName,
-                });
-
-                return {
-                  provider: "wompi" as const,
-                  cardholderName: cardPayment.cardholderName,
-                  cardToken: tokenizedCard.id,
-                  acceptanceToken: wompiConfig.acceptanceToken,
-                  acceptPersonalAuth: wompiConfig.personalDataAuthToken,
-                  last4: tokenizedCard.last_four,
-                  brand: tokenizedCard.brand,
-                  installments: Number(cardPayment.installments || "1"),
-                };
-              }
-
-              if (!epaycoConfig?.publicKey) {
-                throw new Error("ePayco no está configurado correctamente");
-              }
-
-              const tokenizedCard = await ordersService.tokenizeEpaycoCard({
-                cardNumber: cardPayment.cardNumber.replace(/\s+/g, ""),
-                cvc: cardPayment.cvv,
-                expMonth: cardPayment.expiryMonth,
-                expYear: cardPayment.expiryYear,
-                cardHolder: cardPayment.cardholderName,
-              });
-
-              return {
-                provider: "epayco" as const,
-                cardholderName: cardPayment.cardholderName,
-                cardToken: tokenizedCard.id,
-                last4: tokenizedCard.last4,
-                brand: tokenizedCard.brand,
-                installments: Number(cardPayment.installments || "1"),
-              };
-            })()
-          : undefined;
+      setCheckoutLoading(true); setCheckoutError(null);
+      const cardDetails = checkoutPayment === "tarjeta" ? await (async () => {
+        if (cardGateway === "wompi") {
+          if (!wompiConfig?.publicKey) throw new Error("Wompi no configurado");
+          if (!wompiAcceptance.terms || !wompiAcceptance.personalData || !wompiConfig.acceptanceToken || !wompiConfig.personalDataAuthToken)
+            throw new Error("Debes aceptar términos y tratamiento de datos para pagar con tarjeta");
+          const tok = await ordersService.tokenizeWompiCard({
+            publicKey: wompiConfig.publicKey, number: cardPayment.cardNumber.replace(/\s+/g, ""),
+            cvc: cardPayment.cvv, expMonth: cardPayment.expiryMonth, expYear: cardPayment.expiryYear, cardHolder: cardPayment.cardholderName,
+          });
+          return { provider: "wompi" as const, cardholderName: cardPayment.cardholderName, cardToken: tok.id, acceptanceToken: wompiConfig.acceptanceToken, acceptPersonalAuth: wompiConfig.personalDataAuthToken, last4: tok.last_four, brand: tok.brand, installments: Number(cardPayment.installments || "1") };
+        }
+        if (!epaycoConfig?.publicKey) throw new Error("ePayco no configurado");
+        const tok = await ordersService.tokenizeEpaycoCard({
+          cardNumber: cardPayment.cardNumber.replace(/\s+/g, ""), cvc: cardPayment.cvv,
+          expMonth: cardPayment.expiryMonth, expYear: cardPayment.expiryYear, cardHolder: cardPayment.cardholderName,
+        });
+        return { provider: "epayco" as const, cardholderName: cardPayment.cardholderName, cardToken: tok.id, last4: tok.last4, brand: tok.brand, installments: Number(cardPayment.installments || "1") };
+      })() : undefined;
 
       const response = await ordersService.checkout({
-        items: cartItems.map((item) => ({
-          productId: item.id,
-          quantity: item.quantity,
-        })),
-        address: {
-          name: checkoutAddress.name,
-          phone: checkoutAddress.phone,
-          address: checkoutAddress.address,
-          city: checkoutAddress.city,
-          notes: checkoutAddress.notes,
-        },
-        shippingType: checkoutShipping,
-        paymentMethod: checkoutPayment,
-        paymentDetails:
-          checkoutPayment === "tarjeta"
-            ? {
-                card: cardDetails,
-              }
-            : checkoutPayment === "pse"
-              ? { pse: psePayment }
-              : checkoutPayment === "nequi"
-                ? { nequi: nequiPayment }
-                : undefined,
+        items: cartItems.map((i) => ({ productId: i.id, quantity: i.quantity })),
+        address: { name: checkoutAddress.name, phone: checkoutAddress.phone, address: checkoutAddress.address, city: checkoutAddress.city, notes: checkoutAddress.notes },
+        shippingType: checkoutShipping, paymentMethod: checkoutPayment,
+        paymentDetails: checkoutPayment === "tarjeta" ? { card: cardDetails } : checkoutPayment === "pse" ? { pse: psePayment } : checkoutPayment === "nequi" ? { nequi: nequiPayment } : undefined,
       });
 
       const newOrder: Order = {
-        id: response.referenceCode,
-        date: new Date().toLocaleDateString("es-CO", {
-          day: "2-digit",
-          month: "long",
-          year: "numeric",
-        }),
-        items: [...cartItems],
-        total: response.grandTotal,
-        shipping: response.shippingCost,
-        address: `${response.address.address}, ${response.address.city}`,
-        paymentMethod: response.paymentMethod,
-        status: "preparando",
+        id: response.referenceCode, date: new Date().toLocaleDateString("es-CO", { day: "2-digit", month: "long", year: "numeric" }),
+        items: [...cartItems], total: response.grandTotal, shipping: response.shippingCost,
+        address: `${response.address.address}, ${response.address.city}`, paymentMethod: response.paymentMethod, status: "preparando",
       };
-
       setOrders((prev) => [newOrder, ...prev]);
-      setLastOrderId(response.referenceCode);
-      setCartItems([]);
-      setCheckoutStep(4);
-    } catch (error) {
-      setCheckoutError(
-        error instanceof Error
-          ? error.message
-          : "No se pudo procesar el pedido",
-      );
-    } finally {
-      setCheckoutLoading(false);
-    }
+      setLastOrderId(response.referenceCode); setCartItems([]); setCheckoutStep(4);
+    } catch (error) { setCheckoutError(error instanceof Error ? error.message : "No se pudo procesar el pedido"); }
+    finally { setCheckoutLoading(false); }
   };
 
   useEffect(() => {
-    void ordersService
-      .getEpaycoConfig()
-      .then(setEpaycoConfig)
-      .catch(() => null);
-
-    void ordersService
-      .getWompiConfig()
-      .then(setWompiConfig)
-      .catch(() => null);
+    void ordersService.getEpaycoConfig().then(setEpaycoConfig).catch(() => null);
+    void ordersService.getWompiConfig().then(setWompiConfig).catch(() => null);
   }, []);
 
-  const handleSocialSuccess = () => {
-    setLoginModal(false);
-    if (cartItems.length > 0) {
-      setCheckoutStep(1);
-      setCheckoutOpen(true);
-    }
-  };
-
-  const handleSocialError = (error: unknown) => {
-    setAuthError(
-      error instanceof Error ? error.message : "Error en autenticación",
-    );
-  };
+  const handleSocialSuccess = () => { setLoginModal(false); if (cartItems.length > 0) { setCheckoutStep(1); setCheckoutOpen(true); } };
+  const handleSocialError = (error: unknown) => setAuthError(error instanceof Error ? error.message : "Error en autenticación");
 
   return (
-    <div
-      className="min-h-screen bg-background"
-      style={{ fontFamily: "'Inter', sans-serif" }}
-    >
+    <div className="min-h-screen bg-background" style={{ fontFamily: "'Inter', sans-serif" }}>
       <Header
-        cartCount={cartCount}
-        categories={landingCategories}
-        customer={customer}
-        customerLoading={customerLoading}
-        ordersCount={orders.length}
-        cartItems={cartItems}
+        cartCount={cartCount} categories={landingCategories} customer={customer} customerLoading={customerLoading}
+        ordersCount={orders.length} cartItems={cartItems}
         onCartOpen={() => setCartOpen(true)}
-        onOrdersOpen={() => {
-          setSelectedOrder(null);
-          setOrdersOpen(true);
-        }}
-        onLoginModal={openModal}
-        onCatalogSearch={setCatalogSearch}
-        onOpenCatalog={openCatalog}
-        onAddToCart={addToCart}
-        onRemoveFromCart={removeFromCart}
-        fmt={fmt}
+        onOrdersOpen={() => { setSelectedOrder(null); setOrdersOpen(true); }}
+        onLoginModal={openModal} onCatalogSearch={setCatalogSearch} onOpenCatalog={openCatalog}
+        onAddToCart={addToCart} onRemoveFromCart={removeFromCart}
+        onHome={() => { setCurrentView("home"); navigate("/"); }} fmt={fmt}
       />
 
       {currentView === "catalog" && (
         <CatalogPage
-          cartItems={cartItems}
-          onAdd={addToCart}
-          onRemove={removeFromCart}
-          onBack={() => {
-            navigate("/");
-            setCurrentView("home");
-          }}
-          onProductClick={setSelectedProduct}
-          onOpenCategory={openCatalog}
-          catalogCategory={catalogCategory}
-          setCatalogCategory={setCatalogCategory}
-          catalogOnSale={catalogOnSale}
-          setCatalogOnSale={setCatalogOnSale}
-          catalogPriceRange={catalogPriceRange}
-          setCatalogPriceRange={setCatalogPriceRange}
-          catalogSort={catalogSort}
-          setCatalogSort={setCatalogSort}
-          catalogSearch={catalogSearch}
-          setCatalogSearch={setCatalogSearch}
-          mobileFiltersOpen={mobileFiltersOpen}
-          setMobileFiltersOpen={setMobileFiltersOpen}
+          cartItems={cartItems} onAdd={addToCart} onRemove={removeFromCart}
+          onBack={() => { navigate("/"); setCurrentView("home"); }}
+          onProductClick={setSelectedProduct} onOpenCategory={openCatalog}
+          catalogCategory={catalogCategory} setCatalogCategory={setCatalogCategory}
+          catalogOnSale={catalogOnSale} setCatalogOnSale={setCatalogOnSale}
+          catalogPriceRange={catalogPriceRange} setCatalogPriceRange={setCatalogPriceRange}
+          catalogSort={catalogSort} setCatalogSort={setCatalogSort}
+          catalogSearch={catalogSearch} setCatalogSearch={setCatalogSearch}
+          mobileFiltersOpen={mobileFiltersOpen} setMobileFiltersOpen={setMobileFiltersOpen}
         />
       )}
 
       <main className={currentView === "catalog" ? "hidden" : ""}>
         <HeroSection />
 
-        {/* ── Quick Categories ── */}
+        <AdvertisingBanner onShop={() => openCatalog()} />
+
         <section className="py-8 bg-white border-b border-border">
           <div className="max-w-7xl mx-auto px-4">
             <div className="flex items-center justify-between mb-5">
-              <h2
-                className="font-black text-lg text-foreground"
-                style={{ fontFamily: "'Bricolage Grotesque', sans-serif" }}
-              >
-                Categorías
-              </h2>
-              <button
-                onClick={() => openCatalog()}
-                className="text-xs font-medium text-muted-foreground flex items-center gap-1 hover:text-foreground transition-colors"
-              >
+              <h2 className="font-black text-lg text-foreground" style={{ fontFamily: "'Bricolage Grotesque', sans-serif" }}>Categorías</h2>
+              <button onClick={() => openCatalog()} className="text-xs font-medium text-muted-foreground flex items-center gap-1 hover:text-foreground transition-colors">
                 Ver todas <ChevronRight className="w-3.5 h-3.5" />
               </button>
             </div>
-            <div
-              className="flex gap-4 overflow-x-auto pb-2"
-              style={{ scrollbarWidth: "none" }}
-            >
+            <div className="flex gap-4 overflow-x-auto pb-2" style={{ scrollbarWidth: "none" }}>
               {landingCategories.map((cat) => {
                 const Icon = cat.icon;
                 return (
-                  <button
-                    key={cat.id}
-                    onClick={() => openCatalog(cat.id)}
-                    className="flex flex-col items-center gap-2 flex-shrink-0 p-3 rounded-xl hover:bg-muted transition-colors min-w-[90px]"
-                  >
-                    <div
-                      className="w-12 h-12 rounded-xl flex items-center justify-center text-lg"
-                      style={{
-                        background: cat.bg || "#F4F4F6",
-                        color: cat.color || "#6B7280",
-                      }}
-                    >
-                      {Icon ? (
-                        <Icon className="w-5 h-5" />
-                      ) : (
-                        <span className="font-bold text-sm">
-                          {cat.name.charAt(0)}
-                        </span>
-                      )}
+                  <button key={cat.id} onClick={() => openCatalog(cat.id)} className="flex flex-col items-center gap-2 flex-shrink-0 p-3 rounded-xl hover:bg-muted transition-colors min-w-[90px]">
+                    <div className="w-12 h-12 rounded-xl flex items-center justify-center text-lg"
+                      style={{ background: cat.bg || "#F4F4F6", color: cat.color || "#6B7280" }}>
+                      {Icon ? <Icon className="w-5 h-5" /> : <span className="font-bold text-sm">{cat.name.charAt(0)}</span>}
                     </div>
-                    <span className="text-xs font-medium text-center text-foreground leading-tight">
-                      {cat.name}
-                    </span>
+                    <span className="text-xs font-medium text-center text-foreground leading-tight">{cat.name}</span>
                   </button>
                 );
               })}
@@ -616,175 +334,97 @@ export default function App() {
 
         <PromoBanner />
 
-        {/* ── Featured Products ── */}
         <section className="py-10 bg-background">
           <div className="max-w-7xl mx-auto px-4">
             <div className="flex items-center justify-between mb-6">
-              <h2
-                className="font-black text-2xl text-foreground"
-                style={{ fontFamily: "'Bricolage Grotesque', sans-serif" }}
-              >
-                Productos Destacados
-              </h2>
-              <button
-                onClick={() => openCatalog()}
-                className="hidden md:flex items-center gap-1 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
-              >
+              <h2 className="font-black text-2xl text-foreground" style={{ fontFamily: "'Bricolage Grotesque', sans-serif" }}>Productos Destacados</h2>
+              <button onClick={() => openCatalog()} className="hidden md:flex items-center gap-1 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
                 Ver catálogo completo <ChevronRight className="w-4 h-4" />
               </button>
             </div>
-
-            {/* Tabs */}
-            <div
-              className="flex gap-2 mb-6 overflow-x-auto pb-1"
-              style={{ scrollbarWidth: "none" }}
-            >
+            <div className="flex gap-2 mb-6 overflow-x-auto pb-1" style={{ scrollbarWidth: "none" }}>
               {PRODUCT_TABS.map((tab) => (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
+                <button key={tab.id} onClick={() => setActiveTab(tab.id)}
                   className="flex-shrink-0 px-4 py-2 rounded-xl text-sm font-semibold transition-all duration-150"
-                  style={
-                    activeTab === tab.id
-                      ? { background: "#FFF200", color: "#1A1A2E" }
-                      : { background: "#F4F4F6", color: "#6B7280" }
-                  }
-                >
+                  style={activeTab === tab.id ? { background: "#FFF200", color: "#1A1A2E" } : { background: "#F4F4F6", color: "#6B7280" }}>
                   {tab.label}
                 </button>
               ))}
             </div>
-
-            {/* Product grid */}
             {landingLoading ? (
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-4">
-                {Array.from({ length: 8 }).map((_, i) => (
-                  <SkeletonCard key={i} />
-                ))}
+                {Array.from({ length: 8 }).map((_, i) => <SkeletonCard key={i} />)}
               </div>
             ) : landingProducts.length > 0 ? (
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-4">
                 {landingProducts.map((p) => (
-                  <ProductCard
-                    key={p.id}
-                    product={p}
-                    cartItems={cartItems}
-                    onAdd={addToCart}
-                    onRemove={removeFromCart}
-                    onProductClick={setSelectedProduct}
-                  />
+                  <ProductCard key={p.id} product={p} cartItems={cartItems} onAdd={addToCart} onRemove={removeFromCart} onProductClick={setSelectedProduct} />
                 ))}
               </div>
             ) : (
-              <div className="text-center py-12 text-muted-foreground text-sm">
-                No hay productos disponibles en esta categoría.
-              </div>
+              <div className="text-center py-12 text-muted-foreground text-sm">No hay productos disponibles en esta categoría.</div>
             )}
-
             <div className="text-center mt-8">
-              <button
-                onClick={() => openCatalog()}
+              <button onClick={() => openCatalog()}
                 className="px-8 py-3 rounded-xl font-bold text-sm border-2 transition-all hover:bg-foreground hover:text-white"
-                style={{ borderColor: "#1A1A2E", color: "#1A1A2E" }}
-              >
+                style={{ borderColor: "#1A1A2E", color: "#1A1A2E" }}>
                 Ver todos los productos
               </button>
             </div>
           </div>
         </section>
 
+        <DailyDealsSection
+          cartItems={cartItems}
+          onAdd={addToCart}
+          onRemove={removeFromCart}
+          onProductClick={setSelectedProduct}
+          dealProducts={dealProducts}
+        />
+
+        <BrandsSection />
         <SucursalesSection />
         <BenefitsSection />
         <NewsletterSection />
       </main>
 
-      <Footer />
+      <Footer categories={landingCategories} onCategoryClick={handleCategoryClick} />
 
       <CartDrawer
-        cartOpen={cartOpen}
-        cartItems={cartItems}
-        cartCount={cartCount}
-        cartTotal={cartTotal}
-        onClose={() => setCartOpen(false)}
-        onAdd={addToCart}
-        onRemove={removeFromCart}
-        onDelete={deleteFromCart}
-        onCheckout={() => {
-          setCartOpen(false);
-          if (customer) {
-            setCheckoutStep(1);
-            setCheckoutOpen(true);
-            return;
-          }
-          openModal("choice");
-        }}
+        cartOpen={cartOpen} cartItems={cartItems} cartCount={cartCount} cartTotal={cartTotal}
+        onClose={() => setCartOpen(false)} onAdd={addToCart} onRemove={removeFromCart} onDelete={deleteFromCart}
+        onCheckout={() => { setCartOpen(false); if (customer) { setCheckoutStep(1); setCheckoutOpen(true); return; } openModal("choice"); }}
         fmt={fmt}
       />
 
       <ProductDetailModal
-        product={selectedProduct}
-        cartItems={cartItems}
-        onAdd={addToCart}
-        onRemove={removeFromCart}
+        product={selectedProduct} cartItems={cartItems} onAdd={addToCart} onRemove={removeFromCart}
         onClose={() => setSelectedProduct(null)}
       />
 
       <AuthModal
-        loginModal={loginModal}
-        modalView={modalView}
-        authError={authError}
-        authLoading={authLoading}
-        cartItems={cartItems}
-        socialLogin={socialLogin}
-        onClose={closeModal}
-        onSetModalView={setModalView}
-        onLoginSubmit={handleLoginSubmit}
-        onRegisterSubmit={handleRegisterSubmit}
-        onSocialSuccess={handleSocialSuccess}
-        onSocialError={handleSocialError}
+        loginModal={loginModal} modalView={modalView} authError={authError} authLoading={authLoading}
+        cartItems={cartItems} socialLogin={socialLogin} onClose={closeModal} onSetModalView={setModalView}
+        onLoginSubmit={handleLoginSubmit} onRegisterSubmit={handleRegisterSubmit}
+        onSocialSuccess={handleSocialSuccess} onSocialError={handleSocialError}
       />
 
       <CheckoutModal
-        checkoutOpen={checkoutOpen}
-        checkoutStep={checkoutStep}
-        cartItems={cartItems}
-        cartTotal={cartTotal}
-        checkoutAddress={checkoutAddress}
-        checkoutShipping={checkoutShipping}
-        checkoutPayment={checkoutPayment}
-        checkoutLoading={checkoutLoading}
-        checkoutError={checkoutError}
-        cardPayment={cardPayment}
-        cardGateway={cardGateway}
-        wompiAcceptance={wompiAcceptance}
-        wompiConfig={wompiConfig}
-        psePayment={psePayment}
-        nequiPayment={nequiPayment}
-        lastOrderId={lastOrderId}
-        onClose={() => setCheckoutOpen(false)}
-        onSetCheckoutStep={setCheckoutStep}
-        onSetCheckoutAddress={setCheckoutAddress}
-        onSetCheckoutShipping={setCheckoutShipping}
-        onSetCheckoutPayment={setCheckoutPayment}
-        onSetCardPayment={setCardPayment}
-        onSetCardGateway={setCardGateway}
-        onSetWompiAcceptance={setWompiAcceptance}
-        onSetPsePayment={setPsePayment}
-        onSetNequiPayment={setNequiPayment}
-        onPlaceOrder={placeOrder}
-        fmt={fmt}
+        checkoutOpen={checkoutOpen} checkoutStep={checkoutStep} cartItems={cartItems} cartTotal={cartTotal}
+        checkoutAddress={checkoutAddress} checkoutShipping={checkoutShipping} checkoutPayment={checkoutPayment}
+        checkoutLoading={checkoutLoading} checkoutError={checkoutError}
+        cardPayment={cardPayment} cardGateway={cardGateway} wompiAcceptance={wompiAcceptance} wompiConfig={wompiConfig}
+        psePayment={psePayment} nequiPayment={nequiPayment} lastOrderId={lastOrderId}
+        onClose={() => setCheckoutOpen(false)} onSetCheckoutStep={setCheckoutStep}
+        onSetCheckoutAddress={setCheckoutAddress} onSetCheckoutShipping={setCheckoutShipping}
+        onSetCheckoutPayment={setCheckoutPayment} onSetCardPayment={setCardPayment} onSetCardGateway={setCardGateway}
+        onSetWompiAcceptance={setWompiAcceptance} onSetPsePayment={setPsePayment} onSetNequiPayment={setNequiPayment}
+        onPlaceOrder={placeOrder} fmt={fmt}
       />
 
       <OrdersPanel
-        ordersOpen={ordersOpen}
-        orders={orders}
-        selectedOrder={selectedOrder}
-        onClose={() => {
-          setOrdersOpen(false);
-          setSelectedOrder(null);
-        }}
-        onSelectOrder={setSelectedOrder}
-        fmt={fmt}
+        ordersOpen={ordersOpen} orders={orders} selectedOrder={selectedOrder}
+        onClose={() => { setOrdersOpen(false); setSelectedOrder(null); }} onSelectOrder={setSelectedOrder} fmt={fmt}
       />
     </div>
   );

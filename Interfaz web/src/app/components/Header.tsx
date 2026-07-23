@@ -33,6 +33,7 @@ interface HeaderProps {
   onOpenCatalog: (categoryId?: number) => void;
   onAddToCart: (product: Product, quantity?: number) => void;
   onRemoveFromCart: (id: number) => void;
+  onHome: () => void;
   fmt: (n: number) => string;
 }
 
@@ -59,6 +60,7 @@ export function Header({
   onOpenCatalog,
   onAddToCart,
   onRemoveFromCart,
+  onHome,
   fmt,
 }: HeaderProps) {
   const [searchQuery, setSearchQuery] = useState("");
@@ -119,8 +121,18 @@ export function Header({
     let cancelled = false;
 
     const timer = setTimeout(() => {
+      // Buscar también por nombre de categoría
+      const matchingCategories = searchCategories.filter((cat) =>
+        cat.name.toLowerCase().includes(query.toLowerCase()),
+      );
+      const categoryIds = matchingCategories.map((c) => c.id);
+
       void catalogService
-        .getProducts({ search: query, limit: 8 })
+        .getProducts({
+          search: query,
+          categoryIds: categoryIds.length > 0 ? categoryIds : undefined,
+          limit: 8,
+        })
         .then((products) => {
           if (!cancelled) setSearchResults(products);
         })
@@ -136,7 +148,7 @@ export function Header({
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [searchQuery]);
+  }, [searchQuery, searchCategories]);
 
   const suggestedCategories =
     searchQuery.trim().length >= 2
@@ -309,7 +321,7 @@ export function Header({
           <Menu className="w-5 h-5" />
         </button>
 
-        <a href="#" className="flex-shrink-0">
+        <a href="#" className="flex-shrink-0" onClick={(e) => { e.preventDefault(); onHome(); }}>
           <Logo dark={true} />
         </a>
 
@@ -631,7 +643,11 @@ export function Header({
                 key={item}
                 href="#"
                 className="py-2.5 px-2 text-sm font-medium rounded-lg hover:bg-muted transition-colors border-b border-border last:border-0"
-                onClick={() => setMobileMenuOpen(false)}
+                onClick={(e) => {
+                  e.preventDefault();
+                  if (item === "Inicio") onHome();
+                  setMobileMenuOpen(false);
+                }}
               >
                 {item}
               </a>
@@ -683,13 +699,17 @@ export function Header({
           </div>
 
           {["Inicio", "Promociones", "Marketplace", "Ayuda"].map((item) => (
-            <a
+            <button
               key={item}
-              href="#"
+              onClick={() => {
+                if (item === "Inicio") {
+                  onHome();
+                }
+              }}
               className="px-4 py-3 text-sm font-medium text-foreground transition-colors border-b-2 border-transparent hover:border-accent hover:text-accent"
             >
               {item}
-            </a>
+            </button>
           ))}
 
           <div className="ml-auto flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer hover:text-foreground transition-colors">
