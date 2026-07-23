@@ -61,6 +61,7 @@ export function DailyDealsSection({
 }: DailyDealsSectionProps) {
   const [featuredIdx, setFeaturedIdx] = useState(0);
   const [carouselStart, setCarouselStart] = useState(0);
+  const [localQtys, setLocalQtys] = useState<Record<number, number>>({});
   const carouselRef = useRef<HTMLDivElement>(null);
 
   const VISIBLE = 3;
@@ -74,6 +75,17 @@ export function DailyDealsSection({
     const next = carouselStart + dir;
     if (next < 0 || next + VISIBLE > dealProducts.length) return;
     setCarouselStart(next);
+  };
+
+  const incQty = (id: number) =>
+    setLocalQtys((prev) => ({ ...prev, [id]: (prev[id] || 1) + 1 }));
+
+  const decQty = (id: number) =>
+    setLocalQtys((prev) => ({ ...prev, [id]: Math.max(1, (prev[id] || 1) - 1) }));
+
+  const handleAdd = (p: Product) => {
+    onAdd(p, localQtys[p.id] || 1);
+    setLocalQtys((prev) => ({ ...prev, [p.id]: 1 }));
   };
 
   const featured = DEAL_OF_DAY_ITEMS[featuredIdx];
@@ -185,8 +197,7 @@ export function DailyDealsSection({
 
             <div ref={carouselRef} className="grid grid-cols-2 md:grid-cols-3 gap-3 flex-1">
               {dealProducts.slice(carouselStart, carouselStart + VISIBLE).map((p) => {
-                const inCart = cartItems.find((c) => c.id === p.id);
-                const qty = inCart?.quantity ?? 0;
+                const qty = localQtys[p.id] || 1;
                 const discountPct = p.originalPrice ? Math.round((1 - p.price / p.originalPrice) * 100) : 0;
                 return (
                   <div key={p.id} className="bg-card border border-border rounded-xl overflow-hidden flex flex-col hover:shadow-md transition-shadow">
@@ -212,21 +223,23 @@ export function DailyDealsSection({
                         <span className="text-xs text-muted-foreground line-through">{fmt(p.originalPrice!)}</span>
                       </div>
                       <div className="flex items-center border border-border rounded-lg overflow-hidden mt-2">
-                        <button onClick={() => onRemove(p.id)} disabled={qty === 0} className="flex-1 flex items-center justify-center py-1.5 disabled:opacity-25 hover:bg-muted transition-colors">
+                        <button onClick={() => decQty(p.id)}
+                          className="flex-1 flex items-center justify-center py-1.5 hover:bg-muted transition-colors">
                           <Minus className="w-3.5 h-3.5" />
                         </button>
                         <span className="font-bold text-sm w-8 text-center tabular-nums">{qty}</span>
-                        <button onClick={() => onAdd(p)} className="flex-1 flex items-center justify-center py-1.5 hover:bg-muted transition-colors">
+                        <button onClick={() => incQty(p.id)}
+                          className="flex-1 flex items-center justify-center py-1.5 hover:bg-muted transition-colors">
                           <Plus className="w-3.5 h-3.5" />
                         </button>
                       </div>
                       <button
-                        onClick={() => onAdd(p)}
+                        onClick={() => handleAdd(p)}
                         className="w-full flex items-center justify-center gap-1.5 py-1.5 rounded-lg font-semibold text-sm mt-1 transition-all hover:brightness-95 active:scale-95"
                         style={{ background: "#FFF200", color: "#1A1A2E" }}
                       >
                         <ShoppingCart className="w-3.5 h-3.5" />
-                        {qty === 0 ? "Agregar" : "Agregar uno más"}
+                        Agregar {qty}
                       </button>
                     </div>
                   </div>
