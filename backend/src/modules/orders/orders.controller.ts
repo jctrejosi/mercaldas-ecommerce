@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Get,
   HttpCode,
   HttpStatus,
   Post,
@@ -39,5 +40,12 @@ export class OrdersController {
     @Body() dto: CreateOrderDto,
   ) {
     return this.ordersService.checkout(customer.sub, dto);
+  }
+
+  @Get()
+  @ApiOperation({ summary: 'Obtener pedidos del cliente autenticado' })
+  @ApiResponse({ status: 200, description: 'Listado de pedidos del cliente' })
+  getOrders(@CurrentUser() customer: AuthenticatedCustomer) {
+    return this.ordersService.getOrders(customer.sub);
   }
 }

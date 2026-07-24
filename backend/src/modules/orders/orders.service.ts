@@ -3,17 +3,19 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { and, asc, eq, inArray, isNull } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNull } from 'drizzle-orm';
 import { DrizzleService } from '../../database/drizzle.service';
 import {
   branches,
   customerAddresses,
   customers,
+  media,
   orderItems,
   orders,
   orderStatusHistory,
   paymentIntents,
   payments,
+  productImages,
   productVariants,
   products,
   shipments,
@@ -285,6 +287,113 @@ export class OrdersService {
     });
 
     return result;
+  }
+
+  async getOrders(customerId: number) {
+    const orderRows = await this.db
+      .select({
+        id: orders.id,
+        referenceCode: orders.referenceCode,
+        status: orders.status,
+        subtotal: orders.subtotal,
+        shippingCost: orders.shippingCost,
+        grandTotal: orders.grandTotal,
+        createdAt: orders.createdAt,
+        addressLine1: customerAddresses.addressLine1,
+        addressLine2: customerAddresses.addressLine2,
+        city: customerAddresses.city,
+        paymentMethod: payments.paymentMethod,
+      })
+      .from(orders)
+      .leftJoin(customerAddresses, eq(customerAddresses.id, orders.customerAddressId))
+      .leftJoin(payments, eq(payments.orderId, orders.id))
+      .where(eq(orders.customerId, customerId))
+      .orderBy(desc(orders.createdAt));
+
+    if (!orderRows.length) return [];
+
+    const orderIds = orderRows.map((r) => Number(r.id));
+
+    const itemRows = await this.db
+      .select({
+        orderId: orderItems.orderId,
+        productName: orderItems.productName,
+        quantity: orderItems.quantity,
+        unitPrice: orderItems.unitPriceNet,
+        total: orderItems.total,
+        variantSku: orderItems.variantSku,
+        productVariantId: orderItems.productVariantId,
+        image: media.path,
+      })
+      .from(orderItems)
+      .leftJoin(productVariants, eq(productVariants.id, orderItems.productVariantId))
+      .leftJoin(products, eq(products.id, productVariants.productId))
+      .leftJoin(productImages, and(
+        eq(productImages.productId, products.id),
+        eq(productImages.isCover, true),
+      ))
+      .leftJoin(media, eq(media.id, productImages.mediaId))
+      .where(inArray(orderItems.orderId, orderIds))
+      .orderBy(asc(orderItems.id));
+
+    const itemsByOrderId = new Map<number, typeof itemRows>();
+    for (const item of itemRows) {
+      const oid = Number(item.orderId);
+      const list = itemsByOrderId.get(oid) ?? [];
+      list.push(item);
+      itemsByOrderId.set(oid, list);
+    }
+
+    return orderRows.map((row) => {
+      const items = (itemsByOrderId.get(Number(row.id)) ?? []).map((item) => ({
+        name: item.productName,
+        price: Number(item.unitPrice ?? 0),
+        quantity: Number(item.quantity ?? 1),
+        total: Number(item.total ?? 0),
+        image: item.image ?? null,
+        unit: 'unidad',
+        category: '',
+      }));
+
+      const address = [row.addressLine1, row.addressLine2, row.city]
+        .filter(Boolean)
+        .join(', ');
+
+      return {
+        id: row.referenceCode,
+        date: row.createdAt ?? '',
+        items,
+        total: Number(row.grandTotal ?? 0),
+        shipping: Number(row.shippingCost ?? 0),
+        address,
+        paymentMethod: this.reverseMapPaymentMethod(row.paymentMethod),
+        status: this.mapOrderStatus(row.status),
+      };
+    });
+  }
+
+  private reverseMapPaymentMethod(method: string | null) {
+    switch (method) {
+      case 'CARD': return 'tarjeta';
+      case 'PSE': return 'pse';
+      case 'CASH': return 'efectivo';
+      case 'NEQUI': return 'nequi';
+      case 'DAVIPLATA': return 'daviplata';
+      case 'BANK_TRANSFER': return 'efectivo';
+      default: return 'efectivo';
+    }
+  }
+
+  private mapOrderStatus(status: string | null) {
+    switch (status) {
+      case 'created': return 'preparando';
+      case 'confirmed': return 'preparando';
+      case 'preparing': return 'preparando';
+      case 'in_transit': return 'en camino';
+      case 'delivered': return 'entregado';
+      case 'cancelled': return 'cancelado';
+      default: return 'preparando';
+    }
   }
 
   private async getCustomer(customerId: number) {

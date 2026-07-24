@@ -1,5 +1,7 @@
 import { getAuthHeaders } from "./customer-auth.service";
 
+import type { Order } from "../app/types";
+
 const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:3000";
 
 export type CheckoutItem = {
@@ -163,6 +165,12 @@ export const ordersService = {
       headers: { "Content-Type": "application/json" },
       credentials: "include",
       body: JSON.stringify(payload),
+    });
+  },
+
+  async getOrders(): Promise<Order[]> {
+    return fetchJson<Order[]>(`${API_BASE_URL}/orders`, {
+      credentials: "include",
     });
   },
 };

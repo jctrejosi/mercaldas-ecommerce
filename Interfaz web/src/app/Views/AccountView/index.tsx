@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import {
   Package, Heart, ClipboardList, MapPin, CreditCard, Gift, Star, Bell, HelpCircle,
   Settings, ArrowLeft, Award, Search, ChevronLeft, ChevronRight, ChevronDown,
@@ -7,6 +7,7 @@ import {
   ThumbsUp, Camera, Mail, User, Lock, Eye, EyeOff, CheckCircle2, Shield, Send, Menu,
 } from "lucide-react";
 import type { CartItem, Order, Product } from "../../types";
+import { ordersService } from "../../../services/orders.service";
 
 const MOCK_PRODUCTS: Product[] = [
   {
@@ -459,8 +460,8 @@ export interface UserAdminViewProps {
 
 export function UserAdminView({ appOrders, cartItems, onAdd, onRemove, onProductClick, onBack, initialSection = "orders" }: AccountPageProps) {
   const [section, setSection] = useState<AccountSection>(initialSection);
-  const [selectedOrderId, setSelectedOrderId] = useState<string | null>(MOCK_ACCT_ORDERS[1].id);
-  const [trackingOrderId, setTrackingOrderId] = useState<string>(MOCK_ACCT_ORDERS[1].id);
+  const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
+  const [trackingOrderId, setTrackingOrderId] = useState<string>("");
   const [favorites, setFavorites] = useState<Product[]>(INIT_FAVORITES);
   const [lists, setLists] = useState<ShoppingList[]>(INIT_LISTS);
   const [selectedListId, setSelectedListId] = useState<string>(INIT_LISTS[0].id);
@@ -470,9 +471,19 @@ export function UserAdminView({ appOrders, cartItems, onAdd, onRemove, onProduct
   const [notifs, setNotifs] = useState<AcctNotif[]>(INIT_NOTIFS);
   const [reviews, setReviews] = useState<ProductReview[]>(INIT_REVIEWS);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [apiOrders, setApiOrders] = useState<Order[]>([]);
+  const [ordersLoading, setOrdersLoading] = useState(true);
+
+  useEffect(() => {
+    ordersService.getOrders().then(setApiOrders).catch(() => {}).finally(() => setOrdersLoading(false));
+  }, []);
 
   const allOrders: AcctOrder[] = [
-    ...MOCK_ACCT_ORDERS,
+    ...apiOrders.map((o) => ({
+      ...o,
+      estimatedDelivery: "",
+      deliveredAt: o.status === "entregado" ? o.date : "",
+    })),
     ...appOrders.map((o) => ({
       ...o,
       status: (o.status === "en camino" ? "en camino" : o.status === "preparando" ? "preparando" : "entregado") as AcctOrder["status"],
@@ -480,6 +491,14 @@ export function UserAdminView({ appOrders, cartItems, onAdd, onRemove, onProduct
       deliveredAt: o.status === "entregado" ? o.date : "",
     })),
   ];
+
+  // Initialize selected order from API data once loaded
+  useEffect(() => {
+    if (apiOrders.length > 0) {
+      setSelectedOrderId((prev) => prev ?? apiOrders[0].id);
+      setTrackingOrderId((prev) => prev || apiOrders[0].id);
+    }
+  }, [apiOrders]);
 
   const unreadNotifs = notifs.filter((n) => !n.read).length;
 
