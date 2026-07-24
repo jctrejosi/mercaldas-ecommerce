@@ -498,11 +498,12 @@ export function UserAdminView({ appOrders, cartItems, onAdd, onRemove, onProduct
   ];
 
   const currentNav = navItems.find((n) => n.id === section || (section === "order-detail" && n.id === "orders") || (section === "tracking" && n.id === "orders"));
+  const contentRef = useRef<HTMLElement>(null);
 
   const navigate = (s: AccountSection) => {
     setSection(s);
     setMobileNavOpen(false);
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    contentRef.current?.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   const fmtCOP = (n: number) => new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP", maximumFractionDigits: 0 }).format(n);
@@ -2139,17 +2140,19 @@ export function UserAdminView({ appOrders, cartItems, onAdd, onRemove, onProduct
         </div>
       )}
 
-      <div className="max-w-7xl mx-auto px-4 py-6 flex gap-6 items-start">
+      <div className="max-w-7xl mx-auto px-4 py-6 flex gap-6" style={{ minHeight: "calc(100vh - 12rem)" }}>
         {/* Desktop sidebar */}
-        <div className="hidden md:block sticky top-24">
+        <div className="hidden md:block sticky top-24 self-start" style={{ maxHeight: "calc(100vh - 8rem)", overflowY: "auto", scrollbarWidth: "thin" }}>
           <Sidebar />
         </div>
 
         {/* Content */}
-        <main className="flex-1 min-w-0">
-          {renderSection()}
+        <main ref={contentRef} className="flex-1 min-w-0" style={{ maxHeight: "calc(100vh - 8rem)", overflowY: "auto", scrollbarWidth: "thin" }}>
+          <div style={{ minHeight: "min-content" }}>
+            {renderSection()}
+          </div>
         </main>
       </div>
     </div>
   );
-}
+}
