@@ -62,6 +62,7 @@ export default function App() {
   const [checkoutAddress, setCheckoutAddress] = useState({ name: "", phone: "", address: "", city: "Manizales", notes: "" });
   const [checkoutShipping, setCheckoutShipping] = useState<"standard" | "express">("standard");
   const [checkoutPayment, setCheckoutPayment] = useState<"efectivo" | "tarjeta" | "nequi" | "pse">("efectivo");
+  const [cardGateway, setCardGateway] = useState<"epayco" | "wompi">("wompi");
   const [cardPayment, setCardPayment] = useState({ cardholderName: "", cardNumber: "", expiryMonth: "", expiryYear: "", cvv: "", installments: "1" });
   const [psePayment, setPsePayment] = useState({ bank: "", personType: "natural" as "natural" | "juridica" });
   const [nequiPayment, setNequiPayment] = useState({ phone: "" });
@@ -202,7 +203,7 @@ const [landingLoading, setLandingLoading] = useState(true);
       // Tokenize card if paying by card
       let cardToken = ""; let last4 = ""; let brand = "";
       if (checkoutPayment === "tarjeta") {
-        if ("wompi" === "wompi" && wompiConfig) {
+        if (cardGateway === "wompi" && wompiConfig) {
           const tokenized = await ordersService.tokenizeWompiCard({
             publicKey: wompiConfig.publicKey,
             number: cardPayment.cardNumber.replace(/\s/g, ""),
@@ -214,7 +215,7 @@ const [landingLoading, setLandingLoading] = useState(true);
           cardToken = tokenized.id;
           last4 = tokenized.last_four;
           brand = tokenized.brand;
-        } else if ("wompi" === "epayco" && epaycoConfig) {
+        } else if (cardGateway === "epayco" && epaycoConfig) {
           const tokenized = await ordersService.tokenizeEpaycoCard({
             cardNumber: cardPayment.cardNumber.replace(/\s/g, ""),
             cvc: cardPayment.cvv,
@@ -236,7 +237,7 @@ const [landingLoading, setLandingLoading] = useState(true);
         shippingType: checkoutShipping,
         paymentMethod: checkoutPayment,
       };
-      if (checkoutPayment === "tarjeta") { payload.paymentDetails = { card: { provider: "wompi", cardholderName: cardPayment.cardholderName, cardToken, last4, brand, installments: parseInt(cardPayment.installments) || 1, ...("wompi" === "wompi" ? { acceptanceToken: wompiConfig?.acceptanceToken ?? "", acceptPersonalAuth: wompiConfig?.personalDataAuthToken ?? "" } : {}) } }; }
+      if (checkoutPayment === "tarjeta") { payload.paymentDetails = { card: { provider: cardGateway, cardholderName: cardPayment.cardholderName, cardToken, last4, brand, installments: parseInt(cardPayment.installments) || 1, ...(cardGateway === "wompi" ? { acceptanceToken: wompiConfig?.acceptanceToken ?? "", acceptPersonalAuth: wompiConfig?.personalDataAuthToken ?? "" } : {}) } }; }
       if (checkoutPayment === "pse") { payload.paymentDetails = { pse: psePayment }; }
       if (checkoutPayment === "nequi") { payload.paymentDetails = { nequi: nequiPayment }; }
 
@@ -317,7 +318,7 @@ const [landingLoading, setLandingLoading] = useState(true);
       <CartDrawer cartOpen={cartOpen} cartItems={cartItems} cartCount={cartCount} cartTotal={cartTotal} onClose={() => setCartOpen(false)} onAdd={addToCart} onRemove={removeFromCart} onDelete={deleteFromCart} onCheckout={() => { setCartOpen(false); if (customer) { setCheckoutStep(1); setCheckoutOpen(true); return; } openModal("choice"); }} fmt={fmt} />
       <ProductDetailModal product={selectedProduct} cartItems={cartItems} onAdd={addToCart} onRemove={removeFromCart} onClose={() => setSelectedProduct(null)} />
       <AuthModal loginModal={loginModal} modalView={modalView} authError={authError} authLoading={authLoading} cartItems={cartItems} socialLogin={socialLogin} onClose={closeModal} onSetModalView={setModalView} onLoginSubmit={handleLoginSubmit} onRegisterSubmit={handleRegisterSubmit} onSocialSuccess={handleSocialSuccess} onSocialError={handleSocialError} />
-      <CheckoutModal checkoutOpen={checkoutOpen} checkoutStep={checkoutStep} cartItems={cartItems} cartTotal={cartTotal} checkoutAddress={checkoutAddress} checkoutShipping={checkoutShipping} checkoutPayment={checkoutPayment} checkoutLoading={checkoutLoading} checkoutError={checkoutError} cardPayment={cardPayment} wompiAcceptance={wompiAcceptance} wompiConfig={wompiConfig} psePayment={psePayment} nequiPayment={nequiPayment} lastOrderId={lastOrderId} onClose={() => setCheckoutOpen(false)} onSetCheckoutStep={setCheckoutStep} onSetCheckoutAddress={setCheckoutAddress} onSetCheckoutShipping={setCheckoutShipping} onSetCheckoutPayment={setCheckoutPayment} onSetCardPayment={setCardPayment} onSetWompiAcceptance={setWompiAcceptance} onSetPsePayment={setPsePayment} onSetNequiPayment={setNequiPayment} onPlaceOrder={placeOrder} orderPending={orderPending} fmt={fmt} />
+      <CheckoutModal checkoutOpen={checkoutOpen} checkoutStep={checkoutStep} cartItems={cartItems} cartTotal={cartTotal} checkoutAddress={checkoutAddress} checkoutShipping={checkoutShipping} checkoutPayment={checkoutPayment} checkoutLoading={checkoutLoading} checkoutError={checkoutError} cardPayment={cardPayment} cardGateway={cardGateway} wompiAcceptance={wompiAcceptance} wompiConfig={wompiConfig} psePayment={psePayment} nequiPayment={nequiPayment} lastOrderId={lastOrderId} onClose={() => setCheckoutOpen(false)} onSetCheckoutStep={setCheckoutStep} onSetCheckoutAddress={setCheckoutAddress} onSetCheckoutShipping={setCheckoutShipping} onSetCheckoutPayment={setCheckoutPayment} onSetCardPayment={setCardPayment} onSetCardGateway={setCardGateway} onSetWompiAcceptance={setWompiAcceptance} onSetPsePayment={setPsePayment} onSetNequiPayment={setNequiPayment} onPlaceOrder={placeOrder} orderPending={orderPending} fmt={fmt} />
       <OrdersPanel ordersOpen={ordersOpen} orders={orders} selectedOrder={selectedOrder} onClose={() => { setOrdersOpen(false); setSelectedOrder(null); }} onSelectOrder={setSelectedOrder} onGoToCatalog={openCatalog} fmt={fmt} />
     </div>
   );
