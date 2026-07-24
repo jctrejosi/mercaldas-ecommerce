@@ -12,6 +12,7 @@ import {
 } from 'drizzle-orm';
 import { DrizzleService } from '../../database/drizzle.service';
 import {
+  branches,
   brands,
   categories,
   media,
@@ -348,6 +349,32 @@ export class CatalogService {
     }
 
     return Array.from(uniqueProducts.values());
+  }
+
+  async getBranches() {
+    const rows = await this.drizzleService.db
+      .select({
+        id: branches.id,
+        name: branches.name,
+        address: branches.address,
+        city: branches.city,
+        phone: branches.phone,
+        email: branches.email,
+        schedule: branches.schedule,
+        location: branches.location,
+        isActive: branches.isActive,
+        priority: branches.priority,
+      })
+      .from(branches)
+      .where(
+        and(eq(branches.isActive, true), isNull(branches.deletedAt)),
+      )
+      .orderBy(asc(branches.priority));
+
+    return rows.map((row) => ({
+      ...row,
+      id: Number(row.id),
+    }));
   }
 
   private buildPriceRangeCondition(priceRange?: string) {

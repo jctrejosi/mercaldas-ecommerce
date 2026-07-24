@@ -1,4 +1,5 @@
 import type {
+  Branch,
   CatalogCategory,
   CatalogDataResponse,
   Product,
@@ -49,6 +50,10 @@ async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
 }
 
 export const catalogService = {
+  async getBranches(): Promise<Branch[]> {
+    return fetchJson<Branch[]>(`${API_BASE_URL}/catalog/branches`);
+  },
+
   async getFeaturedBrands(): Promise<Brand[]> {
     const brands = await fetchJson<Brand[]>(
       `${API_BASE_URL}/catalog/brands/featured`,

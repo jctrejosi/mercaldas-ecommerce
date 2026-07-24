@@ -4,7 +4,7 @@ import { useCustomerAuth } from "../hooks/useCustomerAuth";
 import { catalogService } from "../services/catalog.service";
 import { ordersService } from "../services/orders.service";
 import { cartService } from "../services/cart.service";
-import type { Brand, CartItem, CatalogCategory, Order, Product } from "./types";
+import type { Brand, Branch, CartItem, CatalogCategory, Order, Product } from "./types";
 import type { EpaycoConfigResponse, WompiConfigResponse } from "../services/orders.service";
 import { ProductDetailModal } from "./ProductDetailModal";
 import { CatalogPage } from "./Views/CatalogView";
@@ -73,6 +73,7 @@ export default function App() {
   const [landingLoading, setLandingLoading] = useState(true);
   const [dealProducts, setDealProducts] = useState<Product[]>([]);
   const [featuredBrands, setFeaturedBrands] = useState<Brand[]>([]);
+  const [landingBranches, setLandingBranches] = useState<Branch[]>([]);
 
   const { customer, loading: customerLoading, login, register, socialLogin } = useCustomerAuth();
   const [authError, setAuthError] = useState<string | null>(null);
@@ -82,6 +83,7 @@ export default function App() {
     void catalogService.getCategories().then(setLandingCategories).catch(() => {});
     void catalogService.getProducts({ onSale: true, sort: "descuento", limit: 8 }).then(setDealProducts).catch(() => {});
     void catalogService.getFeaturedBrands().then(setFeaturedBrands).catch(() => {});
+    void catalogService.getBranches().then(setLandingBranches).catch(() => {});
   }, []);
 
   const fetchLandingProducts = useCallback(async (tab: string) => {
@@ -174,6 +176,7 @@ export default function App() {
           onTabChange={setActiveTab} onAdd={addToCart} onRemove={removeFromCart}
           onProductClick={setSelectedProduct} onCategoryClick={openCatalog} onViewCatalog={openCatalog}
           featuredBrands={featuredBrands}
+          branches={landingBranches}
         />
       </main>
 

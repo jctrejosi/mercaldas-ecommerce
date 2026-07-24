@@ -640,22 +640,24 @@ export function Header({
       {/* Mobile dropdown */}
       {mobileMenuOpen && (
         <div className="md:hidden border-t border-border bg-white px-4 py-3 flex flex-col gap-1">
-          {["Inicio", "Categorías", "Promociones", "Marketplace", "Ayuda"].map(
-            (item) => (
-              <a
-                key={item}
-                href="#"
-                className="py-2.5 px-2 text-sm font-medium rounded-lg hover:bg-muted transition-colors border-b border-border last:border-0"
-                onClick={(e) => {
-                  e.preventDefault();
-                  if (item === "Inicio") onHome();
-                  setMobileMenuOpen(false);
-                }}
-              >
-                {item}
-              </a>
-            ),
-          )}
+          {(customer
+            ? ["Inicio", "Categorías", "Mi cuenta"]
+            : ["Inicio", "Categorías", "Promociones", "Marketplace", "Ayuda"]
+          ).map((item) => (
+            <a
+              key={item}
+              href="#"
+              className="py-2.5 px-2 text-sm font-medium rounded-lg hover:bg-muted transition-colors border-b border-border last:border-0"
+              onClick={(e) => {
+                e.preventDefault();
+                if (item === "Inicio") onHome();
+                if (item === "Mi cuenta" && onAccount) onAccount();
+                setMobileMenuOpen(false);
+              }}
+            >
+              {item}
+            </a>
+          ))}
         </div>
       )}
 
@@ -701,13 +703,15 @@ export function Header({
             )}
           </div>
 
-          {["Inicio", "Promociones", "Marketplace", "Ayuda"].map((item) => (
+          {(customer
+            ? ["Inicio", "Mi cuenta"]
+            : ["Inicio", "Promociones", "Marketplace", "Ayuda"]
+          ).map((item) => (
             <button
               key={item}
               onClick={() => {
-                if (item === "Inicio") {
-                  onHome();
-                }
+                if (item === "Inicio") onHome();
+                if (item === "Mi cuenta" && onAccount) onAccount();
               }}
               className="px-4 py-3 text-sm font-medium text-foreground transition-colors border-b-2 border-transparent hover:border-accent hover:text-accent"
             >

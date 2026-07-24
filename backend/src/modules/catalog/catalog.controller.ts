@@ -34,6 +34,14 @@ export class CatalogController {
   }
 
   @Public()
+  @Get('branches')
+  @ApiOperation({ summary: 'Obtener sucursales activas' })
+  @ApiResponse({ status: 200, description: 'Listado de sucursales' })
+  getBranches() {
+    return this.catalogService.getBranches();
+  }
+
+  @Public()
   @Get('brands/featured')
   @ApiOperation({ summary: 'Obtener marcas destacadas' })
   @ApiResponse({ status: 200, description: 'Listado de marcas destacadas' })

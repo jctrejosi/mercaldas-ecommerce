@@ -90,6 +90,19 @@ export interface Slide {
   accent: string;
 }
 
+export interface Branch {
+  id: number;
+  name: string;
+  address: string;
+  city: string;
+  phone: string;
+  email?: string;
+  schedule?: Record<string, string> | null;
+  location?: string;
+  priority?: number;
+  isActive?: boolean;
+}
+
 export interface Order {
   id: string;
   date: string;
