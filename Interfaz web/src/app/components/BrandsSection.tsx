@@ -1,20 +1,12 @@
 import { useRef } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
+import type { Brand } from "../types";
 
-const BRANDS = [
-  { name: "Alquería", color: "#E31B23", logo: "🥛" },
-  { name: "Alpina", color: "#005A9C", logo: "🧀" },
-  { name: "Ariel", color: "#0047BB", logo: "🫧" },
-  { name: "Colgate", color: "#E31B23", logo: "🪥" },
-  { name: "Nestlé", color: "#009FE3", logo: "☕" },
-  { name: "Juan Valdez", color: "#5B3427", logo: "☕" },
-  { name: "Huggies", color: "#FF6900", logo: "👶" },
-  { name: "Head & Shoulders", color: "#003087", logo: "💆" },
-  { name: "Protex", color: "#009B3A", logo: "🧼" },
-  { name: "Casillero del Diablo", color: "#8B0000", logo: "🍷" },
-];
+interface BrandsSectionProps {
+  brands: Brand[];
+}
 
-export function BrandsSection() {
+export function BrandsSection({ brands = [] }: BrandsSectionProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const scroll = (dir: number) => {
@@ -46,26 +38,34 @@ export function BrandsSection() {
           </div>
         </div>
 
-        <div
-          ref={scrollRef}
-          className="flex gap-4 overflow-x-auto pb-2"
-          style={{ scrollbarWidth: "none" }}
-        >
-          {BRANDS.map((brand) => (
-            <button
-              key={brand.name}
-              className="flex-shrink-0 flex flex-col items-center gap-3 group"
-            >
-              <div
-                className="w-20 h-20 md:w-24 md:h-24 rounded-2xl border-2 border-border flex items-center justify-center transition-all duration-200 group-hover:border-foreground group-hover:shadow-md bg-white"
-              >
-                <span className="text-3xl md:text-4xl select-none">{brand.logo}</span>
-              </div>
-              <span className="text-xs font-semibold text-center text-muted-foreground group-hover:text-foreground transition-colors" style={{ maxWidth: "80px" }}>
-                {brand.name}
-              </span>
-            </button>
-          ))}
+        <div ref={scrollRef} className="flex gap-4 overflow-x-auto pb-2" style={{ scrollbarWidth: "none" }}>
+          {brands.length === 0 ? (
+            <div className="flex gap-4">
+              {["Alquería", "Alpina", "Ariel", "Colgate", "Nestlé", "Juan Valdez", "Huggies", "Head & Shoulders", "Protex", "Casillero del Diablo"].map((name, i) => (
+                <div key={name} className="flex-shrink-0 flex flex-col items-center gap-3 group">
+                  <div className="w-20 h-20 md:w-24 md:h-24 rounded-2xl border-2 border-border flex items-center justify-center transition-all duration-200 group-hover:border-foreground group-hover:shadow-md bg-white">
+                    <span className="text-3xl md:text-4xl select-none opacity-60">{["🥛", "🧀", "🫧", "🪥", "☕", "☕", "👶", "💆", "🧼", "🍷"][i]}</span>
+                  </div>
+                  <span className="text-xs font-semibold text-center text-muted-foreground group-hover:text-foreground transition-colors" style={{ maxWidth: "80px" }}>{name}</span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            brands.map((brand) => (
+              <button key={brand.id} className="flex-shrink-0 flex flex-col items-center gap-3 group">
+                <div className="w-20 h-20 md:w-24 md:h-24 rounded-2xl border-2 border-border flex items-center justify-center transition-all duration-200 group-hover:border-foreground group-hover:shadow-md bg-white overflow-hidden">
+                  {brand.image ? (
+                    <img src={brand.image} alt={brand.name} className="w-full h-full object-cover" />
+                  ) : (
+                    <span className="text-3xl md:text-4xl select-none opacity-40">{brand.name.charAt(0)}</span>
+                  )}
+                </div>
+                <span className="text-xs font-semibold text-center text-muted-foreground group-hover:text-foreground transition-colors" style={{ maxWidth: "80px" }}>
+                  {brand.name}
+                </span>
+              </button>
+            ))
+          )}
         </div>
       </div>
     </section>

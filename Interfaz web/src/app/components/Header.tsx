@@ -670,7 +670,7 @@ export function Header({
               onClick={() => setCategoriesOpen(!categoriesOpen)}
             >
               <Menu className="w-4 h-4" />
-              Todas las categorías
+              Nuestros productos
               <ChevronDown
                 className={`w-3.5 h-3.5 transition-transform ${categoriesOpen ? "rotate-180" : ""}`}
               />

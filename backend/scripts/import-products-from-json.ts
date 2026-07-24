@@ -6,7 +6,7 @@ import 'dotenv/config';
 import fs from 'node:fs';
 import path from 'node:path';
 import { drizzle } from 'drizzle-orm/node-postgres';
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, eq, inArray, isNull } from 'drizzle-orm';
 import { Pool } from 'pg';
 import slugify from 'slugify';
 import * as schema from '../drizzle/schema';
@@ -227,33 +227,103 @@ async function ensureTaxRates() {
   }
 }
 
-async function ensureDefaultBrand(): Promise<number> {
-  const brandName = 'Sin marca';
-  const brandSlug = 'sin-marca';
+async function ensureBrands(): Promise<Map<string, number>> {
+  const brandMap = new Map<string, number>();
 
-  const existing = await db
+  // Ensure "Sin marca" fallback
+  const defaultSlug = 'sin-marca';
+  let [defaultBrand] = await db
     .select({ id: schema.brands.id })
     .from(schema.brands)
-    .where(eq(schema.brands.slug, brandSlug))
+    .where(eq(schema.brands.slug, defaultSlug))
     .limit(1);
 
-  if (existing.length > 0) {
-    return Number(existing[0].id);
+  if (!defaultBrand) {
+    const inserted = await db
+      .insert(schema.brands)
+      .values({
+        name: 'Sin marca',
+        slug: defaultSlug,
+        website: '',
+        description: 'Marca por defecto para productos importados',
+        country: 'CO',
+        isActive: true,
+      })
+      .returning({ id: schema.brands.id });
+    defaultBrand = inserted[0];
+  }
+  brandMap.set('Sin marca', Number(defaultBrand.id));
+
+  // Extract unique brand names from MARCA field (excluding empty)
+  const brandNames = [
+    ...new Set(
+      sourceProducts
+        .map((row) => normalizeText(row.MARCA))
+        .filter((name) => name.length > 0),
+    ),
+  ];
+
+  if (brandNames.length === 0) return brandMap;
+
+  // Count products per brand to determine featured ones
+  const brandCounts = new Map<string, number>();
+  for (const row of sourceProducts) {
+    const name = normalizeText(row.MARCA);
+    if (name) {
+      brandCounts.set(name, (brandCounts.get(name) ?? 0) + 1);
+    }
   }
 
-  const inserted = await db
-    .insert(schema.brands)
-    .values({
-      name: brandName,
-      slug: brandSlug,
-      website: '',
-      description: 'Marca por defecto para productos importados',
-      country: 'CO',
-      isActive: true,
-    })
-    .returning({ id: schema.brands.id });
+  // Sort by count descending, take top 10 as featured
+  const sortedBrands = [...brandCounts.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 10)
+    .map(([name]) => name);
+  const featuredSet = new Set(sortedBrands);
 
-  return Number(inserted[0].id);
+  // Get existing brands from DB
+  const existingBrands = await db
+    .select({ id: schema.brands.id, name: schema.brands.name })
+    .from(schema.brands)
+    .where(inArray(schema.brands.name, brandNames));
+
+  for (const b of existingBrands) {
+    brandMap.set(b.name, Number(b.id));
+  }
+
+  // Create missing brands
+  const missingNames = brandNames.filter((name) => !brandMap.has(name));
+  for (const name of missingNames) {
+    const slug = buildSlug([name]);
+    const isFeatured = featuredSet.has(name);
+    const inserted = await db
+      .insert(schema.brands)
+      .values({
+        name,
+        slug,
+        website: '',
+        description: '',
+        country: 'CO',
+        isFeatured,
+        isActive: true,
+      })
+      .returning({ id: schema.brands.id });
+    brandMap.set(name, Number(inserted[0].id));
+  }
+
+  // Update featured flag for existing brands
+  for (const name of featuredSet) {
+    const bid = brandMap.get(name);
+    if (bid && name !== 'Sin marca') {
+      await db
+        .update(schema.brands)
+        .set({ isFeatured: true })
+        .where(eq(schema.brands.id, BigInt(bid)));
+    }
+  }
+
+  console.log(`🏷️ ${brandMap.size} marcas aseguradas (${featuredSet.size} destacadas)`);
+  return brandMap;
 }
 
 async function ensureBranchId(): Promise<number> {
@@ -605,7 +675,7 @@ async function importProducts() {
   );
 
   await ensureTaxRates();
-  const defaultBrandId = await ensureDefaultBrand();
+  const brandMap = await ensureBrands();
   const branchId = await ensureBranchId();
   const adminUserId = await ensureAdminUserId();
   await ensureProductTypes(sourceProducts);
@@ -625,6 +695,9 @@ async function importProducts() {
     const comparePrice =
       comparePriceNumber > 0 ? comparePriceNumber.toFixed(2) : null;
     const manufacturer = normalizeText(row.MARCA) || null;
+    const brandId = manufacturer && brandMap.has(manufacturer)
+      ? brandMap.get(manufacturer)!
+      : brandMap.get('Sin marca')!;
     const productSlug = buildSlug([nombre, codigo.slice(-6)]);
     const productTypeCode = normalizeText(row.CATEGORIA) || null;
     const productTypeId = productTypeCode
@@ -668,7 +741,7 @@ async function importProducts() {
         .set({
           name: nombre,
           slug: productSlug,
-          brandId: defaultBrandId,
+          brandId,
           externalId: codigo,
           manufacturer,
           isActive: true,
@@ -690,7 +763,7 @@ async function importProducts() {
       const insertedProduct = await db
         .insert(schema.products)
         .values({
-          brandId: defaultBrandId,
+          brandId,
           externalId: codigo,
           name: nombre,
           slug: productSlug,

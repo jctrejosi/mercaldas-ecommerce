@@ -1,3 +1,12 @@
+export interface Brand {
+  id: number;
+  name: string;
+  slug: string;
+  description?: string | null;
+  image?: string | null;
+  website?: string | null;
+}
+
 export interface CartItem extends Product {
   quantity: number;
 }

@@ -1,4 +1,4 @@
-import type { CartItem, CatalogCategory, Product } from "../../types";
+import type { Brand, CartItem, CatalogCategory, Product } from "../../types";
 import { HeroSection } from "../../components/HeroSection";
 import { AdvertisingBanner } from "../../components/AdvertisingBanner";
 import { QuickCategoriesSection } from "../../components/QuickCategoriesSection";
@@ -23,6 +23,7 @@ interface LandingViewProps {
   onProductClick: (product: Product) => void;
   onCategoryClick: (categoryId: number) => void;
   onViewCatalog: () => void;
+  featuredBrands: Brand[];
 }
 
 export function LandingView({
@@ -38,6 +39,7 @@ export function LandingView({
   onProductClick,
   onCategoryClick,
   onViewCatalog,
+  featuredBrands,
 }: LandingViewProps) {
   return (
     <>
@@ -68,7 +70,7 @@ export function LandingView({
         onProductClick={onProductClick}
         dealProducts={dealProducts}
       />
-      <BrandsSection />
+      <BrandsSection brands={featuredBrands} />
       <SucursalesSection />
       <BenefitsSection />
       <NewsletterSection />

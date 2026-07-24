@@ -32,4 +32,12 @@ export class CatalogController {
   getProducts(@Body() query: CatalogProductsQueryDto) {
     return this.catalogService.getProducts(query);
   }
+
+  @Public()
+  @Get('brands/featured')
+  @ApiOperation({ summary: 'Obtener marcas destacadas' })
+  @ApiResponse({ status: 200, description: 'Listado de marcas destacadas' })
+  getFeaturedBrands() {
+    return this.catalogService.getFeaturedBrands();
+  }
 }

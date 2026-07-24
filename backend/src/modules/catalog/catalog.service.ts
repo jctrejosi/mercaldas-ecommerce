@@ -12,6 +12,7 @@ import {
 } from 'drizzle-orm';
 import { DrizzleService } from '../../database/drizzle.service';
 import {
+  brands,
   categories,
   media,
   productCategories,
@@ -139,6 +140,27 @@ export class CatalogService {
     return rows.map((row) => ({
       categoryId: Number(row.categoryId),
       count: Number(row.count),
+    }));
+  }
+
+  async getFeaturedBrands() {
+    const rows = await this.drizzleService.db
+      .select({
+        id: brands.id,
+        name: brands.name,
+        slug: brands.slug,
+        description: brands.description,
+        image: media.path,
+        website: brands.website,
+      })
+      .from(brands)
+      .leftJoin(media, eq(brands.logoMediaId, media.id))
+      .where(and(eq(brands.isActive, true), eq(brands.isFeatured, true)))
+      .orderBy(asc(brands.name));
+
+    return rows.map((row) => ({
+      ...row,
+      id: Number(row.id),
     }));
   }
 

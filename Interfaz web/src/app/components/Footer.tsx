@@ -25,8 +25,7 @@ export function Footer({ categories, onCategoryClick }: FooterProps) {
   // Tomar las primeras 6 categorías raíz para el footer
   const footerCategories = categories
     .filter((c) => !c.parentId)
-    .slice(0, 6)
-    .map((c) => c.name);
+    .slice(0, 6);
 
   return (
     <footer className="pt-12 pb-6" style={{ background: "#111827" }}>
@@ -64,13 +63,13 @@ export function Footer({ categories, onCategoryClick }: FooterProps) {
             </h4>
             <ul className="space-y-2">
               {footerCategories.map((c) => (
-                <li key={c}>
+                <li key={c.id}>
                   <button
-                    onClick={() => onCategoryClick(c)}
+                    onClick={() => onCategoryClick(c.name)}
                     className="text-xs hover:text-white transition-colors text-left"
                     style={{ color: "rgba(255,255,255,0.5)" }}
                   >
-                    {c}
+                    {c.name}
                   </button>
                 </li>
               ))}
