@@ -198,6 +198,39 @@ export class CatalogService {
     }));
   }
 
+  async getProductTypes() {
+    const rows = await this.drizzleService.db
+      .select({
+        id: productTypes.id,
+        code: productTypes.code,
+        name: productTypes.name,
+        description: productTypes.description,
+        count: sql<number>`count(DISTINCT ${products.id})`,
+      })
+      .from(productTypes)
+      .innerJoin(productTypeAssignments, eq(productTypeAssignments.productTypeId, productTypes.id))
+      .innerJoin(products, eq(products.id, productTypeAssignments.productId))
+      .innerJoin(productVariants, eq(productVariants.productId, products.id))
+      .where(
+        and(
+          eq(productTypes.isActive, true),
+          eq(products.isActive, true),
+          isNull(products.deletedAt),
+          eq(productVariants.isActive, true),
+          isNull(productVariants.deletedAt),
+        ),
+      )
+      .groupBy(productTypes.id, productTypes.code, productTypes.name, productTypes.description)
+      .having(sql`count(DISTINCT ${products.id}) > 0`)
+      .orderBy(asc(productTypes.name));
+
+    return rows.map((row) => ({
+      ...row,
+      id: Number(row.id),
+      count: Number(row.count),
+    }));
+  }
+
   async getProducts(
     query: CatalogProductsQueryDto,
   ): Promise<CatalogProductResponse[]> {
@@ -309,6 +342,9 @@ export class CatalogService {
             : undefined,
           query.brandId
             ? eq(products.brandId, query.brandId)
+            : undefined,
+          query.productTypeCode
+            ? eq(productTypes.code, query.productTypeCode)
             : undefined,
           search
             ? or(

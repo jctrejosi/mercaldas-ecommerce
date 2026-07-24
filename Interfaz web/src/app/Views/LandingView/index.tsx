@@ -18,6 +18,7 @@ interface LandingViewProps {
   dealProducts: Product[];
   cartItems: CartItem[];
   branches: Branch[];
+  productTypes: { id: number; code: string; name: string; count: number }[];
   onTabChange: (tab: string) => void;
   onAdd: (product: Product, quantity?: number) => void;
   onRemove: (id: number) => void;
@@ -25,6 +26,7 @@ interface LandingViewProps {
   onCategoryClick: (categoryId: number) => void;
   onViewCatalog: () => void;
   onBrandClick: (brandId: number) => void;
+  onProductTypeClick: (code: string) => void;
   featuredBrands: Brand[];
 }
 
@@ -44,14 +46,16 @@ export function LandingView({
   featuredBrands,
   branches,
   onBrandClick,
+  productTypes,
+  onProductTypeClick,
 }: LandingViewProps) {
   return (
     <>
       <HeroSection />
 
       <QuickCategoriesSection
-        categories={categories}
-        onCategoryClick={onCategoryClick}
+        productTypes={productTypes}
+        onProductTypeClick={onProductTypeClick}
         onViewAll={onViewCatalog}
       />
       <PromoBanner />

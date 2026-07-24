@@ -76,10 +76,11 @@ export default function App() {
   const [dealProducts, setDealProducts] = useState<Product[]>([]);
   const [featuredBrands, setFeaturedBrands] = useState<Brand[]>([]);
   const [landingBranches, setLandingBranches] = useState<Branch[]>([]);
+  const [landingProductTypes, setLandingProductTypes] = useState<{ id: number; code: string; name: string; count: number }[]>([]);
   const [apiError, setApiError] = useState<number | null>(null);
   const [healthChecked, setHealthChecked] = useState(false);
 
-  // Detectar si el backend está disponible antes de renderizar la app
+  // Detectar si el backend esta disponible antes de renderizar la app
   useEffect(() => {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 5000);
@@ -107,6 +108,7 @@ export default function App() {
     void catalogService.getProducts({ onSale: true, sort: "descuento", limit: 8 }).then(setDealProducts).catch(() => {});
     void catalogService.getFeaturedBrands().then(setFeaturedBrands).catch(() => {});
     void catalogService.getBranches().then(setLandingBranches).catch(() => {});
+    void catalogService.getProductTypes().then(setLandingProductTypes).catch(() => {});
   }, []);
 
   const fetchLandingProducts = useCallback(async (tab: string) => {
@@ -159,9 +161,10 @@ export default function App() {
   const cartCount = cartItems.reduce((s, c) => s + c.quantity, 0);
   const handleCategoryClick = (n: string) => { setCatalogSearch(n); setCatalogBrand(null); setCurrentView("catalog"); navigate("/catalog"); window.scrollTo({ top: 0, behavior: "smooth" }); };
   const handleBrandClick = (brandId: number) => { setCatalogBrand(brandId); setCatalogCategory([]); setCatalogSearch(""); setCurrentView("catalog"); navigate("/catalog"); window.scrollTo({ top: 0, behavior: "smooth" }); };
+  const handleProductTypeClick = (code: string) => { setCurrentView("catalog"); navigate("/catalog"); window.scrollTo({ top: 0, behavior: "smooth" }); };
 
   const placeOrder = async () => {
-    if (!customer) { setCheckoutError("Debes iniciar sesión"); return; }
+    if (!customer) { setCheckoutError("Debes iniciar sesion"); return; }
     try { setCheckoutLoading(true); setCheckoutError(null); const response = await ordersService.checkout({ items: cartItems.map(i => ({ productId: i.id, quantity: i.quantity })), address: { name: checkoutAddress.name, phone: checkoutAddress.phone, address: checkoutAddress.address, city: checkoutAddress.city, notes: checkoutAddress.notes }, shippingType: checkoutShipping, paymentMethod: checkoutPayment }); const o: Order = { id: response.referenceCode, date: new Date().toLocaleDateString("es-CO", { day: "2-digit", month: "long", year: "numeric" }), items: [...cartItems], total: response.grandTotal, shipping: response.shippingCost, address: `${response.address.address}, ${response.address.city}`, paymentMethod: response.paymentMethod, status: "preparando" }; setOrders(prev => [o, ...prev]); setLastOrderId(response.referenceCode); setCartItems([]); setCheckoutStep(4); }
     catch (err) { setCheckoutError(err instanceof Error ? err.message : "Error"); }
     finally { setCheckoutLoading(false); }
@@ -183,7 +186,7 @@ export default function App() {
     fmt,
   };
 
-  // Health check — must be AFTER all hooks
+  // Health check -- must be AFTER all hooks
   if (!healthChecked) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-white">
@@ -224,6 +227,8 @@ export default function App() {
           featuredBrands={featuredBrands}
           branches={landingBranches}
           onBrandClick={handleBrandClick}
+          productTypes={landingProductTypes}
+          onProductTypeClick={handleProductTypeClick}
         />
       </main>
 

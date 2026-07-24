@@ -56,4 +56,12 @@ export class CatalogController {
   getCatalogBrands() {
     return this.catalogService.getCatalogBrands();
   }
+
+  @Public()
+  @Get('product-types')
+  @ApiOperation({ summary: 'Obtener tipos de producto con conteo' })
+  @ApiResponse({ status: 200, description: 'Listado de tipos de producto' })
+  getProductTypes() {
+    return this.catalogService.getProductTypes();
+  }
 }

@@ -71,6 +71,10 @@ export class CatalogProductsQueryDto {
   search?: string;
 
   @IsOptional()
+  @IsString()
+  productTypeCode?: string;
+
+  @IsOptional()
   @Transform(({ value }) => {
     if (value === undefined || value === null || value === '') {
       return undefined;
