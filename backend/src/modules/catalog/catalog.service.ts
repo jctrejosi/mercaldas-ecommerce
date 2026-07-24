@@ -166,44 +166,29 @@ export class CatalogService {
   }
 
   async getCatalogBrands() {
-    const countSub = this.drizzleService.db
-      .select({
-        brandId: products.brandId,
-        count: sql<number>`count(DISTINCT ${products.id})`,
-      })
-      .from(products)
-      .innerJoin(productVariants, eq(productVariants.productId, products.id))
-      .innerJoin(productCategories, eq(productCategories.productId, products.id))
-      .innerJoin(categories, eq(categories.id, productCategories.categoryId))
-      .where(
-        and(
-          eq(products.isActive, true),
-          isNull(products.deletedAt),
-          eq(productVariants.isActive, true),
-          isNull(productVariants.deletedAt),
-          eq(categories.isActive, true),
-          isNull(categories.deletedAt),
-        ),
-      )
-      .groupBy(products.brandId)
-      .as('brand_counts');
-
     const rows = await this.drizzleService.db
       .select({
         id: brands.id,
         name: brands.name,
         slug: brands.slug,
-        count: sql<number>`COALESCE(${countSub.count}, 0)`,
+        count: sql<number>`count(DISTINCT ${products.id})`,
       })
       .from(brands)
-      .leftJoin(countSub, eq(countSub.brandId, brands.id))
+      .innerJoin(products, eq(products.brandId, brands.id))
+      .innerJoin(productVariants, eq(productVariants.productId, products.id))
+      .leftJoin(productCategories, eq(productCategories.productId, products.id))
+      .leftJoin(categories, eq(categories.id, productCategories.categoryId))
       .where(
         and(
           eq(brands.isActive, true),
           isNull(brands.deletedAt),
-          sql`COALESCE(${countSub.count}, 0) > 0`,
+          eq(products.isActive, true),
+          isNull(products.deletedAt),
+          eq(productVariants.isActive, true),
+          isNull(productVariants.deletedAt),
         ),
       )
+      .groupBy(brands.id, brands.name, brands.slug)
       .orderBy(asc(brands.name));
 
     return rows.map((row) => ({
@@ -290,11 +275,11 @@ export class CatalogService {
       })
       .from(products)
       .innerJoin(productVariants, eq(productVariants.productId, products.id))
-      .innerJoin(
+      .leftJoin(
         productCategories,
         eq(productCategories.productId, products.id),
       )
-      .innerJoin(categories, eq(categories.id, productCategories.categoryId))
+      .leftJoin(categories, eq(categories.id, productCategories.categoryId))
       .leftJoin(
         productTypeAssignments,
         eq(productTypeAssignments.productId, products.id),
@@ -314,8 +299,6 @@ export class CatalogService {
           isNull(products.deletedAt),
           eq(productVariants.isActive, true),
           isNull(productVariants.deletedAt),
-          eq(categories.isActive, true),
-          isNull(categories.deletedAt),
           allowedCategoryBigIntIds.length > 0
             ? inArray(categories.id, allowedCategoryBigIntIds)
             : normalizedCategories.length > 0 || normalizedCategoryIds.length > 0
@@ -331,7 +314,6 @@ export class CatalogService {
             ? or(
                 ilike(products.name, `%${search}%`),
                 ilike(products.description, `%${search}%`),
-                ilike(categories.name, `%${search}%`),
               )
             : undefined,
           this.buildPriceRangeCondition(query.priceRange),
@@ -389,8 +371,8 @@ export class CatalogService {
         ...(originalPrice ? { originalPrice } : {}),
         image: row.image,
         images,
-        category: row.categoryName,
-        categoryId: Number(row.categoryId),
+        category: row.categoryName ?? '',
+        categoryId: row.categoryId ? Number(row.categoryId) : 0,
         productTypeCode: row.productTypeCode,
         productTypeName: row.productTypeName,
         isActive: row.isActive,

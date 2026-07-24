@@ -42,6 +42,7 @@ export function useCatalog(filters?: CatalogProductsQuery) {
 
   // Load products when filters change
   useEffect(() => {
+    console.log("[useCatalog] Effect firing with brandId:", filters?.brandId);
     let mounted = true;
 
     const loadProducts = async () => {
@@ -78,6 +79,7 @@ export function useCatalog(filters?: CatalogProductsQuery) {
     filters?.priceRange,
     filters?.sort,
     filters?.search,
+    filters?.brandId,
     filters?.limit,
   ]);
 

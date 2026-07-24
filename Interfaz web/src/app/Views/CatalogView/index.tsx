@@ -55,7 +55,7 @@ export function CatalogPage({
   const [brands, setBrands] = useState<Brand[]>([]);
 
   useEffect(() => {
-    catalogService.getCatalogBrands().then(setBrands).catch(() => {});
+    catalogService.getFeaturedBrands().then(setBrands).catch(() => {});
   }, []);
   const PAGE_SIZE = 20;
 
