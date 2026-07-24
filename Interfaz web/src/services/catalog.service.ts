@@ -1,4 +1,5 @@
 import type {
+  Brand,
   Branch,
   CatalogCategory,
   CatalogDataResponse,
@@ -10,6 +11,7 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:3000";
 export type CatalogProductsQuery = {
   categories?: number[];
   categoryIds?: number[];
+  brandId?: number;
   productTypeCode?: string;
   onSale?: boolean;
   priceRange?: string;
@@ -23,6 +25,7 @@ function buildProductsPayload(params?: CatalogProductsQuery) {
   return {
     categories: params?.categories?.length ? params.categories : undefined,
     categoryIds: params?.categoryIds?.length ? params.categoryIds : undefined,
+    brandId: params?.brandId || undefined,
     productTypeCode: params?.productTypeCode || undefined,
     onSale: params?.onSale || undefined,
     priceRange:
@@ -60,6 +63,13 @@ export const catalogService = {
     );
     return brands.map((brand) => ({ ...brand }));
   },
+
+  async getCatalogBrands(): Promise<(Brand & { count: number })[]> {
+    return fetchJson<(Brand & { count: number })[]>(
+      `${API_BASE_URL}/catalog/brands`,
+    );
+  },
+
   async getCatalogData(
     params?: CatalogProductsQuery,
   ): Promise<CatalogDataResponse> {

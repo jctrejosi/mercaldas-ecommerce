@@ -78,6 +78,16 @@ export class CatalogProductsQueryDto {
     return Number(value);
   })
   @IsNumber()
+  brandId?: number;
+
+  @IsOptional()
+  @Transform(({ value }) => {
+    if (value === undefined || value === null || value === '') {
+      return undefined;
+    }
+    return Number(value);
+  })
+  @IsNumber()
   limit?: number;
 
   @IsOptional()

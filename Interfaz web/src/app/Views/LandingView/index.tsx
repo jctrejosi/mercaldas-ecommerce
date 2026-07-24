@@ -24,6 +24,7 @@ interface LandingViewProps {
   onProductClick: (product: Product) => void;
   onCategoryClick: (categoryId: number) => void;
   onViewCatalog: () => void;
+  onBrandClick: (brandId: number) => void;
   featuredBrands: Brand[];
 }
 
@@ -42,6 +43,7 @@ export function LandingView({
   onViewCatalog,
   featuredBrands,
   branches,
+  onBrandClick,
 }: LandingViewProps) {
   return (
     <>
@@ -72,7 +74,7 @@ export function LandingView({
         onProductClick={onProductClick}
         dealProducts={dealProducts}
       />
-      <BrandsSection brands={featuredBrands} />
+      <BrandsSection brands={featuredBrands} onBrandClick={onBrandClick} />
       <SucursalesSection branches={branches} />
       <BenefitsSection />
       <NewsletterSection />

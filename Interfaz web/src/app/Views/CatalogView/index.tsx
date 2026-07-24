@@ -5,7 +5,7 @@ import { catalogService } from "../../../services/catalog.service";
 import { InfiniteScrollTrigger } from "./InfiniteScrollTrigger";
 import { ProductCard } from "./ProductCard";
 import { SkeletonCard } from "./SkeletonCard";
-import type { CatalogCategory, CatalogPageProps, Product } from "../../types";
+import type { Brand, CatalogCategory, CatalogPageProps, Product } from "../../types";
 
 const PRICE_RANGES = [
   { id: "all", label: "Todos los precios" },
@@ -42,6 +42,8 @@ export function CatalogPage({
   setCatalogSort,
   catalogSearch,
   setCatalogSearch,
+  catalogBrand,
+  setCatalogBrand,
   mobileFiltersOpen,
   setMobileFiltersOpen,
 }: CatalogPageProps) {
@@ -50,6 +52,11 @@ export function CatalogPage({
   const [hasMore, setHasMore] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [searchInput, setSearchInput] = useState(catalogSearch);
+  const [brands, setBrands] = useState<Brand[]>([]);
+
+  useEffect(() => {
+    catalogService.getCatalogBrands().then(setBrands).catch(() => {});
+  }, []);
   const PAGE_SIZE = 20;
 
   const {
@@ -62,6 +69,7 @@ export function CatalogPage({
     priceRange: catalogPriceRange,
     sort: catalogSort,
     search: catalogSearch,
+    brandId: catalogBrand ?? undefined,
     limit: PAGE_SIZE,
     offset,
   });
@@ -82,6 +90,7 @@ export function CatalogPage({
     catalogPriceRange,
     catalogSort,
     catalogSearch,
+    catalogBrand,
   ]);
 
   // Debounce search input
@@ -172,13 +181,15 @@ export function CatalogPage({
   const activeFilterCount =
     catalogCategory.length +
     (catalogOnSale ? 1 : 0) +
-    (catalogPriceRange !== "all" ? 1 : 0);
+    (catalogPriceRange !== "all" ? 1 : 0) +
+    (catalogBrand ? 1 : 0);
 
   const clearAll = () => {
     setCatalogCategory([]);
     setCatalogOnSale(false);
     setCatalogPriceRange("all");
     setCatalogSearch("");
+    setCatalogBrand(null);
   };
 
   const SidebarContent = () => (
@@ -401,6 +412,49 @@ export function CatalogPage({
         </div>
       </div>
 
+      {/* Brands */}
+      {brands.length > 0 && (
+        <div className="border-t border-border pt-5">
+          <h3 className="font-bold text-sm text-foreground mb-3">Marcas</h3>
+          <div className="space-y-1.5">
+            {brands.map((brand) => {
+              const checked = catalogBrand === brand.id;
+              return (
+                <label
+                  key={brand.id}
+                  className="flex items-center gap-2.5 py-1 px-2 rounded-lg cursor-pointer hover:bg-muted transition-colors group"
+                >
+                  <div
+                    className="w-5 h-5 rounded border-2 flex items-center justify-center flex-shrink-0 transition-all"
+                    style={{
+                      borderColor: checked ? "#1A1A2E" : "#D1D5DB",
+                      background: checked ? "#1A1A2E" : "white",
+                    }}
+                    onClick={() => setCatalogBrand(checked ? null : brand.id)}
+                  >
+                    {checked && (
+                      <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                      </svg>
+                    )}
+                  </div>
+                  <span
+                    className="text-sm flex-1 transition-colors"
+                    style={{
+                      color: checked ? "#1A1A2E" : "#6B7280",
+                      fontWeight: checked ? 600 : 400,
+                    }}
+                    onClick={() => setCatalogBrand(checked ? null : brand.id)}
+                  >
+                    {brand.name}
+                  </span>
+                </label>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* On sale */}
       <div className="border-t border-border pt-5">
         <label className="flex items-center justify-between cursor-pointer group">
@@ -536,7 +590,8 @@ export function CatalogPage({
           {(catalogCategory.length > 0 ||
             catalogOnSale ||
             catalogPriceRange !== "all" ||
-            catalogSearch) && (
+            catalogSearch ||
+            catalogBrand) && (
             <div className="flex flex-wrap gap-1.5 mb-3">
               {catalogCategory.map((cat) => (
                 <span
@@ -571,6 +626,17 @@ export function CatalogPage({
                   {PRICE_RANGES.find((r) => r.id === catalogPriceRange)?.label}
                   <button
                     onClick={() => setCatalogPriceRange("all")}
+                    className="hover:opacity-70 ml-0.5"
+                  >
+                    <X className="w-2.5 h-2.5" />
+                  </button>
+                </span>
+              )}
+              {catalogBrand && (
+                <span className="flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold border border-border text-muted-foreground">
+                  Marca #{catalogBrand}
+                  <button
+                    onClick={() => setCatalogBrand(null)}
                     className="hover:opacity-70 ml-0.5"
                   >
                     <X className="w-2.5 h-2.5" />

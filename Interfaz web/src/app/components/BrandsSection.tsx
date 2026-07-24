@@ -4,9 +4,10 @@ import type { Brand } from "../types";
 
 interface BrandsSectionProps {
   brands: Brand[];
+  onBrandClick?: (brandId: number) => void;
 }
 
-export function BrandsSection({ brands = [] }: BrandsSectionProps) {
+export function BrandsSection({ brands = [], onBrandClick }: BrandsSectionProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const scroll = (dir: number) => {
@@ -52,7 +53,7 @@ export function BrandsSection({ brands = [] }: BrandsSectionProps) {
             </div>
           ) : (
             brands.map((brand) => (
-              <button key={brand.id} className="flex-shrink-0 flex flex-col items-center gap-3 group">
+              <button key={brand.id} onClick={() => onBrandClick?.(brand.id)} className="flex-shrink-0 flex flex-col items-center gap-3 group">
                 <div className="w-20 h-20 md:w-24 md:h-24 rounded-2xl border-2 border-border flex items-center justify-center transition-all duration-200 group-hover:border-foreground group-hover:shadow-md bg-white overflow-hidden">
                   {brand.image ? (
                     <img src={brand.image} alt={brand.name} className="w-full h-full object-cover" />

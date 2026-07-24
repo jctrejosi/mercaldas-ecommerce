@@ -28,6 +28,8 @@ export interface CatalogPageProps {
   setCatalogSort: (v: string) => void;
   catalogSearch: string;
   setCatalogSearch: (v: string) => void;
+  catalogBrand: number | null;
+  setCatalogBrand: (v: number | null) => void;
   catalogProductType: string;
   setCatalogProductType: (v: string) => void;
   mobileFiltersOpen: boolean;

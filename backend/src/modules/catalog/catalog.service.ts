@@ -165,6 +165,54 @@ export class CatalogService {
     }));
   }
 
+  async getCatalogBrands() {
+    const countSub = this.drizzleService.db
+      .select({
+        brandId: products.brandId,
+        count: sql<number>`count(DISTINCT ${products.id})`,
+      })
+      .from(products)
+      .innerJoin(productVariants, eq(productVariants.productId, products.id))
+      .innerJoin(productCategories, eq(productCategories.productId, products.id))
+      .innerJoin(categories, eq(categories.id, productCategories.categoryId))
+      .where(
+        and(
+          eq(products.isActive, true),
+          isNull(products.deletedAt),
+          eq(productVariants.isActive, true),
+          isNull(productVariants.deletedAt),
+          eq(categories.isActive, true),
+          isNull(categories.deletedAt),
+        ),
+      )
+      .groupBy(products.brandId)
+      .as('brand_counts');
+
+    const rows = await this.drizzleService.db
+      .select({
+        id: brands.id,
+        name: brands.name,
+        slug: brands.slug,
+        count: sql<number>`COALESCE(${countSub.count}, 0)`,
+      })
+      .from(brands)
+      .leftJoin(countSub, eq(countSub.brandId, brands.id))
+      .where(
+        and(
+          eq(brands.isActive, true),
+          isNull(brands.deletedAt),
+          sql`COALESCE(${countSub.count}, 0) > 0`,
+        ),
+      )
+      .orderBy(asc(brands.name));
+
+    return rows.map((row) => ({
+      ...row,
+      id: Number(row.id),
+      count: Number(row.count),
+    }));
+  }
+
   async getProducts(
     query: CatalogProductsQueryDto,
   ): Promise<CatalogProductResponse[]> {
@@ -275,6 +323,9 @@ export class CatalogService {
               : undefined,
           query.onSale
             ? sql`${productVariants.currentComparePrice} IS NOT NULL`
+            : undefined,
+          query.brandId
+            ? eq(products.brandId, query.brandId)
             : undefined,
           search
             ? or(

@@ -48,4 +48,12 @@ export class CatalogController {
   getFeaturedBrands() {
     return this.catalogService.getFeaturedBrands();
   }
+
+  @Public()
+  @Get('brands')
+  @ApiOperation({ summary: 'Obtener marcas del catálogo con conteo de productos' })
+  @ApiResponse({ status: 200, description: 'Listado de marcas con productos' })
+  getCatalogBrands() {
+    return this.catalogService.getCatalogBrands();
+  }
 }

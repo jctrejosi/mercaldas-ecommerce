@@ -47,6 +47,7 @@ export default function App() {
   const [catalogSort, setCatalogSort] = useState("relevancia");
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
   const [catalogSearch, setCatalogSearch] = useState("");
+  const [catalogBrand, setCatalogBrand] = useState<number | null>(null);
   const [loginModal, setLoginModal] = useState(false);
   const [modalView, setModalView] = useState<"choice" | "login" | "register">("choice");
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
@@ -151,12 +152,13 @@ export default function App() {
   const removeFromCart = (id: number) => setCartItems(prev => { const e = prev.find(c => c.id === id); return !e ? prev : e.quantity === 1 ? prev.filter(c => c.id !== id) : prev.map(c => c.id === id ? { ...c, quantity: c.quantity - 1 } : c); });
   const deleteFromCart = (id: number) => setCartItems(prev => prev.filter(c => c.id !== id));
 
-  const openCatalog = (categoryId?: number) => { if (categoryId) { setCatalogCategory([categoryId]); setCatalogSearch(""); } else setCatalogCategory([]); setCurrentView("catalog"); navigate("/catalog"); window.scrollTo({ top: 0, behavior: "smooth" }); };
+  const openCatalog = (categoryId?: number) => { setCatalogBrand(null); if (categoryId) { setCatalogCategory([categoryId]); setCatalogSearch(""); } else setCatalogCategory([]); setCurrentView("catalog"); navigate("/catalog"); window.scrollTo({ top: 0, behavior: "smooth" }); };
   const openModal = (v: "choice" | "login" | "register") => { if (customer) { setLoginModal(false); return; } setModalView(v); setLoginModal(true); };
   const closeModal = () => setLoginModal(false);
   const cartTotal = cartItems.reduce((s, c) => s + c.price * c.quantity, 0);
   const cartCount = cartItems.reduce((s, c) => s + c.quantity, 0);
-  const handleCategoryClick = (n: string) => { setCatalogSearch(n); setCurrentView("catalog"); navigate("/catalog"); window.scrollTo({ top: 0, behavior: "smooth" }); };
+  const handleCategoryClick = (n: string) => { setCatalogSearch(n); setCatalogBrand(null); setCurrentView("catalog"); navigate("/catalog"); window.scrollTo({ top: 0, behavior: "smooth" }); };
+  const handleBrandClick = (brandId: number) => { setCatalogBrand(brandId); setCatalogCategory([]); setCatalogSearch(""); setCurrentView("catalog"); navigate("/catalog"); window.scrollTo({ top: 0, behavior: "smooth" }); };
 
   const placeOrder = async () => {
     if (!customer) { setCheckoutError("Debes iniciar sesión"); return; }
@@ -207,7 +209,7 @@ export default function App() {
     <div className="min-h-screen bg-background" style={{ fontFamily: "'Inter', sans-serif" }}>
       <Header {...headerProps} />
 
-      {currentView === "catalog" && (<CatalogPage cartItems={cartItems} onAdd={addToCart} onRemove={removeFromCart} onBack={() => { navigate("/"); setCurrentView("home"); }} onProductClick={setSelectedProduct} onOpenCategory={openCatalog} catalogCategory={catalogCategory} setCatalogCategory={setCatalogCategory} catalogOnSale={catalogOnSale} setCatalogOnSale={setCatalogOnSale} catalogPriceRange={catalogPriceRange} setCatalogPriceRange={setCatalogPriceRange} catalogSort={catalogSort} setCatalogSort={setCatalogSort} catalogSearch={catalogSearch} setCatalogSearch={setCatalogSearch} mobileFiltersOpen={mobileFiltersOpen} setMobileFiltersOpen={setMobileFiltersOpen} />)}
+      {currentView === "catalog" && (<CatalogPage cartItems={cartItems} onAdd={addToCart} onRemove={removeFromCart} onBack={() => { navigate("/"); setCurrentView("home"); }} onProductClick={setSelectedProduct} onOpenCategory={openCatalog} catalogCategory={catalogCategory} setCatalogCategory={setCatalogCategory} catalogOnSale={catalogOnSale} setCatalogOnSale={setCatalogOnSale} catalogPriceRange={catalogPriceRange} setCatalogPriceRange={setCatalogPriceRange} catalogSort={catalogSort} setCatalogSort={setCatalogSort} catalogSearch={catalogSearch} setCatalogSearch={setCatalogSearch} catalogBrand={catalogBrand} setCatalogBrand={setCatalogBrand} mobileFiltersOpen={mobileFiltersOpen} setMobileFiltersOpen={setMobileFiltersOpen} />)}
 
       {currentView === "account" && (
         <UserAdminView appOrders={orders} cartItems={cartItems} onAdd={addToCart} onRemove={removeFromCart} onProductClick={setSelectedProduct} onBack={() => { setCurrentView("home"); navigate("/"); }} onViewCatalog={openCatalog} />
@@ -221,6 +223,7 @@ export default function App() {
           onProductClick={setSelectedProduct} onCategoryClick={openCatalog} onViewCatalog={openCatalog}
           featuredBrands={featuredBrands}
           branches={landingBranches}
+          onBrandClick={handleBrandClick}
         />
       </main>
 
