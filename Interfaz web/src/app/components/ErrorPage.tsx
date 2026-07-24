@@ -2,7 +2,7 @@ import { AlertTriangle, Frown, Home, RefreshCw, ServerCrash, ArrowLeft } from "l
 import { useEffect, useState } from "react";
 
 interface ErrorPageProps {
-  statusCode: 404 | 500 | 502 | 503;
+  statusCode: number;
   onRetry?: () => void;
   onGoHome: () => void;
 }

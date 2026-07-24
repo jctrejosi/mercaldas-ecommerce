@@ -455,10 +455,11 @@ export interface UserAdminViewProps {
   onRemove: (id: number) => void;
   onProductClick: (p: Product) => void;
   onBack: () => void;
+  onViewCatalog: () => void;
   initialSection?: AccountSection;
 }
 
-export function UserAdminView({ appOrders, cartItems, onAdd, onRemove, onProductClick, onBack, initialSection = "orders" }: AccountPageProps) {
+export function UserAdminView({ appOrders, cartItems, onAdd, onRemove, onProductClick, onBack, onViewCatalog, initialSection = "orders" }: UserAdminViewProps) {
   const [section, setSection] = useState<AccountSection>(initialSection);
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [trackingOrderId, setTrackingOrderId] = useState<string>("");

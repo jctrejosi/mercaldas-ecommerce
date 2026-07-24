@@ -39,6 +39,10 @@ function openMap(address: string) {
   window.open(`https://www.google.com/maps/search/?api=1&query=${encoded}`, "_blank");
 }
 
+function branchAddress(branch: Branch) {
+  return `${branch.name}, ${branch.address}, ${branch.city}, Colombia`;
+}
+
 const FALLBACK_IMAGES = [
   "https://images.unsplash.com/photo-1779370139349-c5a1d667cc9e?w=400&h=260&fit=crop&auto=format",
   "https://images.unsplash.com/photo-1759178388578-d3589d058c0f?w=400&h=260&fit=crop&auto=format",
@@ -75,7 +79,7 @@ export function SucursalesSection({ branches = [] }: SucursalesSectionProps) {
             </p>
           </div>
           <button
-            onClick={() => openMap(branches.map(b => `${b.name}, ${b.address}, ${b.city}`).join(" o "))}
+            onClick={() => openMap("Sucursales Mercaldas Manizales, Colombia")}
             className="hidden md:flex items-center gap-1 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors whitespace-nowrap mt-6 cursor-pointer"
           >
             Ver todas en el mapa <ChevronRight className="w-4 h-4" />
@@ -89,7 +93,7 @@ export function SucursalesSection({ branches = [] }: SucursalesSectionProps) {
               <div
                 key={s.id}
                 className="bg-card rounded-xl overflow-hidden border border-border hover:shadow-md transition-shadow group flex flex-col cursor-pointer"
-                onClick={() => openMap(`${s.name}, ${s.address}, ${s.city}`)}
+                onClick={() => openMap(branchAddress(s))}
               >
                 <div className="relative h-40 bg-muted overflow-hidden flex-shrink-0">
                   <img
@@ -138,7 +142,7 @@ export function SucursalesSection({ branches = [] }: SucursalesSectionProps) {
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      openMap(`${s.name}, ${s.address}, ${s.city}`);
+                      openMap(branchAddress(s));
                     }}
                     className="w-full py-2 rounded-lg text-xs font-bold transition-all hover:brightness-95 mt-auto"
                     style={{ background: "#FFF200", color: "#1A1A2E" }}

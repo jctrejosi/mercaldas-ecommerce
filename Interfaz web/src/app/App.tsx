@@ -15,6 +15,7 @@ import { Footer } from "./components/Footer";
 import { CartDrawer } from "./components/CartDrawer";
 import { AuthModal } from "./components/AuthModal";
 import { CheckoutModal } from "./components/CheckoutModal";
+import { ErrorPage } from "./components/ErrorPage";
 import { OrdersPanel } from "./components/OrdersPanel";
 
 const fmt = (n: number) => new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP", minimumFractionDigits: 0 }).format(n);
@@ -74,6 +75,27 @@ export default function App() {
   const [dealProducts, setDealProducts] = useState<Product[]>([]);
   const [featuredBrands, setFeaturedBrands] = useState<Brand[]>([]);
   const [landingBranches, setLandingBranches] = useState<Branch[]>([]);
+  const [apiError, setApiError] = useState<number | null>(null);
+  const [healthChecked, setHealthChecked] = useState(false);
+
+  // Detectar si el backend está disponible antes de renderizar la app
+  useEffect(() => {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000);
+    fetch(`${import.meta.env.VITE_API_URL || "http://localhost:3000"}/catalog/categories`, {
+      signal: controller.signal,
+    })
+      .then((res) => {
+        clearTimeout(timeout);
+        if (!res.ok) setApiError(res.status);
+      })
+      .catch(() => {
+        clearTimeout(timeout);
+        setApiError(502);
+      })
+      .finally(() => setHealthChecked(true));
+    return () => { clearTimeout(timeout); controller.abort(); };
+  }, []);
 
   const { customer, loading: customerLoading, login, register, socialLogin } = useCustomerAuth();
   const [authError, setAuthError] = useState<string | null>(null);
@@ -159,6 +181,28 @@ export default function App() {
     fmt,
   };
 
+  // Health check — must be AFTER all hooks
+  if (!healthChecked) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-white">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-8 h-8 border-2 border-foreground border-t-transparent rounded-full animate-spin" />
+          <p className="text-sm text-muted-foreground font-medium">Conectando...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (apiError) {
+    return (
+      <ErrorPage
+        statusCode={apiError >= 500 ? (apiError as 500 | 502 | 503) : 502}
+        onRetry={() => { setApiError(null); setHealthChecked(false); window.location.reload(); }}
+        onGoHome={() => { window.location.href = "/"; }}
+      />
+    );
+  }
+
   return (
     <div className="min-h-screen bg-background" style={{ fontFamily: "'Inter', sans-serif" }}>
       <Header {...headerProps} />
@@ -166,7 +210,7 @@ export default function App() {
       {currentView === "catalog" && (<CatalogPage cartItems={cartItems} onAdd={addToCart} onRemove={removeFromCart} onBack={() => { navigate("/"); setCurrentView("home"); }} onProductClick={setSelectedProduct} onOpenCategory={openCatalog} catalogCategory={catalogCategory} setCatalogCategory={setCatalogCategory} catalogOnSale={catalogOnSale} setCatalogOnSale={setCatalogOnSale} catalogPriceRange={catalogPriceRange} setCatalogPriceRange={setCatalogPriceRange} catalogSort={catalogSort} setCatalogSort={setCatalogSort} catalogSearch={catalogSearch} setCatalogSearch={setCatalogSearch} mobileFiltersOpen={mobileFiltersOpen} setMobileFiltersOpen={setMobileFiltersOpen} />)}
 
       {currentView === "account" && (
-        <UserAdminView appOrders={orders} cartItems={cartItems} onAdd={addToCart} onRemove={removeFromCart} onProductClick={setSelectedProduct} onBack={() => { setCurrentView("home"); navigate("/"); }} />
+        <UserAdminView appOrders={orders} cartItems={cartItems} onAdd={addToCart} onRemove={removeFromCart} onProductClick={setSelectedProduct} onBack={() => { setCurrentView("home"); navigate("/"); }} onViewCatalog={openCatalog} />
       )}
 
       <main className={currentView !== "home" ? "hidden" : ""}>
@@ -185,7 +229,7 @@ export default function App() {
       <ProductDetailModal product={selectedProduct} cartItems={cartItems} onAdd={addToCart} onRemove={removeFromCart} onClose={() => setSelectedProduct(null)} />
       <AuthModal loginModal={loginModal} modalView={modalView} authError={authError} authLoading={authLoading} cartItems={cartItems} socialLogin={socialLogin} onClose={closeModal} onSetModalView={setModalView} onLoginSubmit={handleLoginSubmit} onRegisterSubmit={handleRegisterSubmit} onSocialSuccess={handleSocialSuccess} onSocialError={handleSocialError} />
       <CheckoutModal checkoutOpen={checkoutOpen} checkoutStep={checkoutStep} cartItems={cartItems} cartTotal={cartTotal} checkoutAddress={checkoutAddress} checkoutShipping={checkoutShipping} checkoutPayment={checkoutPayment} checkoutLoading={checkoutLoading} checkoutError={checkoutError} cardPayment={cardPayment} cardGateway={cardGateway} wompiAcceptance={wompiAcceptance} wompiConfig={wompiConfig} psePayment={psePayment} nequiPayment={nequiPayment} lastOrderId={lastOrderId} onClose={() => setCheckoutOpen(false)} onSetCheckoutStep={setCheckoutStep} onSetCheckoutAddress={setCheckoutAddress} onSetCheckoutShipping={setCheckoutShipping} onSetCheckoutPayment={setCheckoutPayment} onSetCardPayment={setCardPayment} onSetCardGateway={setCardGateway} onSetWompiAcceptance={setWompiAcceptance} onSetPsePayment={setPsePayment} onSetNequiPayment={setNequiPayment} onPlaceOrder={placeOrder} fmt={fmt} />
-      <OrdersPanel ordersOpen={ordersOpen} orders={orders} selectedOrder={selectedOrder} onClose={() => { setOrdersOpen(false); setSelectedOrder(null); }} onSelectOrder={setSelectedOrder} fmt={fmt} />
+      <OrdersPanel ordersOpen={ordersOpen} orders={orders} selectedOrder={selectedOrder} onClose={() => { setOrdersOpen(false); setSelectedOrder(null); }} onSelectOrder={setSelectedOrder} onGoToCatalog={openCatalog} fmt={fmt} />
     </div>
   );
 }

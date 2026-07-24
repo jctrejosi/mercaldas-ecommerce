@@ -16,6 +16,7 @@ interface OrdersPanelProps {
   selectedOrder: Order | null;
   onClose: () => void;
   onSelectOrder: (order: Order | null) => void;
+  onGoToCatalog: () => void;
   fmt: (n: number) => string;
 }
 
@@ -25,6 +26,7 @@ export function OrdersPanel({
   selectedOrder,
   onClose,
   onSelectOrder,
+  onGoToCatalog,
   fmt,
 }: OrdersPanelProps) {
   if (!ordersOpen) return null;
@@ -81,7 +83,7 @@ export function OrdersPanel({
                 Cuando completes una compra, aparecerá aquí.
               </p>
               <button
-                onClick={onClose}
+                onClick={onGoToCatalog}
                 className="mt-2 px-6 py-3 rounded-xl font-bold text-sm"
                 style={{ background: "#FFF200", color: "#1A1A2E" }}
               >
