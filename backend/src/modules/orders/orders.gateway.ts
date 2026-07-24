@@ -40,9 +40,9 @@ export class OrdersGateway implements OnGatewayConnection, OnGatewayDisconnect {
     this.logger.log(`Client ${client.id} unsubscribed from ${room}`);
   }
 
-  notifyOrderStatus(orderId: string, status: string) {
+  notifyOrderStatus(orderId: string, status: string, reason?: string) {
     const room = `order:${orderId}`;
-    this.server.to(room).emit('order:status', { orderId, status });
-    this.logger.log(`Status update sent to ${room}: ${status}`);
+    this.server.to(room).emit('order:status', { orderId, status, reason: reason ?? null });
+    this.logger.log(`Status update sent to ${room}: ${status}${reason ? ` (${reason})` : ''}`);
   }
 }

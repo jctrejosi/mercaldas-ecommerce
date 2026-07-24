@@ -15,7 +15,7 @@ export class NotificationsService {
   ) {}
 
   async getForCustomer(customerId: number) {
-    return this.drizzleService.db
+    const rows = await this.drizzleService.db
       .select({
         id: notifications.id,
         type: notifications.type,
@@ -28,6 +28,11 @@ export class NotificationsService {
       .from(notifications)
       .where(eq(notifications.targetCustomerId, customerId))
       .orderBy(asc(notifications.isRead), asc(notifications.createdAt));
+
+    return rows.map((row) => ({
+      ...row,
+      id: Number(row.id),
+    }));
   }
 
   async getUnreadCount(customerId: number) {

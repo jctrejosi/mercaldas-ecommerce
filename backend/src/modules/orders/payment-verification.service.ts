@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { eq } from 'drizzle-orm';
 import { DrizzleService } from '../../database/drizzle.service';
-import { orders } from '../../../drizzle/schema';
+import { orders, orderStatusHistory } from '../../../drizzle/schema';
 import { OrdersGateway } from './orders.gateway';
 import { WompiService } from '../payments/wompi.service';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -49,6 +49,9 @@ export class PaymentVerificationService {
             .set({ status: 'paid', updatedAt: new Date().toISOString() })
             .where(eq(orders.id, BigInt(orderId)));
           this.ordersGateway.notifyOrderStatus(String(orderId), 'preparando');
+          await this.drizzleService.db.insert(orderStatusHistory).values({
+            orderId, status: 'paid', note: 'Pago confirmado por Wompi', createdBy: customerId ?? 0,
+          });
           if (customerId) {
             await this.notificationsService.create({
               type: 'ORDER',
@@ -63,16 +66,22 @@ export class PaymentVerificationService {
         }
 
         if (status === 'DECLINED' || status === 'ERROR' || status === 'VOIDED') {
+          const statusMessage = response?.data?.status_message || 'Transacción rechazada por Wompi';
+          const reason = `Wompi: ${statusMessage}`;
+
           await this.drizzleService.db
             .update(orders)
             .set({ status: 'cancelled', updatedAt: new Date().toISOString() })
             .where(eq(orders.id, BigInt(orderId)));
-          this.ordersGateway.notifyOrderStatus(String(orderId), 'cancelado');
+          this.ordersGateway.notifyOrderStatus(String(orderId), 'cancelado', statusMessage);
+          await this.drizzleService.db.insert(orderStatusHistory).values({
+            orderId, status: 'cancelled', note: `Pago rechazado: ${statusMessage}`, createdBy: customerId ?? 0,
+          });
           if (customerId) {
             await this.notificationsService.create({
               type: 'ORDER',
               title: 'Pago rechazado',
-              message: `El pago de tu pedido ${referenceCode} fue rechazado. Intenta de nuevo.`,
+              message: `El pago de tu pedido ${referenceCode} fue rechazado: ${statusMessage}. Intenta de nuevo.`,
               targetCustomerId: customerId,
               linkUrl: '/catalog',
             });
