@@ -53,6 +53,7 @@ export function CatalogPage({
   const [loadingMore, setLoadingMore] = useState(false);
   const [searchInput, setSearchInput] = useState(catalogSearch);
   const [brands, setBrands] = useState<Brand[]>([]);
+  const [productTypes, setProductTypes] = useState<{ id: number; code: string; name: string; count: number }[]>([]);
 
   useEffect(() => {
     catalogService.getFeaturedBrands().then(setBrands).catch(() => {});
@@ -455,7 +456,54 @@ export function CatalogPage({
         </div>
       )}
 
-      {/* On sale */}
+      
+      {/* Product Types */}
+      {productTypes.length > 0 && (
+        <div className="border-t border-border pt-5">
+          <h3 className="font-bold text-sm text-foreground mb-3">Tipo de producto</h3>
+          <div className="space-y-1.5">
+            {productTypes.map((pt) => {
+              const checked = catalogProductType === pt.code;
+              return (
+                <label
+                  key={pt.id}
+                  className="flex items-center gap-2.5 py-1 px-2 rounded-lg cursor-pointer hover:bg-muted transition-colors group"
+                >
+                  <div
+                    className="w-5 h-5 rounded border-2 flex items-center justify-center flex-shrink-0 transition-all"
+                    style={{
+                      borderColor: checked ? '#1A1A2E' : '#D1D5DB',
+                      background: checked ? '#1A1A2E' : 'white',
+                    }}
+                    onClick={() => setCatalogProductType(checked ? '' : pt.code)}
+                  >
+                    {checked && (
+                      <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                      </svg>
+                    )}
+                  </div>
+                  <span
+                    className="text-sm flex-1 transition-colors"
+                    style={{
+                      color: checked ? '#1A1A2E' : '#6B7280',
+                      fontWeight: checked ? 600 : 400,
+                    }}
+                    onClick={() => setCatalogProductType(checked ? '' : pt.code)}
+                  >
+                    {pt.name}
+                  </span>
+                  <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
+                    {pt.count}
+                  </span>
+                </label>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+{/* On sale */}
       <div className="border-t border-border pt-5">
         <label className="flex items-center justify-between cursor-pointer group">
           <div>

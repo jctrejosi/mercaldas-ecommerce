@@ -48,6 +48,7 @@ export default function App() {
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
   const [catalogSearch, setCatalogSearch] = useState("");
   const [catalogBrand, setCatalogBrand] = useState<number | null>(null);
+  const [catalogProductType, setCatalogProductType] = useState("");
   const [loginModal, setLoginModal] = useState(false);
   const [modalView, setModalView] = useState<"choice" | "login" | "register">("choice");
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
@@ -165,7 +166,54 @@ export default function App() {
 
   const placeOrder = async () => {
     if (!customer) { setCheckoutError("Debes iniciar sesion"); return; }
-    try { setCheckoutLoading(true); setCheckoutError(null); const response = await ordersService.checkout({ items: cartItems.map(i => ({ productId: i.id, quantity: i.quantity })), address: { name: checkoutAddress.name, phone: checkoutAddress.phone, address: checkoutAddress.address, city: checkoutAddress.city, notes: checkoutAddress.notes }, shippingType: checkoutShipping, paymentMethod: checkoutPayment }); const o: Order = { id: response.referenceCode, date: new Date().toLocaleDateString("es-CO", { day: "2-digit", month: "long", year: "numeric" }), items: [...cartItems], total: response.grandTotal, shipping: response.shippingCost, address: `${response.address.address}, ${response.address.city}`, paymentMethod: response.paymentMethod, status: "preparando" }; setOrders(prev => [o, ...prev]); setLastOrderId(response.referenceCode); setCartItems([]); setCheckoutStep(4); }
+    try {
+      setCheckoutLoading(true); setCheckoutError(null);
+
+      // Tokenize card if paying by card
+      let cardToken = ""; let last4 = ""; let brand = "";
+      if (checkoutPayment === "tarjeta") {
+        if (cardGateway === "wompi" && wompiConfig) {
+          const tokenized = await ordersService.tokenizeWompiCard({
+            publicKey: wompiConfig.publicKey,
+            number: cardPayment.cardNumber.replace(/\s/g, ""),
+            cvc: cardPayment.cvv,
+            expMonth: cardPayment.expiryMonth,
+            expYear: "20" + cardPayment.expiryYear,
+            cardHolder: cardPayment.cardholderName,
+          });
+          cardToken = tokenized.id;
+          last4 = tokenized.last_four;
+          brand = tokenized.brand;
+        } else if (cardGateway === "epayco" && epaycoConfig) {
+          const tokenized = await ordersService.tokenizeEpaycoCard({
+            cardNumber: cardPayment.cardNumber.replace(/\s/g, ""),
+            cvc: cardPayment.cvv,
+            expMonth: cardPayment.expiryMonth,
+            expYear: "20" + cardPayment.expiryYear,
+            cardHolder: cardPayment.cardholderName,
+          });
+          cardToken = tokenized.id;
+          last4 = tokenized.last4;
+          brand = tokenized.brand;
+        } else {
+          setCheckoutError("Configuracion de pago no disponible"); setCheckoutLoading(false); return;
+        }
+      }
+
+      const payload = {
+        items: cartItems.map(i => ({ productId: i.id, quantity: i.quantity })),
+        address: { name: checkoutAddress.name, phone: checkoutAddress.phone, address: checkoutAddress.address, city: checkoutAddress.city, notes: checkoutAddress.notes },
+        shippingType: checkoutShipping,
+        paymentMethod: checkoutPayment,
+      };
+      if (checkoutPayment === "tarjeta") { payload.paymentDetails = { card: { provider: cardGateway, cardholderName: cardPayment.cardholderName, cardToken, last4, brand, installments: parseInt(cardPayment.installments) || 1, ...(cardGateway === "wompi" ? { acceptanceToken: wompiConfig?.acceptanceToken ?? "", acceptPersonalAuth: wompiConfig?.personalDataAuthToken ?? "" } : {}) } }; }
+      if (checkoutPayment === "pse") { payload.paymentDetails = { pse: psePayment }; }
+      if (checkoutPayment === "nequi") { payload.paymentDetails = { nequi: nequiPayment }; }
+
+      const response = await ordersService.checkout(payload);
+      const o = { id: response.referenceCode, date: new Date().toLocaleDateString("es-CO", { day: "2-digit", month: "long", year: "numeric" }), items: [...cartItems], total: response.grandTotal, shipping: response.shippingCost, address: response.address.address + ", " + response.address.city, paymentMethod: response.paymentMethod, status: "preparando" };
+      setOrders(prev => [o, ...prev]); setLastOrderId(response.referenceCode); setCartItems([]); setCheckoutStep(4);
+    }
     catch (err) { setCheckoutError(err instanceof Error ? err.message : "Error"); }
     finally { setCheckoutLoading(false); }
   };
@@ -212,7 +260,7 @@ export default function App() {
     <div className="min-h-screen bg-background" style={{ fontFamily: "'Inter', sans-serif" }}>
       <Header {...headerProps} />
 
-      {currentView === "catalog" && (<CatalogPage cartItems={cartItems} onAdd={addToCart} onRemove={removeFromCart} onBack={() => { navigate("/"); setCurrentView("home"); }} onProductClick={setSelectedProduct} onOpenCategory={openCatalog} catalogCategory={catalogCategory} setCatalogCategory={setCatalogCategory} catalogOnSale={catalogOnSale} setCatalogOnSale={setCatalogOnSale} catalogPriceRange={catalogPriceRange} setCatalogPriceRange={setCatalogPriceRange} catalogSort={catalogSort} setCatalogSort={setCatalogSort} catalogSearch={catalogSearch} setCatalogSearch={setCatalogSearch} catalogBrand={catalogBrand} setCatalogBrand={setCatalogBrand} mobileFiltersOpen={mobileFiltersOpen} setMobileFiltersOpen={setMobileFiltersOpen} />)}
+      {currentView === "catalog" && (<CatalogPage cartItems={cartItems} onAdd={addToCart} onRemove={removeFromCart} onBack={() => { navigate("/"); setCurrentView("home"); }} onProductClick={setSelectedProduct} onOpenCategory={openCatalog} catalogCategory={catalogCategory} setCatalogCategory={setCatalogCategory} catalogOnSale={catalogOnSale} setCatalogOnSale={setCatalogOnSale} catalogPriceRange={catalogPriceRange} setCatalogPriceRange={setCatalogPriceRange} catalogSort={catalogSort} setCatalogSort={setCatalogSort} catalogSearch={catalogSearch} setCatalogSearch={setCatalogSearch} catalogBrand={catalogBrand} setCatalogBrand={setCatalogBrand} catalogProductType={catalogProductType} setCatalogProductType={setCatalogProductType} mobileFiltersOpen={mobileFiltersOpen} setMobileFiltersOpen={setMobileFiltersOpen} />)}
 
       {currentView === "account" && (
         <UserAdminView appOrders={orders} cartItems={cartItems} onAdd={addToCart} onRemove={removeFromCart} onProductClick={setSelectedProduct} onBack={() => { setCurrentView("home"); navigate("/"); }} onViewCatalog={openCatalog} />
