@@ -5,9 +5,10 @@ import { OrdersGateway } from './orders.gateway';
 import { PaymentVerificationService } from './payment-verification.service';
 import { WebhookController } from './webhook.controller';
 import { PaymentsModule } from '../payments/payments.module';
+import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
-  imports: [PaymentsModule],
+  imports: [PaymentsModule, NotificationsModule],
   controllers: [OrdersController, WebhookController],
   providers: [OrdersService, OrdersGateway, PaymentVerificationService],
   exports: [OrdersService],

@@ -24,6 +24,7 @@ import { CreateOrderDto } from './dto/create-order.dto';
 import { PaymentVerificationService } from './payment-verification.service';
 import { WompiService } from '../payments/wompi.service';
 import { EpaycoService } from '../payments/epayco.service';
+import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
 export class OrdersService {
@@ -32,6 +33,7 @@ export class OrdersService {
     private readonly wompiService: WompiService,
     private readonly epaycoService: EpaycoService,
     private readonly paymentVerification: PaymentVerificationService,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   private get db() {
@@ -289,6 +291,17 @@ export class OrdersService {
     });
 
     if (dto.paymentMethod === "tarjeta" && orderStatus === "payment_pending") { this.paymentVerification.verifyAndNotify(result.orderId, result.referenceCode, result.cardTransaction); };
+
+    // Notify customer about order creation
+    await this.notificationsService.create({
+      type: 'ORDER',
+      title: orderStatus === 'payment_pending' ? 'Pedido recibido - Pago pendiente' : 'Pedido confirmado',
+      message: orderStatus === 'payment_pending'
+        ? `Tu pedido ${result.referenceCode} está pendiente de confirmación de pago. Te notificaremos cuando se apruebe.`
+        : `Tu pedido ${result.referenceCode} ha sido registrado y será procesado pronto.`,
+      targetCustomerId: customerId,
+      linkUrl: `/account?tab=orders`,
+    });
 
     return result;
   }

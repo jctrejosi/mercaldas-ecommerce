@@ -5,12 +5,15 @@ import {
   Min,
   ValidateNested,
 } from 'class-validator';
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 
 export class UpdateCartItemDto {
+  @Transform(({ value }) => Number(value))
   @IsNumber()
+  @Min(1)
   productId!: number;
 
+  @Transform(({ value }) => Number(value))
   @IsInt()
   @Min(1)
   quantity!: number;

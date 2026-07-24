@@ -4,6 +4,7 @@ import { DrizzleService } from '../../database/drizzle.service';
 import { orders } from '../../../drizzle/schema';
 import { OrdersGateway } from './orders.gateway';
 import { WompiService } from '../payments/wompi.service';
+import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
 export class PaymentVerificationService {
@@ -13,6 +14,7 @@ export class PaymentVerificationService {
     private readonly drizzleService: DrizzleService,
     private readonly ordersGateway: OrdersGateway,
     private readonly wompiService: WompiService,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   async verifyAndNotify(orderId: number, referenceCode: string, cardTransaction: any) {
@@ -20,10 +22,15 @@ export class PaymentVerificationService {
 
     const transactionId = cardTransaction?.id;
 
-    if (!transactionId) {
-      // No Wompi transaction to verify
-      return;
-    }
+    if (!transactionId) return;
+
+    // Look up customer for notifications
+    const orderRow = await this.drizzleService.db
+      .select({ customerId: orders.customerId })
+      .from(orders)
+      .where(eq(orders.id, BigInt(orderId)))
+      .limit(1);
+    const customerId = orderRow[0]?.customerId;
 
     let attempts = 0;
     const maxAttempts = 10;
@@ -42,6 +49,15 @@ export class PaymentVerificationService {
             .set({ status: 'paid', updatedAt: new Date().toISOString() })
             .where(eq(orders.id, BigInt(orderId)));
           this.ordersGateway.notifyOrderStatus(String(orderId), 'preparando');
+          if (customerId) {
+            await this.notificationsService.create({
+              type: 'ORDER',
+              title: 'Pago confirmado',
+              message: `Tu pedido ${referenceCode} ha sido aprobado y está siendo preparado.`,
+              targetCustomerId: customerId,
+              linkUrl: `/account?tab=orders`,
+            });
+          }
           this.logger.log(`Order ${referenceCode} payment confirmed`);
           return;
         }
@@ -52,6 +68,15 @@ export class PaymentVerificationService {
             .set({ status: 'cancelled', updatedAt: new Date().toISOString() })
             .where(eq(orders.id, BigInt(orderId)));
           this.ordersGateway.notifyOrderStatus(String(orderId), 'cancelado');
+          if (customerId) {
+            await this.notificationsService.create({
+              type: 'ORDER',
+              title: 'Pago rechazado',
+              message: `El pago de tu pedido ${referenceCode} fue rechazado. Intenta de nuevo.`,
+              targetCustomerId: customerId,
+              linkUrl: '/catalog',
+            });
+          }
           this.logger.log(`Order ${referenceCode} payment declined`);
           return;
         }

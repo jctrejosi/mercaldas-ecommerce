@@ -145,8 +145,8 @@ export class CartService {
       .from(cartItems)
       .innerJoin(productVariants, eq(productVariants.id, cartItems.productVariantId))
       .innerJoin(products, eq(products.id, productVariants.productId))
-      .innerJoin(productCategories, eq(productCategories.productId, products.id))
-      .innerJoin(categories, eq(categories.id, productCategories.categoryId))
+      .leftJoin(productCategories, eq(productCategories.productId, products.id))
+      .leftJoin(categories, eq(categories.id, productCategories.categoryId))
       .leftJoin(
         productImages,
         and(eq(productImages.productId, products.id), eq(productImages.isCover, true)),
@@ -181,8 +181,8 @@ export class CartService {
         price: Number(row.price),
         originalPrice: row.originalPrice ? Number(row.originalPrice) : undefined,
         image: row.image,
-        category: row.category,
-        categoryId: Number(row.categoryId),
+        category: row.category ?? '',
+        categoryId: row.categoryId ? Number(row.categoryId) : 0,
         quantity: row.quantity,
         isFeatured: row.isFeatured,
       });
