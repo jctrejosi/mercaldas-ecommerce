@@ -40,7 +40,7 @@ export class WompiService {
     );
 
     if (!response.ok) {
-      throw new BadRequestException('No se pudo obtener la configuración de Wompi');
+      throw new BadRequestException('No se pudo obtener la configuracion de Wompi');
     }
 
     const json = (await response.json()) as WompiMerchantResponse;
@@ -121,10 +121,20 @@ export class WompiService {
 
     if (!response.ok) {
       throw new BadRequestException(
-        data?.error?.reason ?? data?.error?.messages ?? 'No se pudo crear la transacción con Wompi',
+        data?.error?.reason ?? data?.error?.messages ?? 'No se pudo crear la transaccion con Wompi',
       );
     }
 
     return data?.data;
+  }
+
+  async getTransaction(transactionId: string) {
+    if (!this.config.privateKey) {
+      throw new Error('Wompi private key no configurada');
+    }
+    const response = await fetch(`${this.config.apiUrl}/transactions/${transactionId}`, {
+      headers: { Authorization: `Bearer ${this.config.privateKey}` },
+    });
+    return response.json();
   }
 }

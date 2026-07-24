@@ -92,6 +92,7 @@ interface CheckoutModalProps {
       prev: CheckoutModalProps["nequiPayment"],
     ) => CheckoutModalProps["nequiPayment"],
   ) => void;
+  orderPending?: boolean;
   onPlaceOrder: () => Promise<void>;
   fmt: (n: number) => string;
 }
@@ -113,6 +114,7 @@ export function CheckoutModal({
   psePayment,
   nequiPayment,
   lastOrderId,
+  orderPending,
   onClose,
   onSetCheckoutStep,
   onSetCheckoutAddress,
@@ -793,20 +795,44 @@ export function CheckoutModal({
 
         {checkoutStep === 4 && (
           <div className="flex flex-col items-center text-center py-10 gap-5">
-            <div className="w-20 h-20 rounded-full bg-green-100 flex items-center justify-center">
-              <CheckCircle2 className="w-10 h-10 text-green-500" />
-            </div>
-            <div>
-              <h2
-                className="text-2xl font-black"
-                style={{ fontFamily: "'Bricolage Grotesque', sans-serif" }}
-              >
-                ¡Pedido confirmado!
-              </h2>
-              <p className="text-muted-foreground mt-1 text-sm">
-                Tu pedido <strong>{lastOrderId}</strong> ha sido recibido.
-              </p>
-            </div>
+            {orderPending ? (
+              <>
+                <div className="w-20 h-20 rounded-full bg-amber-100 flex items-center justify-center">
+                  <Clock className="w-10 h-10 text-amber-500" />
+                </div>
+                <div>
+                  <h2
+                    className="text-2xl font-black"
+                    style={{ fontFamily: "'Bricolage Grotesque', sans-serif" }}
+                  >
+                    Pago pendiente de confirmación
+                  </h2>
+                  <p className="text-muted-foreground mt-1 text-sm">
+                    Tu pedido <strong>{lastOrderId}</strong> está siendo procesado por Wompi.
+                  </p>
+                  <p className="text-muted-foreground text-xs mt-1">
+                    Te notificaremos cuando el pago sea confirmado.
+                  </p>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="w-20 h-20 rounded-full bg-green-100 flex items-center justify-center">
+                  <CheckCircle2 className="w-10 h-10 text-green-500" />
+                </div>
+                <div>
+                  <h2
+                    className="text-2xl font-black"
+                    style={{ fontFamily: "'Bricolage Grotesque', sans-serif" }}
+                  >
+                    ¡Pedido confirmado!
+                  </h2>
+                  <p className="text-muted-foreground mt-1 text-sm">
+                    Tu pedido <strong>{lastOrderId}</strong> ha sido recibido.
+                  </p>
+                </div>
+              </>
+            )}
             <div className="bg-white rounded-2xl border border-border p-4 w-full text-left space-y-2.5">
               <div className="flex items-center gap-2 text-sm">
                 <Clock className="w-4 h-4 text-muted-foreground shrink-0" />

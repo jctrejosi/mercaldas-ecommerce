@@ -21,6 +21,7 @@ import {
   shipments,
 } from '../../../drizzle/schema';
 import { CreateOrderDto } from './dto/create-order.dto';
+import { PaymentVerificationService } from './payment-verification.service';
 import { WompiService } from '../payments/wompi.service';
 import { EpaycoService } from '../payments/epayco.service';
 
@@ -30,6 +31,7 @@ export class OrdersService {
     private readonly drizzleService: DrizzleService,
     private readonly wompiService: WompiService,
     private readonly epaycoService: EpaycoService,
+    private readonly paymentVerification: PaymentVerificationService,
   ) {}
 
   private get db() {
@@ -286,6 +288,8 @@ export class OrdersService {
       };
     });
 
+    if (dto.paymentMethod === "tarjeta" && orderStatus === "payment_pending") { this.paymentVerification.verifyAndNotify(result.orderId, result.referenceCode, result.cardTransaction); };
+
     return result;
   }
 
@@ -388,8 +392,10 @@ export class OrdersService {
     switch (status) {
       case 'created': return 'preparando';
       case 'confirmed': return 'preparando';
+      case 'payment_pending': return 'pendiente';
+      case 'paid': return 'preparando';
       case 'preparing': return 'preparando';
-      case 'in_transit': return 'en camino';
+      case 'shipped': return 'en camino';
       case 'delivered': return 'entregado';
       case 'cancelled': return 'cancelado';
       default: return 'preparando';

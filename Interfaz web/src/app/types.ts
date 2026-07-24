@@ -113,7 +113,7 @@ export interface Order {
   shipping: number;
   address: string;
   paymentMethod: string;
-  status: "preparando" | "en camino" | "entregado";
+  status: "pendiente" | "preparando" | "en camino" | "entregado" | "cancelado";
 }
 
 export interface ProductCardProps {

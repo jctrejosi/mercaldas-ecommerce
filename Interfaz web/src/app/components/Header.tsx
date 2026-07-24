@@ -34,7 +34,12 @@ interface HeaderProps {
   onAddToCart: (product: Product, quantity?: number) => void;
   onRemoveFromCart: (id: number) => void;
   onHome: () => void;
+  currentView: string;
+  currentView: string;
+  onHome: () => void; currentView: string;
   onAccount?: () => void;
+  onNotifOpen?: () => void;
+  unreadNotifCount?: number;
   fmt: (n: number) => string;
 }
 
@@ -61,7 +66,7 @@ export function Header({
   onOpenCatalog,
   onAddToCart,
   onRemoveFromCart,
-  onHome,
+  currentView, onHome,
   onAccount,
   fmt,
 }: HeaderProps) {
@@ -76,6 +81,13 @@ export function Header({
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [categoriesOpen, setCategoriesOpen] = useState(false);
   const categoriesRef = useRef<HTMLDivElement>(null);
+  const [notifOpen, setNotifOpen] = useState(false);
+  const notifRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const handler = (e: MouseEvent) => { if (notifRef.current && !notifRef.current.contains(e.target as Node)) setNotifOpen(false); };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -641,8 +653,8 @@ export function Header({
       {mobileMenuOpen && (
         <div className="md:hidden border-t border-border bg-white px-4 py-3 flex flex-col gap-1">
           {(customer
-            ? ["Inicio", "Categorías", "Mi cuenta"]
-            : ["Inicio", "Categorías"]
+            ? ["Inicio", "Categorías", "Catálogo", "Mi cuenta"]
+            : ["Inicio", "Categorías", "Catálogo"]
           ).map((item) => (
             <a
               key={item}
@@ -651,6 +663,10 @@ export function Header({
               onClick={(e) => {
                 e.preventDefault();
                 if (item === "Inicio") onHome();
+                if (item === "Catálogo") onOpenCatalog();
+                if (item === "Catalogo") onOpenCatalog();
+                if (item === "Catálogo") onOpenCatalog();
+                if (item === "Catálogo") onOpenCatalog();
                 if (item === "Mi cuenta" && onAccount) onAccount();
                 setMobileMenuOpen(false);
               }}
@@ -704,16 +720,16 @@ export function Header({
           </div>
 
           {(customer
-            ? ["Inicio", "Mi cuenta"]
-            : ["Inicio"]
+            ? ["Inicio", "Catálogo", "Mi cuenta"]           : ["Inicio", "Catálogo"]
           ).map((item) => (
             <button
               key={item}
               onClick={() => {
                 if (item === "Inicio") onHome();
+                if (item === "Catálogo") onOpenCatalog();
                 if (item === "Mi cuenta" && onAccount) onAccount();
               }}
-              className="px-4 py-3 text-sm font-medium text-foreground transition-colors border-b-2 border-transparent hover:border-accent hover:text-accent"
+              className={`px-4 py-3 text-sm font-medium transition-colors border-b-2 ${(item === "Inicio" && currentView === "home") || (item === "Catálogo" && currentView === "catalog") || (item === "Mi cuenta" && currentView === "account") ? "bg-[#FFF200] text-[#1A1A2E] border-[#FFF200]" : "border-transparent text-foreground"} hover:border-[#FFF200] hover:text-[#1A1A2E]`}
             >
               {item}
             </button>
