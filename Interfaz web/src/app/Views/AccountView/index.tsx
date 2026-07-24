@@ -7,6 +7,7 @@ import {
   ThumbsUp, Camera, Mail, User, Lock, Eye, EyeOff, CheckCircle2, Shield, Send, Menu,
 } from "lucide-react";
 import type { CartItem, Order, Product } from "../../types";
+import type { AppNotification } from "../../../hooks/useNotifications";
 import { ordersService } from "../../../services/orders.service";
 
 const MOCK_PRODUCTS: Product[] = [
@@ -173,7 +174,7 @@ const MOCK_PRODUCTS: Product[] = [
 ];
 
 /* ─── Account Module Types ───────────────────────────────── */
-type AccountSection =
+export type AccountSection =
   | "orders" | "order-detail" | "tracking"
   | "favorites" | "lists" | "addresses"
   | "payments" | "coupons" | "history"
@@ -457,9 +458,13 @@ export interface UserAdminViewProps {
   onBack: () => void;
   onViewCatalog: () => void;
   initialSection?: AccountSection;
+  notifications?: AppNotification[];
+  unreadNotifCount?: number;
+  onMarkNotifRead?: (id: number) => void;
+  fmt?: (n: number) => string;
 }
 
-export function UserAdminView({ appOrders, cartItems, onAdd, onRemove, onProductClick, onBack, onViewCatalog, initialSection = "orders" }: UserAdminViewProps) {
+export function UserAdminView({ appOrders, cartItems, onAdd, onRemove, onProductClick, onBack, onViewCatalog, initialSection = "orders", notifications = [], unreadNotifCount = 0, onMarkNotifRead }: UserAdminViewProps) {
   const [section, setSection] = useState<AccountSection>(initialSection);
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [trackingOrderId, setTrackingOrderId] = useState<string>("");
@@ -469,7 +474,16 @@ export function UserAdminView({ appOrders, cartItems, onAdd, onRemove, onProduct
   const [addresses, setAddresses] = useState<SavedAddress[]>(INIT_ADDRESSES);
   const [payments, setPayments] = useState<SavedPayment[]>(INIT_PAYMENTS);
   const [coupons, setCoupons] = useState<Coupon[]>(INIT_COUPONS);
-  const [notifs, setNotifs] = useState<AcctNotif[]>(INIT_NOTIFS);
+  const [notifs, setNotifs] = useState<AcctNotif[]>(() =>
+    notifications.map((n) => ({
+      id: String(n.id),
+      type: (n.type === 'ORDER' || n.type === 'PAYMENT' ? 'order' : n.type === 'PROMOTION' ? 'promo' : 'reco') as AcctNotif['type'],
+      title: n.title,
+      body: n.message,
+      time: new Date(n.createdAt).toLocaleDateString('es-CO', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }),
+      read: n.isRead,
+    })),
+  );
   const [reviews, setReviews] = useState<ProductReview[]>(INIT_REVIEWS);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [apiOrders, setApiOrders] = useState<Order[]>([]);
@@ -501,7 +515,7 @@ export function UserAdminView({ appOrders, cartItems, onAdd, onRemove, onProduct
     }
   }, [apiOrders]);
 
-  const unreadNotifs = notifs.filter((n) => !n.read).length;
+  const unreadNotifs = unreadNotifCount;
 
   const navItems: Array<{ id: AccountSection; label: string; icon: React.FC<{ className?: string }>; badge?: number }> = [
     { id: "orders", label: "Mis Pedidos", icon: Package, badge: allOrders.filter((o) => o.status !== "entregado" && o.status !== "cancelado").length || undefined },
@@ -1716,7 +1730,7 @@ export function UserAdminView({ appOrders, cartItems, onAdd, onRemove, onProduct
                   </div>
                   <div className="flex gap-1 flex-shrink-0">
                     {!n.read && (
-                      <button onClick={() => setNotifs((prev) => prev.map((x) => x.id === n.id ? { ...x, read: true } : x))} className="w-7 h-7 rounded-lg flex items-center justify-center border border-border hover:bg-muted transition-colors">
+                      <button onClick={() => { setNotifs((prev) => prev.map((x) => x.id === n.id ? { ...x, read: true } : x)); onMarkNotifRead?.(Number(n.id)); }} className="w-7 h-7 rounded-lg flex items-center justify-center border border-border hover:bg-muted transition-colors">
                         <Check className="w-3 h-3 text-muted-foreground" />
                       </button>
                     )}

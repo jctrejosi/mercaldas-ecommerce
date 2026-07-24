@@ -4,12 +4,14 @@ import { useCustomerAuth } from "../hooks/useCustomerAuth";
 import { catalogService } from "../services/catalog.service";
 import { ordersService } from "../services/orders.service";
 import { useOrderSocket } from "../hooks/useOrderSocket";
+import { useNotifications } from "../hooks/useNotifications";
 import { cartService } from "../services/cart.service";
 import type { Brand, Branch, CartItem, CatalogCategory, Order, Product } from "./types";
-import type { EpaycoConfigResponse, WompiConfigResponse } from "../services/orders.service";
+import type { WompiConfigResponse } from "../services/orders.service";
 import { ProductDetailModal } from "./ProductDetailModal";
 import { CatalogPage } from "./Views/CatalogView";
 import { UserAdminView } from "./Views/AccountView";
+import type { AccountSection } from "./Views/AccountView";
 import { LandingView } from "./Views/LandingView";
 import { Header } from "./components/Header";
 import { Footer } from "./components/Footer";
@@ -59,27 +61,27 @@ export default function App() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [ordersOpen, setOrdersOpen] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
-  const [checkoutAddress, setCheckoutAddress] = useState({ name: "", phone: "", address: "", city: "Manizales", notes: "" });
-  const [checkoutShipping, setCheckoutShipping] = useState<"standard" | "express">("standard");
-  const [checkoutPayment, setCheckoutPayment] = useState<"efectivo" | "tarjeta" | "nequi" | "pse">("efectivo");
-  const [cardGateway, setCardGateway] = useState<"epayco" | "wompi">("wompi");
+  const [checkoutAddress, setCheckoutAddress] = useState(() => { try { const a = localStorage.getItem("checkout_address"); return a ? JSON.parse(a) : { name: "", phone: "", address: "", city: "Manizales", notes: "" }; } catch { return { name: "", phone: "", address: "", city: "Manizales", notes: "" }; } });
+  const [checkoutShipping, setCheckoutShipping] = useState<"standard" | "express">(() => { const s = localStorage.getItem("checkout_shipping"); return s === "express" ? "express" : "standard"; });
+  const [checkoutPayment, setCheckoutPayment] = useState<"efectivo" | "tarjeta" | "nequi" | "pse">(() => { const p = localStorage.getItem("checkout_payment"); return p === "tarjeta" || p === "nequi" || p === "pse" ? p : "efectivo"; });
   const [cardPayment, setCardPayment] = useState({ cardholderName: "", cardNumber: "", expiryMonth: "", expiryYear: "", cvv: "", installments: "1" });
   const [psePayment, setPsePayment] = useState({ bank: "", personType: "natural" as "natural" | "juridica" });
   const [nequiPayment, setNequiPayment] = useState({ phone: "" });
   const [lastOrderId, setLastOrderId] = useState("");
   const [pendingOrderId, setPendingOrderId] = useState<string | null>(null);
   const [orderPending, setOrderPending] = useState(false);
-  const watchStatus = useOrderSocket(pendingOrderId);
+  const [orderDeclineReason, setOrderDeclineReason] = useState<string | null>(null);
+  const watch = useOrderSocket(pendingOrderId);
 
   // Update order status from WebSocket
   useEffect(() => {
-    if (watchStatus) {
-      setOrders(prev => prev.map(o => o.id === pendingOrderId ? { ...o, status: watchStatus as "pendiente" | "preparando" | "en camino" | "entregado" | "cancelado" } : o));
-      if (watchStatus === "preparando" || watchStatus === "cancelado") setPendingOrderId(null);
+    if (watch.status) {
+      setOrders(prev => prev.map(o => o.id === pendingOrderId ? { ...o, status: watch.status as "pendiente" | "preparando" | "en camino" | "entregado" | "cancelado" } : o));
+      if (watch.reason) setOrderDeclineReason(watch.reason);
+      if (watch.status === "preparando" || watch.status === "cancelado") setPendingOrderId(null);
     }
-  }, [watchStatus, pendingOrderId]);
+  }, [watch.status, watch.reason, pendingOrderId]);
   
-  const [epaycoConfig, setEpaycoConfig] = useState<EpaycoConfigResponse | null>(null);
   const [wompiConfig, setWompiConfig] = useState<WompiConfigResponse | null>(null);
   const [wompiAcceptance, setWompiAcceptance] = useState({ terms: false, personalData: false });
   const [checkoutLoading, setCheckoutLoading] = useState(false);
@@ -88,18 +90,6 @@ export default function App() {
   const [landingCategories, setLandingCategories] = useState<CatalogCategory[]>([]);
   const [landingProducts, setLandingProducts] = useState<Product[]>([]);
   
-  // Cargar datos de checkout guardados
-  useEffect(() => {
-    try {
-      const addr = localStorage.getItem("checkout_address");
-      if (addr) setCheckoutAddress(JSON.parse(addr));
-      const ship = localStorage.getItem("checkout_shipping");
-      if (ship === "express" || ship === "standard") setCheckoutShipping(ship);
-      const pay = localStorage.getItem("checkout_payment");
-      if (pay === "efectivo" || pay === "tarjeta" || pay === "nequi" || pay === "pse") setCheckoutPayment(pay);
-    } catch {}
-  }, []);
-
   // Persistir datos de checkout
   useEffect(() => { localStorage.setItem("checkout_address", JSON.stringify(checkoutAddress)); }, [checkoutAddress]);
   useEffect(() => { localStorage.setItem("checkout_shipping", checkoutShipping); }, [checkoutShipping]);
@@ -132,6 +122,7 @@ const [landingLoading, setLandingLoading] = useState(true);
   }, []);
 
   const { customer, loading: customerLoading, login, register, socialLogin } = useCustomerAuth();
+  const { notifications, unreadCount, markAsRead } = useNotifications(customer?.id ?? null);
   const [authError, setAuthError] = useState<string | null>(null);
   const [authLoading, setAuthLoading] = useState(false);
 
@@ -176,13 +167,13 @@ const [landingLoading, setLandingLoading] = useState(true);
     if (customerLoading) return;
     if (!customer) { setCartHydrated(true); return; }
     void cartService.getCart().then(r => {
-      setCartItems(prev => { const m = new Map<number, CartItem>(); r.items.forEach(i => m.set(i.id, { ...i })); prev.forEach(i => { const e = m.get(i.id); if (e) m.set(i.id, { ...e, quantity: e.quantity + i.quantity }); else m.set(i.id, i); }); return [...m.values()]; });
+      setCartItems(prev => { const m = new Map<number, CartItem>(); r.items.filter(i => i.id && Number(i.id) > 0).forEach(i => m.set(i.id, { ...i })); prev.forEach(i => { const e = m.get(i.id); if (e) m.set(i.id, { ...e, quantity: e.quantity + i.quantity }); else m.set(i.id, i); }); return [...m.values()]; });
       setCartHydrated(true);
     }).catch(() => setCartHydrated(true));
   }, [customer, customerLoading]);
-  useEffect(() => { if (customer && cartHydrated) void cartService.updateCart(cartItems.map(i => ({ productId: i.id, quantity: i.quantity }))); }, [cartHydrated, cartItems, customer]);
+  useEffect(() => { if (customer && cartHydrated) { const valid = cartItems.filter(i => i.id && Number(i.id) > 0); if (valid.length > 0) void cartService.updateCart(valid.map(i => ({ productId: Number(i.id), quantity: i.quantity }))); } }, [cartHydrated, cartItems, customer]);
 
-  const addToCart = (p: Product, q: number = 1) => setCartItems(prev => { const e = prev.find(c => c.id === p.id); return e ? prev.map(c => c.id === p.id ? { ...c, quantity: c.quantity + q } : c) : [...prev, { ...p, quantity: q }]; });
+  const addToCart = (p: Product, q: number = 1) => { if (!p.id || Number(p.id) <= 0) return; setCartItems(prev => { const e = prev.find(c => c.id === p.id); return e ? prev.map(c => c.id === p.id ? { ...c, quantity: c.quantity + q } : c) : [...prev, { ...p, quantity: q }]; }); };
   const removeFromCart = (id: number) => setCartItems(prev => { const e = prev.find(c => c.id === id); return !e ? prev : e.quantity === 1 ? prev.filter(c => c.id !== id) : prev.map(c => c.id === id ? { ...c, quantity: c.quantity - 1 } : c); });
   const deleteFromCart = (id: number) => setCartItems(prev => prev.filter(c => c.id !== id));
 
@@ -200,46 +191,34 @@ const [landingLoading, setLandingLoading] = useState(true);
     try {
       setCheckoutLoading(true); setCheckoutError(null);
 
-      // Tokenize card if paying by card
+      // Tokenize card with Wompi
       let cardToken = ""; let last4 = ""; let brand = "";
       if (checkoutPayment === "tarjeta") {
-        if (cardGateway === "wompi" && wompiConfig) {
-          const tokenized = await ordersService.tokenizeWompiCard({
-            publicKey: wompiConfig.publicKey,
-            number: cardPayment.cardNumber.replace(/\s/g, ""),
-            cvc: cardPayment.cvv,
-            expMonth: cardPayment.expiryMonth,
-            expYear: cardPayment.expiryYear,
-            cardHolder: cardPayment.cardholderName,
-          });
-          cardToken = tokenized.id;
-          last4 = tokenized.last_four;
-          brand = tokenized.brand;
-        } else if (cardGateway === "epayco" && epaycoConfig) {
-          const tokenized = await ordersService.tokenizeEpaycoCard({
-            cardNumber: cardPayment.cardNumber.replace(/\s/g, ""),
-            cvc: cardPayment.cvv,
-            expMonth: cardPayment.expiryMonth,
-            expYear: cardPayment.expiryYear,
-            cardHolder: cardPayment.cardholderName,
-          });
-          cardToken = tokenized.id;
-          last4 = tokenized.last4;
-          brand = tokenized.brand;
-        } else {
-          setCheckoutError("Configuracion de pago no disponible"); setCheckoutLoading(false); return;
-        }
+        if (!wompiConfig) { setCheckoutError("Configuración de pago no disponible"); setCheckoutLoading(false); return; }
+        const tokenized = await ordersService.tokenizeWompiCard({
+          publicKey: wompiConfig.publicKey,
+          number: cardPayment.cardNumber.replace(/\s/g, ""),
+          cvc: cardPayment.cvv,
+          expMonth: cardPayment.expiryMonth,
+          expYear: cardPayment.expiryYear,
+          cardHolder: cardPayment.cardholderName,
+        });
+        cardToken = tokenized.id;
+        last4 = tokenized.last_four;
+        brand = tokenized.brand;
       }
 
       const payload = {
-        items: cartItems.map(i => ({ productId: i.id, quantity: i.quantity })),
+        items: cartItems.filter(i => i.id && Number(i.id) > 0).map(i => ({ productId: Number(i.id), quantity: i.quantity })),
         address: { name: checkoutAddress.name, phone: checkoutAddress.phone, address: checkoutAddress.address, city: checkoutAddress.city, notes: checkoutAddress.notes },
         shippingType: checkoutShipping,
         paymentMethod: checkoutPayment,
       };
-      if (checkoutPayment === "tarjeta") { payload.paymentDetails = { card: { provider: cardGateway, cardholderName: cardPayment.cardholderName, cardToken, last4, brand, installments: parseInt(cardPayment.installments) || 1, ...(cardGateway === "wompi" ? { acceptanceToken: wompiConfig?.acceptanceToken ?? "", acceptPersonalAuth: wompiConfig?.personalDataAuthToken ?? "" } : {}) } }; }
+      if (checkoutPayment === "tarjeta") { payload.paymentDetails = { card: { provider: "wompi", cardholderName: cardPayment.cardholderName, cardToken, last4, brand, installments: parseInt(cardPayment.installments) || 1, acceptanceToken: wompiConfig?.acceptanceToken ?? "", acceptPersonalAuth: wompiConfig?.personalDataAuthToken ?? "" } }; }
       if (checkoutPayment === "pse") { payload.paymentDetails = { pse: psePayment }; }
       if (checkoutPayment === "nequi") { payload.paymentDetails = { nequi: nequiPayment }; }
+
+      if (payload.items.length === 0) { setCheckoutError("El carrito está vacío o contiene productos no disponibles"); setCheckoutLoading(false); return; }
 
       const response = await ordersService.checkout(payload);
       const o = { id: response.referenceCode, date: new Date().toLocaleDateString("es-CO", { day: "2-digit", month: "long", year: "numeric" }), items: [...cartItems], total: response.grandTotal, shipping: response.shippingCost, address: response.address.address + ", " + response.address.city, paymentMethod: response.paymentMethod, status: (s => s === "payment_pending" ? "pendiente" : s === "paid" || s === "created" ? "preparando" : "preparando")(response.status) };
@@ -252,7 +231,7 @@ const [landingLoading, setLandingLoading] = useState(true);
     finally { setCheckoutLoading(false); }
   };
 
-  useEffect(() => { void ordersService.getEpaycoConfig().then(setEpaycoConfig).catch(() => null); void ordersService.getWompiConfig().then(setWompiConfig).catch(() => null); }, []);
+  useEffect(() => { void ordersService.getWompiConfig().then(setWompiConfig).catch(() => null); }, []);
   const handleSocialSuccess = () => { setLoginModal(false); if (cartItems.length > 0) { setCheckoutStep(1); setCheckoutOpen(true); } };
   const handleSocialError = (e: unknown) => setAuthError(e instanceof Error ? e.message : "Error");
 
@@ -265,6 +244,8 @@ const [landingLoading, setLandingLoading] = useState(true);
     onAddToCart: addToCart, onRemoveFromCart: removeFromCart,
     currentView, onHome: () => { setCurrentView("home"); navigate("/"); },
     onAccount: customer ? () => { setCurrentView("account"); navigate("/account"); } : undefined,
+    onNavigateNotifs: () => { setCurrentView("account"); navigate("/account?tab=notifications"); },
+    notifications, unreadNotifCount: unreadCount, onMarkNotifRead: markAsRead,
     fmt,
   };
 
@@ -297,7 +278,7 @@ const [landingLoading, setLandingLoading] = useState(true);
       {currentView === "catalog" && (<CatalogPage cartItems={cartItems} onAdd={addToCart} onRemove={removeFromCart} onBack={() => { navigate("/"); setCurrentView("home"); }} onProductClick={setSelectedProduct} onOpenCategory={openCatalog} catalogCategory={catalogCategory} setCatalogCategory={setCatalogCategory} catalogOnSale={catalogOnSale} setCatalogOnSale={setCatalogOnSale} catalogPriceRange={catalogPriceRange} setCatalogPriceRange={setCatalogPriceRange} catalogSort={catalogSort} setCatalogSort={setCatalogSort} catalogSearch={catalogSearch} setCatalogSearch={setCatalogSearch} catalogBrand={catalogBrand} setCatalogBrand={setCatalogBrand} catalogProductType={catalogProductType} setCatalogProductType={setCatalogProductType} mobileFiltersOpen={mobileFiltersOpen} setMobileFiltersOpen={setMobileFiltersOpen} />)}
 
       {currentView === "account" && (
-        <UserAdminView appOrders={orders} cartItems={cartItems} onAdd={addToCart} onRemove={removeFromCart} onProductClick={setSelectedProduct} onBack={() => { setCurrentView("home"); navigate("/"); }} onViewCatalog={openCatalog} />
+        <UserAdminView appOrders={orders} cartItems={cartItems} onAdd={addToCart} onRemove={removeFromCart} onProductClick={setSelectedProduct} onBack={() => { setCurrentView("home"); navigate("/"); }} onViewCatalog={openCatalog} initialSection={(new URLSearchParams(location.search).get("tab") as AccountSection) || undefined} notifications={notifications} unreadNotifCount={unreadCount} onMarkNotifRead={markAsRead} />
       )}
 
       <main className={currentView !== "home" ? "hidden" : ""}>
@@ -318,7 +299,7 @@ const [landingLoading, setLandingLoading] = useState(true);
       <CartDrawer cartOpen={cartOpen} cartItems={cartItems} cartCount={cartCount} cartTotal={cartTotal} onClose={() => setCartOpen(false)} onAdd={addToCart} onRemove={removeFromCart} onDelete={deleteFromCart} onCheckout={() => { setCartOpen(false); if (customer) { setCheckoutStep(1); setCheckoutOpen(true); return; } openModal("choice"); }} fmt={fmt} />
       <ProductDetailModal product={selectedProduct} cartItems={cartItems} onAdd={addToCart} onRemove={removeFromCart} onClose={() => setSelectedProduct(null)} />
       <AuthModal loginModal={loginModal} modalView={modalView} authError={authError} authLoading={authLoading} cartItems={cartItems} socialLogin={socialLogin} onClose={closeModal} onSetModalView={setModalView} onLoginSubmit={handleLoginSubmit} onRegisterSubmit={handleRegisterSubmit} onSocialSuccess={handleSocialSuccess} onSocialError={handleSocialError} />
-      <CheckoutModal checkoutOpen={checkoutOpen} checkoutStep={checkoutStep} cartItems={cartItems} cartTotal={cartTotal} checkoutAddress={checkoutAddress} checkoutShipping={checkoutShipping} checkoutPayment={checkoutPayment} checkoutLoading={checkoutLoading} checkoutError={checkoutError} cardPayment={cardPayment} cardGateway={cardGateway} wompiAcceptance={wompiAcceptance} wompiConfig={wompiConfig} psePayment={psePayment} nequiPayment={nequiPayment} lastOrderId={lastOrderId} onClose={() => setCheckoutOpen(false)} onSetCheckoutStep={setCheckoutStep} onSetCheckoutAddress={setCheckoutAddress} onSetCheckoutShipping={setCheckoutShipping} onSetCheckoutPayment={setCheckoutPayment} onSetCardPayment={setCardPayment} onSetCardGateway={setCardGateway} onSetWompiAcceptance={setWompiAcceptance} onSetPsePayment={setPsePayment} onSetNequiPayment={setNequiPayment} onPlaceOrder={placeOrder} orderPending={orderPending} fmt={fmt} />
+      <CheckoutModal checkoutOpen={checkoutOpen} checkoutStep={checkoutStep} cartItems={cartItems} cartTotal={cartTotal} checkoutAddress={checkoutAddress} checkoutShipping={checkoutShipping} checkoutPayment={checkoutPayment} checkoutLoading={checkoutLoading} checkoutError={checkoutError} cardPayment={cardPayment} wompiAcceptance={wompiAcceptance} wompiConfig={wompiConfig} psePayment={psePayment} nequiPayment={nequiPayment} lastOrderId={lastOrderId} onClose={() => setCheckoutOpen(false)} onSetCheckoutStep={setCheckoutStep} onSetCheckoutAddress={setCheckoutAddress} onSetCheckoutShipping={setCheckoutShipping} onSetCheckoutPayment={setCheckoutPayment} onSetCardPayment={setCardPayment} onSetWompiAcceptance={setWompiAcceptance} onSetPsePayment={setPsePayment} onSetNequiPayment={setNequiPayment} onPlaceOrder={placeOrder} orderPending={orderPending} orderDeclineReason={orderDeclineReason} fmt={fmt} />
       <OrdersPanel ordersOpen={ordersOpen} orders={orders} selectedOrder={selectedOrder} onClose={() => { setOrdersOpen(false); setSelectedOrder(null); }} onSelectOrder={setSelectedOrder} onGoToCatalog={openCatalog} fmt={fmt} />
     </div>
   );

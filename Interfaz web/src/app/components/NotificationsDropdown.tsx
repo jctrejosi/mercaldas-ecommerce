@@ -5,22 +5,31 @@ interface NotificationsDropdownProps {
   notifications: AppNotification[];
   unreadCount: number;
   onMarkAsRead: (id: number) => void;
+  onNavigate: () => void;
   onClose: () => void;
 }
 
 const typeIcons: Record<string, typeof Package> = {
-  order: Package,
-  promo: Tag,
-  system: Info,
+  ORDER: Package,
+  PAYMENT: Package,
+  PROMOTION: Tag,
+  INFO: Info,
+  SUCCESS: Info,
+  WARNING: AlertCircle,
+  ERROR: AlertCircle,
 };
 
 const typeColors: Record<string, string> = {
-  order: '#F59E0B',
-  promo: '#EC4899',
-  system: '#3B82F6',
+  ORDER: '#F59E0B',
+  PAYMENT: '#10B981',
+  PROMOTION: '#EC4899',
+  INFO: '#3B82F6',
+  SUCCESS: '#10B981',
+  WARNING: '#F59E0B',
+  ERROR: '#EF4444',
 };
 
-export function NotificationsDropdown({ notifications, unreadCount, onMarkAsRead, onClose }: NotificationsDropdownProps) {
+export function NotificationsDropdown({ notifications, unreadCount, onMarkAsRead, onNavigate, onClose }: NotificationsDropdownProps) {
   return (
     <div className="absolute right-0 top-full mt-2 w-80 max-h-[70vh] bg-white rounded-2xl border border-border shadow-2xl z-50 flex flex-col">
       <div className="flex items-center justify-between px-4 py-3 border-b border-border">
@@ -51,7 +60,11 @@ export function NotificationsDropdown({ notifications, unreadCount, onMarkAsRead
             return (
               <button
                 key={n.id}
-                onClick={() => !n.isRead && onMarkAsRead(n.id)}
+                onClick={() => {
+                  if (!n.isRead) onMarkAsRead(n.id);
+                  onNavigate();
+                  onClose();
+                }}
                 className="w-full flex items-start gap-3 px-4 py-3 text-left hover:bg-muted/50 transition-colors border-b border-border last:border-0"
               >
                 <div

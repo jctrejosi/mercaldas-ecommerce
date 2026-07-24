@@ -14,12 +14,8 @@ import {
 } from "lucide-react";
 import { Logo } from "../Logo";
 import type { CartItem } from "../types";
-import type {
-  EpaycoConfigResponse,
-  WompiConfigResponse,
-} from "../../services/orders.service";
+import type { WompiConfigResponse } from "../../services/orders.service";
 
-type EpaycoConfig = EpaycoConfigResponse;
 type WompiConfig = WompiConfigResponse;
 
 interface CheckoutModalProps {
@@ -46,7 +42,6 @@ interface CheckoutModalProps {
     cvv: string;
     installments: string;
   };
-  cardGateway: "epayco" | "wompi";
   wompiAcceptance: {
     terms: boolean;
     personalData: boolean;
@@ -76,7 +71,6 @@ interface CheckoutModalProps {
       prev: CheckoutModalProps["cardPayment"],
     ) => CheckoutModalProps["cardPayment"],
   ) => void;
-  onSetCardGateway: (gateway: "epayco" | "wompi") => void;
   onSetWompiAcceptance: (
     updater: (
       prev: CheckoutModalProps["wompiAcceptance"],
@@ -93,6 +87,7 @@ interface CheckoutModalProps {
     ) => CheckoutModalProps["nequiPayment"],
   ) => void;
   orderPending?: boolean;
+  orderDeclineReason?: string | null;
   onPlaceOrder: () => Promise<void>;
   fmt: (n: number) => string;
 }
@@ -108,20 +103,19 @@ export function CheckoutModal({
   checkoutLoading,
   checkoutError,
   cardPayment,
-  cardGateway,
   wompiAcceptance,
   wompiConfig,
   psePayment,
   nequiPayment,
   lastOrderId,
   orderPending,
+  orderDeclineReason,
   onClose,
   onSetCheckoutStep,
   onSetCheckoutAddress,
   onSetCheckoutShipping,
   onSetCheckoutPayment,
   onSetCardPayment,
-  onSetCardGateway,
   onSetWompiAcceptance,
   onSetPsePayment,
   onSetNequiPayment,
@@ -572,94 +566,58 @@ export function CheckoutModal({
                   </select>
                 </div>
                 <div className="rounded-xl border border-border bg-muted/30 p-3 space-y-3">
-                  <div>
-                    <label className="text-xs font-semibold block mb-2">
-                      Pasarela de pago
-                    </label>
-                    <div className="grid grid-cols-2 gap-2">
-                      <button
-                        type="button"
-                        onClick={() => onSetCardGateway("epayco")}
-                        className={`px-3 py-2.5 rounded-xl border text-sm font-semibold ${cardGateway === "epayco" ? "border-yellow-400 bg-yellow-50" : "border-border bg-white"}`}
+                  <label className="flex items-start gap-2 text-xs text-muted-foreground">
+                    <input
+                      type="checkbox"
+                      checked={wompiAcceptance.terms}
+                      onChange={(e) =>
+                        onSetWompiAcceptance((prev) => ({
+                          ...prev,
+                          terms: e.target.checked,
+                        }))
+                      }
+                      className="mt-0.5"
+                    />
+                    <span>
+                      Acepto los{" "}
+                      <a
+                        href={wompiConfig?.acceptancePermalink ?? "#"}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="underline text-foreground"
                       >
-                        ePayco
-                        <span className="block text-[11px] font-medium text-muted-foreground">
-                          Principal
-                        </span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => onSetCardGateway("wompi")}
-                        className={`px-3 py-2.5 rounded-xl border text-sm font-semibold ${cardGateway === "wompi" ? "border-yellow-400 bg-yellow-50" : "border-border bg-white"}`}
+                        términos y condiciones de Wompi
+                      </a>
+                      .
+                    </span>
+                  </label>
+                  <label className="flex items-start gap-2 text-xs text-muted-foreground">
+                    <input
+                      type="checkbox"
+                      checked={wompiAcceptance.personalData}
+                      onChange={(e) =>
+                        onSetWompiAcceptance((prev) => ({
+                          ...prev,
+                          personalData: e.target.checked,
+                        }))
+                      }
+                      className="mt-0.5"
+                    />
+                    <span>
+                      Autorizo el tratamiento de datos personales según{" "}
+                      <a
+                        href={
+                          wompiConfig?.personalDataAuthPermalink ?? "#"
+                        }
+                        target="_blank"
+                        rel="noreferrer"
+                        className="underline text-foreground"
                       >
-                        Wompi
-                        <span className="block text-[11px] font-medium text-muted-foreground">
-                          Alternativa
-                        </span>
-                      </button>
-                    </div>
-                  </div>
-
-                  {cardGateway === "epayco" ? (
-                    <div className="text-xs text-muted-foreground rounded-lg bg-white border border-border px-3 py-2">
-                      El pago con tarjeta se procesará usando ePayco.
-                    </div>
-                  ) : (
-                    <>
-                      <label className="flex items-start gap-2 text-xs text-muted-foreground">
-                        <input
-                          type="checkbox"
-                          checked={wompiAcceptance.terms}
-                          onChange={(e) =>
-                            onSetWompiAcceptance((prev) => ({
-                              ...prev,
-                              terms: e.target.checked,
-                            }))
-                          }
-                          className="mt-0.5"
-                        />
-                        <span>
-                          Acepto los{" "}
-                          <a
-                            href={wompiConfig?.acceptancePermalink ?? "#"}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="underline text-foreground"
-                          >
-                            términos y condiciones de Wompi
-                          </a>
-                          .
-                        </span>
-                      </label>
-                      <label className="flex items-start gap-2 text-xs text-muted-foreground">
-                        <input
-                          type="checkbox"
-                          checked={wompiAcceptance.personalData}
-                          onChange={(e) =>
-                            onSetWompiAcceptance((prev) => ({
-                              ...prev,
-                              personalData: e.target.checked,
-                            }))
-                          }
-                          className="mt-0.5"
-                        />
-                        <span>
-                          Autorizo el tratamiento de datos personales según{" "}
-                          <a
-                            href={
-                              wompiConfig?.personalDataAuthPermalink ?? "#"
-                            }
-                            target="_blank"
-                            rel="noreferrer"
-                            className="underline text-foreground"
-                          >
-                            la política de Wompi
-                          </a>
-                          .
-                        </span>
-                      </label>
-                    </>
-                  )}
+                        la política de Wompi
+                      </a>
+                      .
+                    </span>
+                  </label>
                 </div>
               </div>
             )}
@@ -777,9 +735,8 @@ export function CheckoutModal({
                     !cardPayment.expiryMonth ||
                     !cardPayment.expiryYear ||
                     !cardPayment.cvv ||
-                    (cardGateway === "wompi" &&
-                      (!wompiAcceptance.terms ||
-                        !wompiAcceptance.personalData)))) ||
+                    (!wompiAcceptance.terms ||
+                      !wompiAcceptance.personalData))) ||
                 (checkoutPayment === "pse" && !psePayment.bank) ||
                 (checkoutPayment === "nequi" && !nequiPayment.phone)
               }
@@ -795,7 +752,27 @@ export function CheckoutModal({
 
         {checkoutStep === 4 && (
           <div className="flex flex-col items-center text-center py-10 gap-5">
-            {orderPending ? (
+            {orderDeclineReason ? (
+              <>
+                <div className="w-20 h-20 rounded-full bg-red-100 flex items-center justify-center">
+                  <X className="w-10 h-10 text-red-500" />
+                </div>
+                <div>
+                  <h2
+                    className="text-2xl font-black"
+                    style={{ fontFamily: "'Bricolage Grotesque', sans-serif" }}
+                  >
+                    Pago rechazado
+                  </h2>
+                  <p className="text-muted-foreground mt-1 text-sm">
+                    Tu pedido <strong>{lastOrderId}</strong> no pudo ser procesado.
+                  </p>
+                  <p className="text-red-500 text-xs mt-1 font-medium">
+                    {orderDeclineReason}
+                  </p>
+                </div>
+              </>
+            ) : orderPending ? (
               <>
                 <div className="w-20 h-20 rounded-full bg-amber-100 flex items-center justify-center">
                   <Clock className="w-10 h-10 text-amber-500" />

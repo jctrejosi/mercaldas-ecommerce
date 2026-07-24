@@ -5,6 +5,7 @@ const SOCKET_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
 export function useOrderSocket(orderId: string | null) {
   const [orderStatus, setOrderStatus] = useState<string | null>(null);
+  const [orderReason, setOrderReason] = useState<string | null>(null);
   const socketRef = useRef<Socket | null>(null);
 
   useEffect(() => {
@@ -17,8 +18,9 @@ export function useOrderSocket(orderId: string | null) {
       socket.emit('subscribe:order', orderId);
     });
 
-    socket.on('order:status', (data: { orderId: string; status: string }) => {
+    socket.on('order:status', (data: { orderId: string; status: string; reason?: string }) => {
       setOrderStatus(data.status);
+      if (data.reason) setOrderReason(data.reason);
     });
 
     return () => {
@@ -27,5 +29,5 @@ export function useOrderSocket(orderId: string | null) {
     };
   }, [orderId]);
 
-  return orderStatus;
+  return { status: orderStatus, reason: orderReason };
 }

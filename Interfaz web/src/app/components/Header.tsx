@@ -14,10 +14,13 @@ import {
   X,
   Plus,
   Minus,
+  Bell,
 } from "lucide-react";
 import { Logo } from "../Logo";
 import type { CartItem, CatalogCategory, Product } from "../types";
 import { catalogService } from "../../services/catalog.service";
+import { NotificationsDropdown } from "./NotificationsDropdown";
+import type { AppNotification } from "../../hooks/useNotifications";
 
 interface HeaderProps {
   cartCount: number;
@@ -33,13 +36,13 @@ interface HeaderProps {
   onOpenCatalog: (categoryId?: number) => void;
   onAddToCart: (product: Product, quantity?: number) => void;
   onRemoveFromCart: (id: number) => void;
+  currentView: string;
   onHome: () => void;
-  currentView: string;
-  currentView: string;
-  onHome: () => void; currentView: string;
   onAccount?: () => void;
-  onNotifOpen?: () => void;
+  notifications?: AppNotification[];
   unreadNotifCount?: number;
+  onMarkNotifRead?: (id: number) => void;
+  onNavigateNotifs?: () => void;
   fmt: (n: number) => string;
 }
 
@@ -68,6 +71,10 @@ export function Header({
   onRemoveFromCart,
   currentView, onHome,
   onAccount,
+  notifications = [],
+  unreadNotifCount = 0,
+  onMarkNotifRead,
+  onNavigateNotifs,
   fmt,
 }: HeaderProps) {
   const [searchQuery, setSearchQuery] = useState("");
@@ -616,6 +623,33 @@ export function Header({
                   "Iniciar sesión"}
             </span>
           </button>
+            {customer && (
+              <div className="relative" ref={notifRef}>
+                <button
+                  onClick={() => setNotifOpen(!notifOpen)}
+                  className="hidden md:flex items-center gap-1.5 px-3 py-2 rounded-lg hover:bg-muted transition-colors text-sm font-medium whitespace-nowrap relative"
+                >
+                  <Bell className="w-4 h-4" />
+                  {unreadNotifCount > 0 && (
+                    <span
+                      className="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full text-[10px] font-bold flex items-center justify-center"
+                      style={{ background: "#FF4444", color: "#fff" }}
+                    >
+                      {unreadNotifCount}
+                    </span>
+                  )}
+                </button>
+                {notifOpen && (
+                  <NotificationsDropdown
+                    notifications={notifications}
+                    unreadCount={unreadNotifCount}
+                    onMarkAsRead={(id) => { onMarkNotifRead?.(id); }}
+                    onNavigate={() => onNavigateNotifs?.()}
+                    onClose={() => setNotifOpen(false)}
+                  />
+                )}
+              </div>
+            )}
           <button
             onClick={onOrdersOpen}
             className="hidden md:flex items-center gap-1.5 px-3 py-2 rounded-lg hover:bg-muted transition-colors text-sm font-medium whitespace-nowrap relative"
