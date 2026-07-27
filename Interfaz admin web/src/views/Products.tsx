@@ -110,6 +110,7 @@ export default function Products() {
   const [priceMin, setPriceMin] = useState("");
   const [priceMax, setPriceMax] = useState("");
   const [totalCount, setTotalCount] = useState(0);
+  const fetchIdRef = useRef(0);
 
   const sentinelRef = useRef<HTMLDivElement>(null);
 
@@ -141,6 +142,7 @@ export default function Products() {
 
   const loadProducts = useCallback(
     async (reset: boolean) => {
+      const id = ++fetchIdRef.current;
       const offset = reset ? 0 : products.length;
       if (reset) {
         setLoading(true);
@@ -164,6 +166,9 @@ export default function Products() {
           offset,
         });
 
+        // Ignore stale responses
+        if (id !== fetchIdRef.current) return;
+
         if (reset) {
           setProducts(data);
         } else {
@@ -173,8 +178,10 @@ export default function Products() {
       } catch {
         // silent
       } finally {
-        setLoading(false);
-        setLoadingMore(false);
+        if (id === fetchIdRef.current) {
+          setLoading(false);
+          setLoadingMore(false);
+        }
       }
     },
     [search, catFilter, brandFilter, typeFilter, statusFilter, priceMin, priceMax, buildSortParam, products.length],
@@ -587,7 +594,8 @@ function ProductDrawer({
 }) {
   const [tab, setTab] = useState<"general" | "stock">("general");
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [toast, setToast] = useState<{ type: "success" | "error"; message: string } | null>(null);
   const [form, setForm] = useState({
     name: product?.name || "",
     description: product?.description || "",
@@ -611,14 +619,15 @@ function ProductDrawer({
 
   const handleSave = async () => {
     if (!form.name || !form.price) {
-      setError("Nombre y precio son obligatorios");
+      setToast({ type: "error", message: "Nombre y precio son obligatorios" });
       return;
     }
     setSaving(true);
-    setError(null);
     try {
       const API = import.meta.env.VITE_API_URL || "http://localhost:3000";
-      const res = await fetch(`${API}/catalog/products/create`, {
+      const isEdit = mode === "edit" && product?.id;
+      const url = isEdit ? `${API}/catalog/products/${product.id}/update` : `${API}/catalog/products/create`;
+      const res = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -633,10 +642,14 @@ function ProductDrawer({
           isActive: form.isActive,
         }),
       });
-      if (!res.ok) throw new Error("Error al crear producto");
-      onCreated();
+      if (!res.ok) {
+        const errData = await res.json().catch(() => null);
+        throw new Error(errData?.message?.join?.(', ') || errData?.message || "Error al guardar");
+      }
+      setToast({ type: "success", message: isEdit ? "Producto actualizado correctamente" : "Producto creado correctamente" });
+      setTimeout(() => { onCreated(); }, 1000);
     } catch (e: any) {
-      setError(e.message);
+      setToast({ type: "error", message: e.message });
     } finally {
       setSaving(false);
     }
@@ -644,6 +657,20 @@ function ProductDrawer({
 
   return (
     <div className="fixed inset-0 z-50 flex">
+      {/* Toast */}
+      {toast && (
+        <div
+          className={`fixed top-4 right-4 z-[60] px-4 py-3 rounded-xl text-sm font-semibold shadow-2xl animate-[slideIn_0.2s_ease-out] flex items-center gap-2 ${toast.type === "success" ? "bg-green-50 text-green-800 border border-green-200" : "bg-red-50 text-red-800 border border-red-200"}`}
+        >
+          {toast.type === "success" ? (
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+          ) : (
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+          )}
+          {toast.message}
+          <button onClick={() => setToast(null)} className="ml-2 hover:opacity-70"><X size={14} /></button>
+        </div>
+      )}
       <div className="flex-1 bg-black/40 animate-[fadeIn_0.2s_ease-out]" onClick={onClose} />
       <div className="w-full max-w-2xl bg-white flex flex-col shadow-2xl animate-[slideIn_0.2s_ease-out]">
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
@@ -664,7 +691,6 @@ function ProductDrawer({
         </div>
 
         <div className="flex-1 overflow-y-auto p-6 space-y-4">
-          {error && <div className="text-sm text-red-600 bg-red-50 rounded-xl px-3 py-2">{error}</div>}
 
           {tab === "general" && (
             <>
@@ -726,8 +752,17 @@ function ProductDrawer({
                       <div className="flex items-center gap-2">
                         <span className="text-xs text-gray-400">o</span>
                         <label className="flex items-center gap-2 px-3 py-1.5 text-xs font-semibold text-gray-600 bg-gray-50 border border-gray-200 rounded-lg hover:bg-gray-100 cursor-pointer transition-colors">
-                          <Upload size={12} />
-                          Subir archivo
+                          {uploading ? (
+                            <>
+                              <svg className="animate-spin w-3 h-3" viewBox="0 0 24 24" fill="none">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                              </svg>
+                              Subiendo...
+                            </>
+                          ) : (
+                            <><Upload size={12} /> Subir archivo</>
+                          )}
                           <input
                             type="file"
                             accept="image/*"
@@ -735,13 +770,12 @@ function ProductDrawer({
                             onChange={async (e) => {
                               const file = e.target.files?.[0];
                               if (!file) return;
-                              // Show preview immediately
+                              setUploading(true);
                               const reader = new FileReader();
                               reader.onload = (ev) => {
                                 update("image", ev.target?.result as string);
                               };
                               reader.readAsDataURL(file);
-                              // Upload to backend → Cloudinary
                               try {
                                 const API = import.meta.env.VITE_API_URL || "http://localhost:3000";
                                 const fd = new FormData();
@@ -751,8 +785,14 @@ function ProductDrawer({
                                 if (res.ok) {
                                   const data = await res.json();
                                   update("image", data.url);
+                                } else {
+                                  setToast({ type: "error", message: "Error al subir imagen" });
                                 }
-                              } catch {}
+                              } catch {
+                                setToast({ type: "error", message: "Error de red al subir imagen" });
+                              } finally {
+                                setUploading(false);
+                              }
                             }}
                           />
                         </label>
@@ -806,7 +846,7 @@ function ProductDrawer({
         <div className="flex items-center justify-between px-6 py-4 border-t border-gray-100 bg-gray-50">
           <button onClick={onClose} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800">Cancelar</button>
           <button onClick={handleSave} disabled={saving} className="px-4 py-2 text-sm font-bold bg-amber-400 text-amber-900 hover:bg-amber-500 rounded-xl transition-colors disabled:opacity-50">
-            {saving ? "Creando..." : "Publicar Producto"}
+            {saving ? "Guardando..." : mode === "create" ? "Publicar Producto" : "Guardar Cambios"}
           </button>
         </div>
       </div>

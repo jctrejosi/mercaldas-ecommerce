@@ -316,6 +316,80 @@ export class CatalogService {
     return result;
   }
 
+  async updateProduct(id: number, dto: CreateProductDto) {
+    const pid = id;
+
+    await this.drizzleService.transaction(async (tx) => {
+      await tx
+        .update(products)
+        .set({
+          name: dto.name,
+          description: dto.description ?? null,
+          brandId: dto.brandId ?? null,
+          isActive: dto.isActive ?? true,
+          featured: dto.isFeatured ?? false,
+          updatedAt: new Date().toISOString(),
+        })
+        .where(eq(products.id, BigInt(pid)));
+
+      const variants = await tx
+        .select({ id: productVariants.id })
+        .from(productVariants)
+        .where(eq(productVariants.productId, pid))
+        .limit(1);
+
+      if (variants.length > 0) {
+        await tx
+          .update(productVariants)
+          .set({
+            sku: dto.sku ?? productVariants.sku,
+            barcode: dto.barcode ?? null,
+            currentPrice: String(dto.price),
+            currentComparePrice: dto.originalPrice ? String(dto.originalPrice) : null,
+          })
+          .where(eq(productVariants.id, BigInt(variants[0].id)));
+      }
+
+      if (dto.image) {
+        const existingImage = await tx
+          .select({ id: productImages.id })
+          .from(productImages)
+          .where(and(eq(productImages.productId, pid), eq(productImages.isCover, true)))
+          .limit(1);
+
+        const insertedMedia = await tx
+          .insert(media)
+          .values({
+            path: dto.image,
+            fileName: dto.image.split('/').pop()?.substring(0, 50) ?? 'updated_image',
+            mimeType: dto.image.startsWith('data:') ? dto.image.split(';')[0].split(':')[1] : 'image/jpeg',
+            mediaType: 'image',
+            sizeBytes: 0,
+            checksum: '',
+          })
+          .returning({ id: media.id });
+
+        const mediaId = Number(insertedMedia[0].id);
+
+        if (existingImage.length > 0) {
+          await tx
+            .update(productImages)
+            .set({ mediaId, updatedAt: new Date().toISOString() })
+            .where(eq(productImages.id, BigInt(existingImage[0].id)));
+        } else {
+          await tx.insert(productImages).values({
+            productId: pid,
+            mediaId,
+            isCover: true,
+            position: 0,
+          });
+        }
+      }
+    });
+
+    return { id };
+  }
+
   async getProducts(
     query: CatalogProductsQueryDto,
   ): Promise<CatalogProductResponse[]> {

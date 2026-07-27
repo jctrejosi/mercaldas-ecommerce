@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, Query, Res, BadRequestException, UploadedFile, UseInterceptors } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query, Res, BadRequestException, UploadedFile, UseInterceptors } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import type { Response } from 'express';
 import { ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
@@ -45,6 +45,14 @@ export class CatalogController {
   }
 
   @Public()
+  @Post('products/:id/update')
+  @ApiOperation({ summary: 'Actualizar un producto existente' })
+  @ApiResponse({ status: 200, description: 'Producto actualizado' })
+  updateProduct(@Param('id') id: string, @Body() dto: CreateProductDto) {
+    return this.catalogService.updateProduct(Number(id), dto);
+  }
+
+  @Public()
   @Get('products/export')
   @ApiOperation({ summary: 'Exportar todos los productos a XLSX' })
   async exportProducts(@Res() res: Response) {
@@ -59,6 +67,9 @@ export class CatalogController {
     if (!file) throw new BadRequestException('Archivo requerido');
     return this.catalogService.importProducts(file);
   }
+
+  @Public()
+  @Get('products/count')
   @ApiOperation({ summary: 'Obtener cantidad total de productos activos' })
   @ApiResponse({ status: 200, description: 'Total de productos' })
   getProductsCount() {
