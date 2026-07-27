@@ -1,4 +1,6 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, BadRequestException } from '@nestjs/common';
+import * as ExcelJS from 'exceljs';
+import type { Response } from 'express';
 import {
   and,
   asc,
@@ -17,6 +19,7 @@ import {
   branches,
   brands,
   categories,
+  inventory,
   media,
   productCategories,
   productImages,
@@ -289,8 +292,11 @@ export class CatalogService {
           .insert(media)
           .values({
             path: dto.image,
+            fileName: dto.image.split('/').pop()?.substring(0, 50) ?? 'uploaded_image',
             mimeType: dto.image.startsWith('data:') ? dto.image.split(';')[0].split(':')[1] : 'image/jpeg',
-            type: 'IMAGE',
+            mediaType: 'image',
+            sizeBytes: 0,
+            checksum: '',
           })
           .returning({ id: media.id });
 
@@ -520,6 +526,184 @@ export class CatalogService {
     }
 
     return Array.from(uniqueProducts.values());
+  }
+
+  async exportProducts(res: Response) {
+    const allProducts = await this.drizzleService.db
+      .select({
+        id: products.id,
+        name: products.name,
+        description: products.description,
+        sku: productVariants.sku,
+        barcode: productVariants.barcode,
+        price: productVariants.currentPrice,
+        originalPrice: productVariants.currentComparePrice,
+        isActive: products.isActive,
+        isFeatured: products.featured,
+        productType: productTypes.name,
+        category: categories.name,
+        brand: brands.name,
+      })
+      .from(products)
+      .innerJoin(productVariants, eq(productVariants.productId, products.id))
+      .leftJoin(productCategories, eq(productCategories.productId, products.id))
+      .leftJoin(categories, eq(categories.id, productCategories.categoryId))
+      .leftJoin(productTypeAssignments, eq(productTypeAssignments.productId, products.id))
+      .leftJoin(productTypes, eq(productTypes.id, productTypeAssignments.productTypeId))
+      .leftJoin(brands, eq(brands.id, products.brandId))
+      .where(and(eq(products.isActive, true), isNull(products.deletedAt)))
+      .orderBy(asc(products.name));
+
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet('Productos');
+
+    sheet.columns = [
+      { header: 'ID', key: 'id', width: 8 },
+      { header: 'Nombre', key: 'name', width: 40 },
+      { header: 'SKU', key: 'sku', width: 15 },
+      { header: 'Código de Barras', key: 'barcode', width: 18 },
+      { header: 'Precio', key: 'price', width: 12 },
+      { header: 'Precio Original', key: 'originalPrice', width: 14 },
+      { header: 'Categoría', key: 'category', width: 20 },
+      { header: 'Marca', key: 'brand', width: 20 },
+      { header: 'Tipo', key: 'productType', width: 20 },
+      { header: 'Activo', key: 'isActive', width: 10 },
+      { header: 'Destacado', key: 'isFeatured', width: 12 },
+      { header: 'Descripción', key: 'description', width: 50 },
+    ];
+
+    for (const p of allProducts) {
+      sheet.addRow({
+        id: Number(p.id),
+        name: p.name,
+        sku: p.sku,
+        barcode: p.barcode,
+        price: p.price,
+        originalPrice: p.originalPrice,
+        category: p.category,
+        brand: p.brand,
+        productType: p.productType,
+        isActive: p.isActive ? 'Sí' : 'No',
+        isFeatured: p.isFeatured ? 'Sí' : 'No',
+        description: p.description,
+      });
+    }
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename=productos_${new Date().toISOString().slice(0, 10)}.xlsx`);
+    await workbook.xlsx.write(res);
+    res.end();
+  }
+
+  async importProducts(file: any) {
+    const raw = file.buffer.toString('utf-8');
+    const catalog = JSON.parse(raw) as { PRODUCTOS?: any[] };
+    const sourceProducts = catalog.PRODUCTOS ?? [];
+
+    let created = 0;
+    let updated = 0;
+
+    // Get default branch
+    const branchRows = await this.drizzleService.db
+      .select({ id: branches.id })
+      .from(branches)
+      .where(and(eq(branches.isActive, true), isNull(branches.deletedAt)))
+      .limit(1);
+    const branchId = branchRows[0]?.id ?? null;
+
+    if (!branchId) throw new BadRequestException('No hay sucursal activa para asignar inventario');
+
+    for (const row of sourceProducts) {
+      const codigo = (row.CODIGO as string)?.trim();
+      const nombre = (row.NOMBRE as string)?.trim();
+      const ean = (row.EAN as string)?.trim();
+      const stock = parseInt(row.SALDO as string, 10) || 0;
+      const currentPrice = parseInt(row.VENTA1 as string, 10) || 0;
+      const comparePrice = parseInt(row.VENTA2 as string, 10) || undefined;
+      const manufacturer = (row.MARCA as string)?.trim();
+
+      if (!nombre || !codigo) continue;
+
+      const slug = nombre.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+
+      // Upsert product
+      const existingVariant = await this.drizzleService.db
+        .select({ id: productVariants.id, productId: productVariants.productId })
+        .from(productVariants)
+        .where(eq(productVariants.sku, codigo))
+        .limit(1);
+
+      let productId: number;
+      let variantId: number;
+
+      if (existingVariant.length > 0) {
+        variantId = Number(existingVariant[0].id);
+        productId = Number(existingVariant[0].productId);
+
+        await this.drizzleService.db.update(products).set({
+          name: nombre,
+          updatedAt: new Date().toISOString(),
+        }).where(eq(products.id, BigInt(productId)));
+
+        await this.drizzleService.db.update(productVariants).set({
+          currentPrice: String(currentPrice),
+          currentComparePrice: comparePrice ? String(comparePrice) : null,
+          barcode: ean || null,
+        }).where(eq(productVariants.id, BigInt(variantId)));
+
+        updated++;
+      } else {
+        const insertedProduct = await this.drizzleService.db.insert(products).values({
+          name: nombre,
+          slug,
+          externalId: codigo,
+          isActive: true,
+          featured: false,
+          visibility: 'PUBLIC',
+        }).returning({ id: products.id });
+
+        productId = Number(insertedProduct[0].id);
+
+        const insertedVariant = await this.drizzleService.db.insert(productVariants).values({
+          productId,
+          sku: codigo,
+          barcode: ean || null,
+          currentPrice: String(currentPrice),
+          currentComparePrice: comparePrice ? String(comparePrice) : null,
+          isActive: true,
+        }).returning({ id: productVariants.id });
+
+        variantId = Number(insertedVariant[0].id);
+
+        created++;
+      }
+
+      // Upsert inventory
+      const existingInv = await this.drizzleService.db
+        .select({ id: inventory.id })
+        .from(inventory)
+        .where(and(
+          eq(inventory.productVariantId, variantId),
+          eq(inventory.branchId, Number(branchId)),
+        ))
+        .limit(1);
+
+      if (existingInv.length > 0) {
+        await this.drizzleService.db.update(inventory).set({ stock }).where(eq(inventory.id, BigInt(existingInv[0].id)));
+      } else {
+        await this.drizzleService.db.insert(inventory).values({
+          productVariantId: variantId,
+          branchId: Number(branchId),
+          stock,
+          reservedStock: 0,
+          reorderPoint: 0,
+          minimumStock: 0,
+          maximumStock: 999999,
+        });
+      }
+    }
+
+    return { created, updated };
   }
 
   async getBranches() {

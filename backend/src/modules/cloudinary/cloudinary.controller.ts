@@ -20,7 +20,7 @@ export class CloudinaryController {
   @ApiConsumes('multipart/form-data')
   @UseInterceptors(FileInterceptor('file'))
   async uploadImage(
-    @UploadedFile() file: Express.Multer.File,
+    @UploadedFile() file: any,
     @Body('code') code?: string,
   ) {
     if (!file) throw new BadRequestException('Archivo requerido');

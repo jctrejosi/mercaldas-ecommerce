@@ -229,12 +229,47 @@ export default function Products() {
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <button className="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors">
-              <Upload size={14} /> Importar
-            </button>
-            <button className="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors">
+            <button
+              onClick={() => {
+                const API = import.meta.env.VITE_API_URL || "http://localhost:3000";
+                window.open(`${API}/catalog/products/export`, "_blank");
+              }}
+              className="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors"
+            >
               <Download size={14} /> Exportar
             </button>
+            <button
+              onClick={() => document.getElementById("import-file-input")?.click()}
+              className="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors"
+            >
+              <Upload size={14} /> Importar
+            </button>
+            <input
+              id="import-file-input"
+              type="file"
+              accept=".json"
+              className="hidden"
+              onChange={async (e) => {
+                const file = (e.target as HTMLInputElement).files?.[0];
+                if (!file) return;
+                const formData = new FormData();
+                formData.append("file", file);
+                try {
+                  const API = import.meta.env.VITE_API_URL || "http://localhost:3000";
+                  const res = await fetch(`${API}/catalog/products/import`, { method: "POST", body: formData });
+                  if (res.ok) {
+                    const data = await res.json();
+                    alert(`Importación completada: ${data.created} creados, ${data.updated} actualizados`);
+                    loadProducts(true);
+                    catalogService.getProductsCount().then((r) => setTotalCount(r.total)).catch(() => {});
+                  } else {
+                    alert("Error al importar");
+                  }
+                } catch {
+                  alert("Error de red al importar");
+                }
+              }}
+            />
             <button
               onClick={() => setDrawer({ mode: "create" })}
               className="flex items-center gap-2 px-3 py-2 text-sm font-bold text-amber-900 bg-amber-400 hover:bg-amber-500 rounded-xl transition-colors"

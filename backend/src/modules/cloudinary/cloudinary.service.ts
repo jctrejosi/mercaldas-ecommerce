@@ -27,7 +27,7 @@ export class CloudinaryService {
   }
 
   async uploadImage(
-    file: Express.Multer.File,
+    file: any,
     productCode: string,
   ): Promise<string> {
     try {

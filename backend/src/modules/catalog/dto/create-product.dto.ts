@@ -41,19 +41,11 @@ export class CreateProductDto {
 
   @IsOptional()
   @IsString()
-  categoryName?: string;
-
-  @IsOptional()
-  @IsString()
   image?: string;
 
   @IsOptional()
   @IsString()
   unit?: string;
-
-  @IsOptional()
-  @IsString()
-  image?: string;
 
   @IsOptional()
   @IsBoolean()
