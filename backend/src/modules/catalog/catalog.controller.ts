@@ -3,6 +3,7 @@ import { ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { Public } from '../../common/decorators/public.decorator';
 import { CatalogService } from './catalog.service';
 import { CatalogProductsQueryDto } from './dto/catalog-products-query.dto';
+import { CreateProductDto } from './dto/create-product.dto';
 
 @ApiTags('Catalog')
 @Controller('catalog')
@@ -31,6 +32,22 @@ export class CatalogController {
   @ApiResponse({ status: 200, description: 'Listado de productos' })
   getProducts(@Body() query: CatalogProductsQueryDto) {
     return this.catalogService.getProducts(query);
+  }
+
+  @Public()
+  @Post('products/create')
+  @ApiOperation({ summary: 'Crear un nuevo producto con su variante' })
+  @ApiResponse({ status: 201, description: 'Producto creado' })
+  createProduct(@Body() dto: CreateProductDto) {
+    return this.catalogService.createProduct(dto);
+  }
+
+  @Public()
+  @Get('products/count')
+  @ApiOperation({ summary: 'Obtener cantidad total de productos activos' })
+  @ApiResponse({ status: 200, description: 'Total de productos' })
+  getProductsCount() {
+    return this.catalogService.getProductsCount();
   }
 
   @Public()

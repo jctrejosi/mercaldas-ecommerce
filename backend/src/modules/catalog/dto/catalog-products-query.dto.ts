@@ -14,6 +14,8 @@ const SORT_OPTIONS = [
   'precio-desc',
   'descuento',
   'nombre',
+  'nombre-desc',
+  'sku',
 ] as const;
 
 export class CatalogProductsQueryDto {

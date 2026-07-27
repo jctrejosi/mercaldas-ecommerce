@@ -24,6 +24,7 @@ import {
   productVariants,
 } from '../../../drizzle/schema';
 import { CatalogProductsQueryDto } from './dto/catalog-products-query.dto';
+import { CreateProductDto } from './dto/create-product.dto';
 
 type CatalogCategoryResponse = {
   id: number;
@@ -231,6 +232,61 @@ export class CatalogService {
     }));
   }
 
+  async getProductsCount(): Promise<{ total: number }> {
+    const rows = await this.drizzleService.db
+      .select({ count: sql<number>`count(DISTINCT ${products.id})`.as('count') })
+      .from(products)
+      .innerJoin(productVariants, eq(productVariants.productId, products.id))
+      .where(
+        and(
+          eq(products.isActive, true),
+          isNull(products.deletedAt),
+          eq(productVariants.isActive, true),
+          isNull(productVariants.deletedAt),
+        ),
+      );
+    return { total: Number(rows[0]?.count ?? 0) };
+  }
+
+  async createProduct(dto: CreateProductDto) {
+    const slug = dto.name
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/(^-|-$)/g, '')
+      + '-' + Date.now().toString(36);
+
+    const sku = dto.sku || `SKU-${Date.now().toString(36).toUpperCase()}`;
+
+    const result = await this.drizzleService.transaction(async (tx) => {
+      const insertedProduct = await tx
+        .insert(products)
+        .values({
+          name: dto.name,
+          slug,
+          description: dto.description ?? null,
+          brandId: dto.brandId ?? null,
+          isActive: dto.isActive ?? true,
+          featured: dto.isFeatured ?? false,
+        })
+        .returning({ id: products.id });
+
+      const productId = Number(insertedProduct[0].id);
+
+      await tx.insert(productVariants).values({
+        productId,
+        sku,
+        barcode: dto.barcode ?? null,
+        currentPrice: String(dto.price),
+        currentComparePrice: dto.originalPrice ? String(dto.originalPrice) : null,
+        isActive: true,
+      });
+
+      return { id: productId, slug, sku };
+    });
+
+    return result;
+  }
+
   async getProducts(
     query: CatalogProductsQueryDto,
   ): Promise<CatalogProductResponse[]> {
@@ -356,13 +412,51 @@ export class CatalogService {
         ),
       )
       .orderBy(...this.buildSort(sort))
-      .limit(limit)
+      .limit(limit * 3)
       .offset(offset);
 
-    const productIds = Array.from(new Set(rows.map((row) => Number(row.id))));
+    // Deduplicate by product ID (LEFT JOINs on categories/type can duplicate rows)
+    const uniqueProducts = new Map<number, CatalogProductResponse>();
+    const productIds: number[] = [];
+
+    for (const row of rows) {
+      const productId = Number(row.id);
+      if (uniqueProducts.has(productId)) continue;
+
+      const price = Number(row.price ?? 0);
+      const originalPrice = row.originalPrice
+        ? Number(row.originalPrice)
+        : undefined;
+
+      uniqueProducts.set(productId, {
+        id: productId,
+        externalId: row.externalId,
+        slug: row.slug,
+        name: row.name,
+        description: row.description,
+        price,
+        ...(originalPrice ? { originalPrice } : {}),
+        image: row.image,
+        images: row.image ? [row.image] : [],
+        category: row.categoryName ?? '',
+        categoryId: row.categoryId ? Number(row.categoryId) : 0,
+        productTypeCode: row.productTypeCode,
+        productTypeName: row.productTypeName,
+        isActive: row.isActive,
+        isFeatured: row.isFeatured,
+        stock: 0,
+      });
+      productIds.push(productId);
+
+      // Stop when we have enough unique products for the original limit
+      if (productIds.length >= limit) break;
+    }
+
     if (productIds.length === 0) {
       return [];
     }
+
+    // Load images for all returned products
 
     const imageRows = await this.drizzleService.db
       .select({
@@ -384,37 +478,12 @@ export class CatalogService {
       imagesByProduct.set(productId, current);
     }
 
-    const uniqueProducts = new Map<number, CatalogProductResponse>();
-
-    for (const row of rows) {
-      const productId = Number(row.id);
-      if (uniqueProducts.has(productId)) continue;
-
-      const price = Number(row.price ?? 0);
-      const originalPrice = row.originalPrice
-        ? Number(row.originalPrice)
-        : undefined;
-      const images =
-        imagesByProduct.get(productId) ?? (row.image ? [row.image] : []);
-
-      uniqueProducts.set(productId, {
-        id: productId,
-        externalId: row.externalId,
-        slug: row.slug,
-        name: row.name,
-        description: row.description,
-        price,
-        ...(originalPrice ? { originalPrice } : {}),
-        image: row.image,
-        images,
-        category: row.categoryName ?? '',
-        categoryId: row.categoryId ? Number(row.categoryId) : 0,
-        productTypeCode: row.productTypeCode,
-        productTypeName: row.productTypeName,
-        isActive: row.isActive,
-        isFeatured: row.isFeatured,
-        stock: 0,
-      });
+    // Merge images into already-deduplicated products
+    for (const [pid, product] of uniqueProducts) {
+      const imgs = imagesByProduct.get(pid);
+      if (imgs && imgs.length > 0) {
+        product.images = imgs;
+      }
     }
 
     return Array.from(uniqueProducts.values());
@@ -471,6 +540,10 @@ export class CatalogService {
         return [desc(productVariants.currentComparePrice), asc(products.name)];
       case 'nombre':
         return [asc(products.name)];
+      case 'nombre-desc':
+        return [desc(products.name)];
+      case 'sku':
+        return [asc(productVariants.sku)];
       case 'relevancia':
       default:
         return [desc(products.featured), asc(products.name)];
