@@ -55,6 +55,9 @@ export type ProductsQuery = {
   categoryIds?: number[];
   brandId?: number;
   productTypeCode?: string;
+  isActive?: boolean;
+  priceMin?: number;
+  priceMax?: number;
   onSale?: boolean;
   priceRange?: string;
   sort?: string;
@@ -98,5 +101,9 @@ export const catalogService = {
 
   async getProductTypes(): Promise<ProductType[]> {
     return fetchJson<ProductType[]>(`${API_BASE_URL}/catalog/product-types`);
+  },
+
+  async getBranches(): Promise<{ id: number; name: string; address: string }[]> {
+    return fetchJson<{ id: number; name: string; address: string }[]>(`${API_BASE_URL}/catalog/branches`);
   },
 };

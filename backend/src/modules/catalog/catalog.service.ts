@@ -4,9 +4,11 @@ import {
   asc,
   desc,
   eq,
+  gte,
   ilike,
   inArray,
   isNull,
+  lte,
   or,
   sql,
 } from 'drizzle-orm';
@@ -281,6 +283,27 @@ export class CatalogService {
         isActive: true,
       });
 
+      // Save image if provided
+      if (dto.image) {
+        const insertedMedia = await tx
+          .insert(media)
+          .values({
+            path: dto.image,
+            mimeType: dto.image.startsWith('data:') ? dto.image.split(';')[0].split(':')[1] : 'image/jpeg',
+            type: 'IMAGE',
+          })
+          .returning({ id: media.id });
+
+        const mediaId = Number(insertedMedia[0].id);
+
+        await tx.insert(productImages).values({
+          productId,
+          mediaId,
+          isCover: true,
+          position: 0,
+        });
+      }
+
       return { id: productId, slug, sku };
     });
 
@@ -393,6 +416,15 @@ export class CatalogService {
             : normalizedCategories.length > 0 || normalizedCategoryIds.length > 0
               ? sql`1 = 0`
               : undefined,
+          query.isActive !== undefined
+            ? eq(products.isActive, query.isActive)
+            : undefined,
+          query.priceMin !== undefined
+            ? gte(productVariants.currentPrice, String(query.priceMin))
+            : undefined,
+          query.priceMax !== undefined
+            ? lte(productVariants.currentPrice, String(query.priceMax))
+            : undefined,
           query.onSale
             ? sql`${productVariants.currentComparePrice} IS NOT NULL`
             : undefined,
@@ -406,6 +438,7 @@ export class CatalogService {
             ? or(
                 ilike(products.name, `%${search}%`),
                 ilike(products.description, `%${search}%`),
+                ilike(productVariants.sku, `%${search}%`),
               )
             : undefined,
           this.buildPriceRangeCondition(query.priceRange),

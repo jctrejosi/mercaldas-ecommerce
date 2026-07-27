@@ -101,10 +101,14 @@ export default function Products() {
   const [brands, setBrands] = useState<Brand[]>([]);
   const [brandFilter, setBrandFilter] = useState<number | null>(null);
   const [productTypes, setProductTypes] = useState<ProductType[]>([]);
+  const [branches, setBranches] = useState<{ id: number; name: string; address: string }[]>([]);
   const [typeFilter, setTypeFilter] = useState<string>("");
   const [sortCol, setSortCol] = useState<SortCol>(null);
   const [sortDir, setSortDir] = useState<SortDir>("asc");
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive">("all");
+  const [priceMin, setPriceMin] = useState("");
+  const [priceMax, setPriceMax] = useState("");
   const [totalCount, setTotalCount] = useState(0);
 
   const sentinelRef = useRef<HTMLDivElement>(null);
@@ -114,6 +118,7 @@ export default function Products() {
     catalogService.getCategories().then(setCategories).catch(() => {});
     catalogService.getBrands().then(setBrands).catch(() => {});
     catalogService.getProductTypes().then(setProductTypes).catch(() => {});
+    catalogService.getBranches().then(setBranches).catch(() => {});
     catalogService.getProductsCount().then((r) => setTotalCount(r.total)).catch(() => {});
   }, []);
 
@@ -151,6 +156,9 @@ export default function Products() {
           categoryIds: catFilter.length > 0 ? catFilter : undefined,
           brandId: brandFilter ?? undefined,
           productTypeCode: typeFilter || undefined,
+          isActive: statusFilter === "all" ? undefined : statusFilter === "active",
+          priceMin: priceMin ? Number(priceMin) : undefined,
+          priceMax: priceMax ? Number(priceMax) : undefined,
           sort: buildSortParam(),
           limit: PAGE_SIZE,
           offset,
@@ -169,13 +177,12 @@ export default function Products() {
         setLoadingMore(false);
       }
     },
-    [search, catFilter, brandFilter, typeFilter, buildSortParam, products.length],
+    [search, catFilter, brandFilter, typeFilter, statusFilter, priceMin, priceMax, buildSortParam, products.length],
   );
 
-  // Initial load + reload on filter change
   useEffect(() => {
     void loadProducts(true);
-  }, [search, catFilter, brandFilter, typeFilter, sortCol, sortDir]);
+  }, [search, catFilter, brandFilter, typeFilter, statusFilter, priceMin, priceMax, sortCol, sortDir]);
 
   // Infinite scroll observer
   useEffect(() => {
@@ -247,7 +254,7 @@ export default function Products() {
             <input
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
-              placeholder="Buscar por nombre..."
+              placeholder="Buscar por nombre o SKU..."
               className="w-full pl-9 pr-3 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-300 bg-white"
             />
           </div>
@@ -262,33 +269,19 @@ export default function Products() {
         {/* Expanded filters */}
         {filtersOpen && (
           <div className="flex items-center gap-4 flex-wrap bg-white border border-gray-200 rounded-xl p-4">
-            {/* Category */}
+            {/* Category dropdown */}
             <div>
               <label className="text-xs font-semibold text-gray-500 block mb-1.5">Categoría</label>
-              <div className="flex flex-wrap gap-1">
-                <button
-                  onClick={() => setCatFilter([])}
-                  className={`px-2.5 py-1 text-xs font-semibold rounded-lg transition-all ${catFilter.length === 0 ? "bg-amber-400 text-amber-900" : "text-gray-500 hover:text-gray-700 bg-gray-50"}`}
-                >
-                  Todas
-                </button>
-                {categories.slice(0, 10).map((c) => {
-                  const active = catFilter.includes(c.id);
-                  return (
-                    <button
-                      key={c.id}
-                      onClick={() =>
-                        setCatFilter((prev) =>
-                          active ? prev.filter((id) => id !== c.id) : [...prev, c.id],
-                        )
-                      }
-                      className={`px-2.5 py-1 text-xs font-semibold rounded-lg transition-all ${active ? "bg-amber-400 text-amber-900" : "text-gray-500 hover:text-gray-700 bg-gray-50"}`}
-                    >
-                      {c.name}
-                    </button>
-                  );
-                })}
-              </div>
+              <select
+                value={catFilter[0] ?? ""}
+                onChange={(e) => setCatFilter(e.target.value ? [Number(e.target.value)] : [])}
+                className="text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 bg-white min-w-[140px]"
+              >
+                <option value="">Todas</option>
+                {categories.map((c) => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
             </div>
 
             {/* Brand */}
@@ -297,7 +290,7 @@ export default function Products() {
               <select
                 value={brandFilter ?? ""}
                 onChange={(e) => setBrandFilter(e.target.value ? Number(e.target.value) : null)}
-                className="text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 bg-white"
+                className="text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 bg-white min-w-[140px]"
               >
                 <option value="">Todas</option>
                 {brands.map((b) => (
@@ -312,7 +305,7 @@ export default function Products() {
               <select
                 value={typeFilter}
                 onChange={(e) => setTypeFilter(e.target.value)}
-                className="text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 bg-white"
+                className="text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 bg-white min-w-[140px]"
               >
                 <option value="">Todos</option>
                 {productTypes.map((pt) => (
@@ -320,6 +313,52 @@ export default function Products() {
                 ))}
               </select>
             </div>
+
+            {/* Status */}
+            <div>
+              <label className="text-xs font-semibold text-gray-500 block mb-1.5">Estado</label>
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value as "all" | "active" | "inactive")}
+                className="text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 bg-white min-w-[120px]"
+              >
+                <option value="all">Todos</option>
+                <option value="active">Activos</option>
+                <option value="inactive">Inactivos</option>
+              </select>
+            </div>
+
+            {/* Price range */}
+            <div>
+              <label className="text-xs font-semibold text-gray-500 block mb-1.5">Precio</label>
+              <div className="flex items-center gap-1">
+                <input
+                  value={priceMin}
+                  onChange={(e) => setPriceMin(e.target.value)}
+                  type="number"
+                  placeholder="Min"
+                  className="w-20 text-xs border border-gray-200 rounded-lg px-2 py-1.5 bg-white"
+                />
+                <span className="text-xs text-gray-400">-</span>
+                <input
+                  value={priceMax}
+                  onChange={(e) => setPriceMax(e.target.value)}
+                  type="number"
+                  placeholder="Max"
+                  className="w-20 text-xs border border-gray-200 rounded-lg px-2 py-1.5 bg-white"
+                />
+              </div>
+            </div>
+
+            {/* Clear filters */}
+            {(catFilter.length > 0 || brandFilter || typeFilter || statusFilter !== "all" || priceMin || priceMax) && (
+              <button
+                onClick={() => { setCatFilter([]); setBrandFilter(null); setTypeFilter(""); setStatusFilter("all"); setPriceMin(""); setPriceMax(""); setSearchInput(""); setSearch(""); }}
+                className="text-xs text-red-500 hover:text-red-700 font-medium self-end mb-0.5"
+              >
+                Limpiar filtros
+              </button>
+            )}
           </div>
         )}
 
@@ -379,16 +418,17 @@ export default function Products() {
                 </tr>
               ) : (
                 products.map((p) => (
-                  <tr key={p.id} className="hover:bg-gray-50 transition-colors group">
+                  <tr key={p.id} className="hover:bg-gray-50 transition-colors group cursor-pointer" onClick={() => setDrawer({ mode: "edit", product: p })}>
                     <td className="px-4 py-3">
                       <input
                         type="checkbox"
                         checked={selected.includes(p.id)}
-                        onChange={(e) =>
+                        onChange={(e) => {
+                          e.stopPropagation();
                           setSelected(
                             e.target.checked ? [...selected, p.id] : selected.filter((id) => id !== p.id),
-                          )
-                        }
+                          );
+                        }}
                         className="w-4 h-4 rounded accent-amber-400"
                       />
                     </td>
@@ -433,7 +473,7 @@ export default function Products() {
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                         <button
-                          onClick={() => setDrawer({ mode: "edit", product: p })}
+                          onClick={(e) => { e.stopPropagation(); setDrawer({ mode: "edit", product: p }); }}
                           className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors"
                         >
                           <Edit size={13} />
@@ -484,8 +524,8 @@ export default function Products() {
         <ProductDrawer
           mode={drawer.mode}
           product={drawer.product}
-          categories={categories}
           brands={brands}
+          branches={branches}
           onClose={() => setDrawer({ mode: null } as any)}
           onCreated={() => { setDrawer({ mode: null } as any); loadProducts(true); }}
         />
@@ -498,19 +538,19 @@ export default function Products() {
 function ProductDrawer({
   mode,
   product,
-  categories,
   brands,
+  branches,
   onClose,
   onCreated,
 }: {
   mode: "create" | "edit";
   product?: any;
-  categories: CatalogCategory[];
   brands: Brand[];
+  branches: { id: number; name: string; address: string }[];
   onClose: () => void;
   onCreated: () => void;
 }) {
-  const [tab, setTab] = useState<"general" | "stock" | "seo">("general");
+  const [tab, setTab] = useState<"general" | "stock">("general");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [form, setForm] = useState({
@@ -521,8 +561,13 @@ function ProductDrawer({
     price: product?.price || "",
     originalPrice: product?.originalPrice || "",
     brandId: product?.brandId || "",
-    categoryName: product?.category || "",
     unit: "",
+    branchId: "",
+    stock: "",
+    minStock: "20",
+    maxStock: "999",
+    reorderPoint: "10",
+    image: product?.image || "",
     isActive: product?.isActive !== false,
   });
 
@@ -549,6 +594,7 @@ function ProductDrawer({
           price: Number(form.price),
           originalPrice: form.originalPrice ? Number(form.originalPrice) : undefined,
           brandId: form.brandId ? Number(form.brandId) : undefined,
+          image: form.image || undefined,
           isActive: form.isActive,
         }),
       });
@@ -563,8 +609,8 @@ function ProductDrawer({
 
   return (
     <div className="fixed inset-0 z-50 flex">
-      <div className="flex-1 bg-black/40" onClick={onClose} />
-      <div className="w-full max-w-2xl bg-white flex flex-col shadow-2xl">
+      <div className="flex-1 bg-black/40 animate-[fadeIn_0.2s_ease-out]" onClick={onClose} />
+      <div className="w-full max-w-2xl bg-white flex flex-col shadow-2xl animate-[slideIn_0.2s_ease-out]">
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
           <h2 className="font-bold text-gray-900">
             {mode === "create" ? "Crear Producto" : "Editar Producto"}
@@ -575,9 +621,9 @@ function ProductDrawer({
         </div>
 
         <div className="flex border-b border-gray-100 px-6">
-          {(["general", "stock", "seo"] as const).map((t) => (
+          {(["general", "stock"] as const).map((t) => (
             <button key={t} onClick={() => setTab(t)} className={`px-4 py-3 text-sm font-medium capitalize border-b-2 transition-colors ${tab === t ? "border-amber-400 text-amber-600" : "border-transparent text-gray-500 hover:text-gray-700"}`}>
-              {t === "seo" ? "SEO" : t.charAt(0).toUpperCase() + t.slice(1)}
+              {t === "general" ? "General" : "Stock"}
             </button>
           ))}
         </div>
@@ -623,6 +669,50 @@ function ProductDrawer({
                   <label className="block text-xs font-semibold text-gray-600 mb-1.5">Descripción</label>
                   <textarea value={form.description} onChange={(e) => update("description", e.target.value)} rows={3} className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-300 resize-none" placeholder="Descripción del producto..." />
                 </div>
+
+                {/* Image */}
+                <div className="col-span-2">
+                  <label className="block text-xs font-semibold text-gray-600 mb-1.5">Imagen</label>
+                  <div className="flex items-start gap-4">
+                    <div className="w-20 h-20 rounded-xl overflow-hidden bg-gray-100 shrink-0 border border-gray-200 flex items-center justify-center">
+                      {form.image ? (
+                        <img src={form.image} alt="Preview" className="w-full h-full object-cover" />
+                      ) : (
+                        <Package className="w-8 h-8 text-gray-300" />
+                      )}
+                    </div>
+                    <div className="flex-1 space-y-2">
+                      <input
+                        value={form.image}
+                        onChange={(e) => update("image", e.target.value)}
+                        className="w-full px-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-300"
+                        placeholder="URL de la imagen..."
+                      />
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-gray-400">o</span>
+                        <label className="flex items-center gap-2 px-3 py-1.5 text-xs font-semibold text-gray-600 bg-gray-50 border border-gray-200 rounded-lg hover:bg-gray-100 cursor-pointer transition-colors">
+                          <Upload size={12} />
+                          Subir archivo
+                          <input
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (!file) return;
+                              const reader = new FileReader();
+                              reader.onload = (ev) => {
+                                const dataUrl = ev.target?.result as string;
+                                update("image", dataUrl);
+                              };
+                              reader.readAsDataURL(file);
+                            }}
+                          />
+                        </label>
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
             </>
           )}
@@ -630,23 +720,37 @@ function ProductDrawer({
           {tab === "stock" && (
             <div className="space-y-4">
               <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1.5">Estado</label>
+                <label className="block text-xs font-semibold text-gray-600 mb-1.5">Sucursal / Bodega</label>
+                <select value={form.branchId} onChange={(e) => update("branchId", e.target.value)} className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-300 bg-white">
+                  <option value="">Principal (por defecto)</option>
+                  {branches.map((b) => (
+                    <option key={b.id} value={b.id}>{b.name} — {b.address}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1.5">Stock actual</label>
+                  <input value={form.stock} onChange={(e) => update("stock", e.target.value)} type="number" className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-300" placeholder="0" />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1.5">Stock máximo</label>
+                  <input value={form.maxStock} onChange={(e) => update("maxStock", e.target.value)} type="number" className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-300" placeholder="999" />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1.5">Stock mínimo (alerta)</label>
+                  <input value={form.minStock} onChange={(e) => update("minStock", e.target.value)} type="number" className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-300" placeholder="20" />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1.5">Punto de reorden</label>
+                  <input value={form.reorderPoint} onChange={(e) => update("reorderPoint", e.target.value)} type="number" className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-300" placeholder="10" />
+                </div>
+              </div>
+              <div>
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input type="checkbox" checked={form.isActive} onChange={(e) => update("isActive", e.target.checked)} className="w-4 h-4 rounded accent-amber-400" />
                   <span className="text-sm text-gray-700">Producto activo</span>
                 </label>
-              </div>
-            </div>
-          )}
-
-          {tab === "seo" && (
-            <div className="space-y-4">
-              <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1.5">Slug URL</label>
-                <div className="flex items-center border border-gray-200 rounded-xl overflow-hidden">
-                  <span className="px-3 py-2.5 text-sm text-gray-400 bg-gray-50 border-r border-gray-200">/producto/</span>
-                  <input className="flex-1 px-3 py-2.5 text-sm focus:outline-none" placeholder="auto-generado" readOnly />
-                </div>
               </div>
             </div>
           )}

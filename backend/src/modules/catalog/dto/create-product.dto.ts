@@ -45,6 +45,10 @@ export class CreateProductDto {
 
   @IsOptional()
   @IsString()
+  image?: string;
+
+  @IsOptional()
+  @IsString()
   unit?: string;
 
   @IsOptional()

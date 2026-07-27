@@ -11,3 +11,13 @@ code, kbd, .mono { font-family: 'JetBrains Mono', monospace; }
 
 .drag-handle:hover { cursor: grab; }
 .drag-handle:active { cursor: grabbing; }
+
+@keyframes slideIn {
+  from { transform: translateX(100%); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}

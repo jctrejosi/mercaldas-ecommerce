@@ -65,6 +65,22 @@ export class CatalogProductsQueryDto {
   priceRange?: string;
 
   @IsOptional()
+  @Transform(({ value }) => {
+    if (value === undefined || value === null || value === '') return undefined;
+    return Number(value);
+  })
+  @IsNumber()
+  priceMin?: number;
+
+  @IsOptional()
+  @Transform(({ value }) => {
+    if (value === undefined || value === null || value === '') return undefined;
+    return Number(value);
+  })
+  @IsNumber()
+  priceMax?: number;
+
+  @IsOptional()
   @IsIn(SORT_OPTIONS)
   sort?: (typeof SORT_OPTIONS)[number];
 
@@ -75,6 +91,15 @@ export class CatalogProductsQueryDto {
   @IsOptional()
   @IsString()
   productTypeCode?: string;
+
+  @IsOptional()
+  @Transform(({ value }) => {
+    if (value === 'true' || value === true) return true;
+    if (value === 'false' || value === false) return false;
+    return undefined;
+  })
+  @IsBoolean()
+  isActive?: boolean;
 
   @IsOptional()
   @Transform(({ value }) => {
