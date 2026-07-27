@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import {
   Search, Plus, Upload, Download, Filter, X, Edit, MoreHorizontal,
-  ChevronUp, ChevronDown, Package,
+  ChevronUp, ChevronDown, Package, RefreshCw,
 } from "lucide-react";
 import {
   catalogService,
@@ -110,6 +110,7 @@ export default function Products() {
   const [priceMin, setPriceMin] = useState("");
   const [priceMax, setPriceMax] = useState("");
   const [totalCount, setTotalCount] = useState(0);
+  const [globalError, setGlobalError] = useState<string | null>(null);
   const fetchIdRef = useRef(0);
 
   const sentinelRef = useRef<HTMLDivElement>(null);
@@ -175,9 +176,12 @@ export default function Products() {
           setProducts((prev) => [...prev, ...data]);
         }
         setHasMore(data.length === PAGE_SIZE);
-      } catch {
-        // silent
-      } finally {
+      } catch (err) {
+        if (id !== fetchIdRef.current) return;
+        setGlobalError('No se pudo conectar con el servidor. Verificá tu conexión.');
+        setLoading(false);
+        setLoadingMore(false);
+        return;
         if (id === fetchIdRef.current) {
           setLoading(false);
           setLoadingMore(false);
@@ -224,11 +228,35 @@ export default function Products() {
     else setSelected(products.map((p) => p.id));
   }
 
+  if (globalError) {
+    return (
+      <div className="flex-1 flex items-center justify-center p-12">
+        <div className="text-center max-w-md">
+          <div className="w-16 h-16 mx-auto rounded-2xl bg-red-50 flex items-center justify-center mb-4">
+            <svg className="w-8 h-8 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
+            </svg>
+          </div>
+          <h2 className="text-lg font-bold text-gray-900 mb-2">Error de conexión</h2>
+          <p className="text-sm text-gray-500 mb-6">{globalError}</p>
+          <button
+            onClick={() => { setGlobalError(null); loadProducts(true); catalogService.getProductsCount().then((r) => setTotalCount(r.total)).catch(() => {}); catalogService.getCategories().then(setCategories).catch(() => {}); catalogService.getBrands().then(setBrands).catch(() => {}); catalogService.getProductTypes().then(setProductTypes).catch(() => {}); catalogService.getBranches().then(setBranches).catch(() => {}); }}
+            className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-bold text-amber-900 bg-amber-400 hover:bg-amber-500 rounded-xl transition-colors"
+          >
+            <RefreshCw size={14} /> Reintentar
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <>
-      <div className="p-6 space-y-5">
-        {/* Header */}
-        <div className="flex items-center justify-between">
+      <div className="flex flex-col h-[calc(100vh-80px)]">
+        {/* Header + filters */}
+        <div className="shrink-0 p-6 pb-0 space-y-5">
+          {/* Header */}
+          <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Productos</h1>
             <p className="text-sm text-gray-500 mt-0.5">
@@ -423,10 +451,12 @@ export default function Products() {
             </div>
           </div>
         )}
+        </div>
 
-        {/* Table */}
-        <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
-          <table className="w-full">
+        {/* Table — fills remaining height */}
+        <div className="flex-1 min-h-0 px-6 pb-6">
+          <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden h-full flex flex-col">
+            <table className="w-full shrink-0">
             <thead>
               <tr className="border-b border-gray-100 bg-gray-50">
                 <th className="px-4 py-3 w-10">
@@ -445,6 +475,9 @@ export default function Products() {
                 <th className="px-4 py-3 w-10" />
               </tr>
             </thead>
+          </table>
+          <div className="overflow-y-auto flex-1">
+            <table className="w-full">
             <tbody className="divide-y divide-gray-50">
               {loading ? (
                 Array.from({ length: 8 }).map((_, i) => <SkeletonRow key={i} />)
@@ -529,7 +562,7 @@ export default function Products() {
                 ))
               )}
             </tbody>
-          </table>
+            </table>
 
           {/* Infinite scroll sentinel */}
           <div ref={sentinelRef} className="h-1" />
@@ -558,6 +591,8 @@ export default function Products() {
               </p>
             </div>
           )}
+          </div>
+          </div>
         </div>
       </div>
 
