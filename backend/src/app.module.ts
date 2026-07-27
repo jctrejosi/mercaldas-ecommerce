@@ -10,6 +10,7 @@ import { OrdersModule } from './modules/orders/orders.module';
 import { PaymentsModule } from './modules/payments/payments.module';
 import { CartModule } from './modules/cart/cart.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
+import { CloudinaryModule } from './modules/cloudinary/cloudinary.module';
 import {
   appConfig,
   databaseConfig,
@@ -44,6 +45,7 @@ import {
     PaymentsModule,
     CartModule,
     NotificationsModule,
+    CloudinaryModule,
   ],
   controllers: [AppController],
   providers: [AppService],

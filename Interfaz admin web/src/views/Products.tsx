@@ -697,15 +697,27 @@ function ProductDrawer({
                             type="file"
                             accept="image/*"
                             className="hidden"
-                            onChange={(e) => {
+                            onChange={async (e) => {
                               const file = e.target.files?.[0];
                               if (!file) return;
+                              // Show preview immediately
                               const reader = new FileReader();
                               reader.onload = (ev) => {
-                                const dataUrl = ev.target?.result as string;
-                                update("image", dataUrl);
+                                update("image", ev.target?.result as string);
                               };
                               reader.readAsDataURL(file);
+                              // Upload to backend → Cloudinary
+                              try {
+                                const API = import.meta.env.VITE_API_URL || "http://localhost:3000";
+                                const fd = new FormData();
+                                fd.append("file", file);
+                                fd.append("code", form.sku || form.name.slice(0, 20).replace(/[^a-zA-Z0-9]/g, '_'));
+                                const res = await fetch(`${API}/upload/image`, { method: "POST", body: fd });
+                                if (res.ok) {
+                                  const data = await res.json();
+                                  update("image", data.url);
+                                }
+                              } catch {}
                             }}
                           />
                         </label>
