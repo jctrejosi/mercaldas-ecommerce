@@ -5,40 +5,14 @@ import {
   type CatalogProductsQuery,
 } from "../services/catalog.service";
 
-export function useCatalog(filters?: CatalogProductsQuery) {
-  const [categories, setCategories] = useState<CatalogCategory[]>([]);
+export function useCatalog(filters?: CatalogProductsQuery, initialCategories?: CatalogCategory[]) {
+  const [categories, setCategories] = useState<CatalogCategory[]>(initialCategories ?? []);
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const categoriesKey = filters?.categories?.join("|") ?? "";
   const categoryIdsKey = filters?.categoryIds?.join("|") ?? "";
-
-  // Load categories only once
-  useEffect(() => {
-    let mounted = true;
-
-    const loadCategories = async () => {
-      try {
-        const data = await catalogService.getCategories();
-        if (mounted) {
-          setCategories(data);
-        }
-      } catch (err) {
-        if (mounted) {
-          setError(
-            err instanceof Error ? err.message : "Error cargando categorías",
-          );
-        }
-      }
-    };
-
-    void loadCategories();
-
-    return () => {
-      mounted = false;
-    };
-  }, []);
 
   // Load products when filters change
   useEffect(() => {

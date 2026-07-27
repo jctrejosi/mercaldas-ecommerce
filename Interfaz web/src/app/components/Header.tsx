@@ -81,9 +81,7 @@ export function Header({
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchResults, setSearchResults] = useState<Product[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
-  const [searchCategories, setSearchCategories] = useState<CatalogCategory[]>(
-    [],
-  );
+  const [searchCategories, setSearchCategories] = useState<CatalogCategory[]>([]);
   const searchRef = useRef<HTMLDivElement>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [categoriesOpen, setCategoriesOpen] = useState(false);
@@ -123,12 +121,10 @@ export function Header({
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
+  // Sync categories from props for search suggestions
   useEffect(() => {
-    void catalogService
-      .getCategories()
-      .then(setSearchCategories)
-      .catch(() => null);
-  }, []);
+    if (categories.length > 0) setSearchCategories(categories);
+  }, [categories]);
 
   useEffect(() => {
     const query = searchQuery.trim();

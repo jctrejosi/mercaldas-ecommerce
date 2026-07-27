@@ -46,6 +46,7 @@ export function CatalogPage({
   setCatalogBrand,
   mobileFiltersOpen,
   setMobileFiltersOpen,
+  catalogCategories,
 }: CatalogPageProps) {
   const [allProducts, setAllProducts] = useState<Product[]>([]);
   const [offset, setOffset] = useState(0);
@@ -71,9 +72,8 @@ export function CatalogPage({
     sort: catalogSort,
     search: catalogSearch,
     brandId: catalogBrand ?? undefined,
-    limit: PAGE_SIZE,
-    offset,
-  });
+    productTypeCode: catalogProductType || undefined,
+  }, catalogCategories);
 
   const getCategoryName = (categoryId: number): string => {
     const category = categories.find((c) => c.id === categoryId);
@@ -169,12 +169,9 @@ export function CatalogPage({
   };
 
   const catalogProducts = products.length > 0 ? products : EMPTY_PRODUCTS;
-  const catalogCategories =
-    categories.length > 0 ? categories : EMPTY_CATEGORIES;
-
-  const rootCategories = catalogCategories.filter(
-    (category) => !category.parentId,
-  );
+  const rootCategories = categories.length > 0
+    ? categories.filter((category) => !category.parentId)
+    : [];
 
   const getChildCategories = (parentId: number) =>
     categoriesByParentId.get(parentId) ?? [];

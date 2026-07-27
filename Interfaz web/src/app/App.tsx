@@ -28,6 +28,8 @@ type CatalogProductsQuery = {
   onSale?: boolean; priceRange?: string; sort?: string; search?: string; limit?: number; offset?: number;
 };
 
+let initialDataLoaded = false;
+
 export default function App() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -100,26 +102,7 @@ const [landingLoading, setLandingLoading] = useState(true);
   const [landingBranches, setLandingBranches] = useState<Branch[]>([]);
   const [landingProductTypes, setLandingProductTypes] = useState<{ id: number; code: string; name: string; count: number }[]>([]);
   const [apiError, setApiError] = useState<number | null>(null);
-  const [healthChecked, setHealthChecked] = useState(false);
-
-  // Detectar si el backend esta disponible antes de renderizar la app
-  useEffect(() => {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 5000);
-    fetch(`${import.meta.env.VITE_API_URL || "http://localhost:3000"}/catalog/categories`, {
-      signal: controller.signal,
-    })
-      .then((res) => {
-        clearTimeout(timeout);
-        if (!res.ok) setApiError(res.status);
-      })
-      .catch(() => {
-        clearTimeout(timeout);
-        setApiError(502);
-      })
-      .finally(() => setHealthChecked(true));
-    return () => { clearTimeout(timeout); controller.abort(); };
-  }, []);
+  const [healthChecked, setHealthChecked] = useState(true);
 
   const { customer, loading: customerLoading, login, register, socialLogin } = useCustomerAuth();
   const { notifications, unreadCount, markAsRead } = useNotifications(customer?.id ?? null);
@@ -127,6 +110,9 @@ const [landingLoading, setLandingLoading] = useState(true);
   const [authLoading, setAuthLoading] = useState(false);
 
   useEffect(() => {
+    if (initialDataLoaded) return;
+    initialDataLoaded = true;
+
     void catalogService.getCategories().then(setLandingCategories).catch(() => {});
     void catalogService.getProducts({ onSale: true, sort: "descuento", limit: 8 }).then(setDealProducts).catch(() => {});
     void catalogService.getFeaturedBrands().then(setFeaturedBrands).catch(() => {});
@@ -275,7 +261,7 @@ const [landingLoading, setLandingLoading] = useState(true);
     <div className="min-h-screen bg-background" style={{ fontFamily: "'Inter', sans-serif" }}>
       <Header {...headerProps} />
 
-      {currentView === "catalog" && (<CatalogPage cartItems={cartItems} onAdd={addToCart} onRemove={removeFromCart} onBack={() => { navigate("/"); setCurrentView("home"); }} onProductClick={setSelectedProduct} onOpenCategory={openCatalog} catalogCategory={catalogCategory} setCatalogCategory={setCatalogCategory} catalogOnSale={catalogOnSale} setCatalogOnSale={setCatalogOnSale} catalogPriceRange={catalogPriceRange} setCatalogPriceRange={setCatalogPriceRange} catalogSort={catalogSort} setCatalogSort={setCatalogSort} catalogSearch={catalogSearch} setCatalogSearch={setCatalogSearch} catalogBrand={catalogBrand} setCatalogBrand={setCatalogBrand} catalogProductType={catalogProductType} setCatalogProductType={setCatalogProductType} mobileFiltersOpen={mobileFiltersOpen} setMobileFiltersOpen={setMobileFiltersOpen} />)}
+      {currentView === "catalog" && (<CatalogPage cartItems={cartItems} onAdd={addToCart} onRemove={removeFromCart} onBack={() => { navigate("/"); setCurrentView("home"); }} onProductClick={setSelectedProduct} onOpenCategory={openCatalog} catalogCategory={catalogCategory} setCatalogCategory={setCatalogCategory} catalogOnSale={catalogOnSale} setCatalogOnSale={setCatalogOnSale} catalogPriceRange={catalogPriceRange} setCatalogPriceRange={setCatalogPriceRange} catalogSort={catalogSort} setCatalogSort={setCatalogSort} catalogSearch={catalogSearch} setCatalogSearch={setCatalogSearch} catalogBrand={catalogBrand} setCatalogBrand={setCatalogBrand} catalogProductType={catalogProductType} setCatalogProductType={setCatalogProductType} mobileFiltersOpen={mobileFiltersOpen} setMobileFiltersOpen={setMobileFiltersOpen} catalogCategories={landingCategories} />)}
 
       {currentView === "account" && (
         <UserAdminView appOrders={orders} cartItems={cartItems} onAdd={addToCart} onRemove={removeFromCart} onProductClick={setSelectedProduct} onBack={() => { setCurrentView("home"); navigate("/"); }} onViewCatalog={openCatalog} initialSection={(new URLSearchParams(location.search).get("tab") as AccountSection) || undefined} notifications={notifications} unreadNotifCount={unreadCount} onMarkNotifRead={markAsRead} />

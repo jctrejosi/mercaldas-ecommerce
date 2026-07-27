@@ -34,6 +34,7 @@ export interface CatalogPageProps {
   setCatalogProductType: (v: string) => void;
   mobileFiltersOpen: boolean;
   setMobileFiltersOpen: (v: boolean) => void;
+  catalogCategories?: CatalogCategory[];
 }
 
 export interface Product {
