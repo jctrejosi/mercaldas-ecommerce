@@ -973,6 +973,7 @@ export interface UserAdminViewProps {
   notifications?: AppNotification[];
   unreadNotifCount?: number;
   onMarkNotifRead?: (id: number) => void;
+  onReplaceCart?: (items: CartItem[]) => void;
   fmt?: (n: number) => string;
 }
 
@@ -989,6 +990,7 @@ export function UserAdminView({
   notifications = [],
   unreadNotifCount = 0,
   onMarkNotifRead,
+  onReplaceCart,
 }: UserAdminViewProps) {
   const [section, setSection] = useState<AccountSection>(initialSection);
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
@@ -2192,6 +2194,22 @@ export function UserAdminView({
       );
     };
 
+    const replaceListToCart = (list: (typeof lists)[0]) => {
+      if (!onReplaceCart) return;
+      onReplaceCart(
+        list.items.map(
+          ({ productId, productName, productPrice, productImage, quantity }) =>
+            ({
+              id: productId,
+              name: productName,
+              price: productPrice,
+              image: productImage || undefined,
+              quantity,
+            }) as CartItem,
+        ),
+      );
+    };
+
     if (listsLoading) {
       return (
         <div className="flex items-center justify-center py-20">
@@ -2441,16 +2459,28 @@ export function UserAdminView({
                       Agregar producto
                     </button>
 
-                    {selectedList.items.length > 0 && (
-                      <button
-                        onClick={() => addListToCart(selectedList)}
-                        className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl font-bold text-sm transition-all hover:brightness-95"
-                        style={{ background: "#FFF200", color: "#1A1A2E" }}
-                      >
-                        <ShoppingCart className="w-4 h-4" />
-                        Agregar lista al carrito
-                      </button>
-                    )}
+                    {selectedList.items.length > 0 ? (
+                      <div className="flex gap-2 flex-1">
+                        <button
+                          onClick={() => addListToCart(selectedList)}
+                          className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl font-bold text-sm transition-all hover:brightness-95"
+                          style={{ background: "#FFF200", color: "#1A1A2E" }}
+                        >
+                          <ShoppingCart className="w-4 h-4" />
+                          Agregar al carrito
+                        </button>
+                        {onReplaceCart && (
+                          <button
+                            onClick={() => replaceListToCart(selectedList)}
+                            className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl font-bold text-sm border-2 border-[#FFF200] transition-all hover:bg-[#FFF200]/10"
+                            style={{ color: "#1A1A2E" }}
+                          >
+                            <RefreshCcw className="w-4 h-4" />
+                            Reemplazar carrito
+                          </button>
+                        )}
+                      </div>
+                    ) : null}
                   </div>
 
                   {/* Product search panel */}
