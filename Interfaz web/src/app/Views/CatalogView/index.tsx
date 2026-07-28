@@ -46,6 +46,8 @@ export function CatalogPage({
   setCatalogBrand,
   mobileFiltersOpen,
   setMobileFiltersOpen,
+  catalogProductType,
+  setCatalogProductType,
   catalogCategories,
 }: CatalogPageProps) {
   const [allProducts, setAllProducts] = useState<Product[]>([]);

@@ -166,8 +166,12 @@ export class CatalogService {
       .orderBy(asc(brands.name));
 
     return rows.map((row) => ({
-      ...row,
       id: Number(row.id),
+      name: row.name,
+      slug: row.slug,
+      description: row.description,
+      image: row.image,
+      website: row.website,
     }));
   }
 
@@ -198,8 +202,9 @@ export class CatalogService {
       .orderBy(asc(brands.name));
 
     return rows.map((row) => ({
-      ...row,
       id: Number(row.id),
+      name: row.name,
+      slug: row.slug,
       count: Number(row.count),
     }));
   }
@@ -231,8 +236,10 @@ export class CatalogService {
       .orderBy(asc(productTypes.name));
 
     return rows.map((row) => ({
-      ...row,
       id: Number(row.id),
+      code: row.code,
+      name: row.name,
+      description: row.description,
       count: Number(row.count),
     }));
   }
@@ -801,8 +808,16 @@ export class CatalogService {
       .orderBy(asc(branches.priority));
 
     return rows.map((row) => ({
-      ...row,
       id: Number(row.id),
+      name: row.name,
+      address: row.address,
+      city: row.city,
+      phone: row.phone,
+      email: row.email,
+      schedule: row.schedule,
+      location: row.location,
+      isActive: row.isActive,
+      priority: Number(row.priority ?? 0),
     }));
   }
 
