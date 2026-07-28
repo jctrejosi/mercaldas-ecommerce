@@ -179,9 +179,7 @@ export default function Products() {
       } catch (err) {
         if (id !== fetchIdRef.current) return;
         setGlobalError('No se pudo conectar con el servidor. Verificá tu conexión.');
-        setLoading(false);
-        setLoadingMore(false);
-        return;
+      } finally {
         if (id === fetchIdRef.current) {
           setLoading(false);
           setLoadingMore(false);
