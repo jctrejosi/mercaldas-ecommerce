@@ -666,6 +666,7 @@ export default function App() {
           onBack={() => {
             navigate("/");
             setCurrentView("home");
+            window.scrollTo(0, 0);
           }}
           onProductClick={setSelectedProduct}
           onOpenCategory={openCatalog}
@@ -700,6 +701,7 @@ export default function App() {
           onBack={() => {
             setCurrentView("home");
             navigate("/");
+            window.scrollTo(0, 0);
           }}
           onViewCatalog={openCatalog}
           initialSection={
