@@ -163,7 +163,7 @@ const [landingLoading, setLandingLoading] = useState(true);
   const removeFromCart = (id: number) => setCartItems(prev => { const e = prev.find(c => c.id === id); return !e ? prev : e.quantity === 1 ? prev.filter(c => c.id !== id) : prev.map(c => c.id === id ? { ...c, quantity: c.quantity - 1 } : c); });
   const deleteFromCart = (id: number) => setCartItems(prev => prev.filter(c => c.id !== id));
 
-  const openCatalog = (categoryId?: number) => { setCatalogBrand(null); if (categoryId) { setCatalogCategory([categoryId]); setCatalogSearch(""); } else setCatalogCategory([]); setCurrentView("catalog"); navigate("/catalog"); window.scrollTo({ top: 0, behavior: "smooth" }); };
+  const openCatalog = (categoryId?: number) => { setCurrentView("catalog"); navigate("/catalog"); window.scrollTo({ top: 0, behavior: "smooth" }); };
   const openModal = (v: "choice" | "login" | "register") => { if (customer) { setLoginModal(false); return; } setModalView(v); setLoginModal(true); };
   const closeModal = () => setLoginModal(false);
   const cartTotal = cartItems.reduce((s, c) => s + c.price * c.quantity, 0);

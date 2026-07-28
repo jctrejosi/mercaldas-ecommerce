@@ -184,7 +184,7 @@ export function CatalogPage({
     catalogCategory.length +
     (catalogOnSale ? 1 : 0) +
     (catalogPriceRange !== "all" ? 1 : 0) +
-    catalogProductType ? 1 : 0;
+    (catalogProductType ? 1 : 0);
 
   const clearAll = () => {
     setCatalogCategory([]);
