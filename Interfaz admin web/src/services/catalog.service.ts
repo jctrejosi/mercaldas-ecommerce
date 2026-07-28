@@ -63,6 +63,7 @@ export type ProductsQuery = {
   sort?: string;
   limit?: number;
   offset?: number;
+  uncategorized?: boolean;
 };
 
 async function fetchJson<T>(input: string, init?: RequestInit): Promise<T> {
@@ -88,7 +89,9 @@ export const catalogService = {
   },
 
   async getProductsCount(): Promise<{ total: number }> {
-    return fetchJson<{ total: number }>(`${API_BASE_URL}/catalog/products/count`);
+    return fetchJson<{ total: number }>(
+      `${API_BASE_URL}/catalog/products/count`,
+    );
   },
 
   async getCategories(): Promise<CatalogCategory[]> {
@@ -103,7 +106,66 @@ export const catalogService = {
     return fetchJson<ProductType[]>(`${API_BASE_URL}/catalog/product-types`);
   },
 
-  async getBranches(): Promise<{ id: number; name: string; address: string }[]> {
-    return fetchJson<{ id: number; name: string; address: string }[]>(`${API_BASE_URL}/catalog/branches`);
+  async getBranches(): Promise<
+    { id: number; name: string; address: string }[]
+  > {
+    return fetchJson<{ id: number; name: string; address: string }[]>(
+      `${API_BASE_URL}/catalog/branches`,
+    );
+  },
+
+  // ── Admin Category CRUD ──
+
+  async getCategoriesAdmin(): Promise<
+    Array<{
+      id: number;
+      name: string;
+      slug: string;
+      parentId: number | null;
+      displayOrder: number;
+      description: string | null;
+      isActive: boolean;
+      level: number;
+      createdAt: string;
+      imagePath: string | null;
+    }>
+  > {
+    return fetchJson(`${API_BASE_URL}/admin/catalog/categories`);
+  },
+
+  async createCategory(data: {
+    name: string;
+    parentId?: number;
+  }): Promise<{ id: number }> {
+    return fetchJson(`${API_BASE_URL}/admin/catalog/categories`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+
+  async updateCategory(
+    id: number,
+    data: { name?: string; isActive?: boolean },
+  ): Promise<{ id: number }> {
+    return fetchJson(`${API_BASE_URL}/admin/catalog/categories/${id}`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+
+  async deleteCategory(id: number): Promise<void> {
+    await fetch(`${API_BASE_URL}/admin/catalog/categories/${id}`, {
+      method: "DELETE",
+    });
+  },
+
+  async getUncategorizedProducts(): Promise<CatalogProduct[]> {
+    return fetchJson<CatalogProduct[]>(
+      `${API_BASE_URL}/admin/catalog/products`,
+      {
+        method: "POST",
+        body: JSON.stringify({ uncategorized: true, limit: 50 }),
+      },
+    );
   },
 };

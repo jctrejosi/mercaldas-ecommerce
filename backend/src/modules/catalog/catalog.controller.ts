@@ -1,4 +1,17 @@
-import { Body, Controller, Delete, Get, Param, Post, Query, Res, BadRequestException, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Post,
+  Query,
+  Res,
+  BadRequestException,
+  UploadedFile,
+  UseGuards,
+  UseInterceptors,
+} from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import type { Response } from 'express';
 import { ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
@@ -25,10 +38,15 @@ export class CatalogController {
   @Public()
   @Get('categories/counts')
   @ApiOperation({ summary: 'Obtener conteo de productos por categoría' })
-  @ApiResponse({ status: 200, description: 'Conteo de productos por categoría' })
+  @ApiResponse({
+    status: 200,
+    description: 'Conteo de productos por categoría',
+  })
   getCategoryCounts() {
     return this.catalogService.getCategoryCounts();
   }
+
+  // ── Products ──
 
   @Public()
   @Post('products')
@@ -96,7 +114,9 @@ export class CatalogController {
 
   @Public()
   @Get('brands')
-  @ApiOperation({ summary: 'Obtener marcas del catálogo con conteo de productos' })
+  @ApiOperation({
+    summary: 'Obtener marcas del catálogo con conteo de productos',
+  })
   @ApiResponse({ status: 200, description: 'Listado de marcas con productos' })
   getCatalogBrands() {
     return this.catalogService.getCatalogBrands();
@@ -168,7 +188,11 @@ export class CatalogController {
     @Param('id') id: string,
     @Body() body: { name: string },
   ) {
-    await this.catalogService.updateShoppingList(customer.sub, Number(id), body.name);
+    await this.catalogService.updateShoppingList(
+      customer.sub,
+      Number(id),
+      body.name,
+    );
     return { success: true };
   }
 
@@ -191,7 +215,12 @@ export class CatalogController {
     @Param('id') id: string,
     @Body() body: { productId: number; quantity?: number },
   ) {
-    await this.catalogService.addToShoppingList(customer.sub, Number(id), body.productId, body.quantity ?? 1);
+    await this.catalogService.addToShoppingList(
+      customer.sub,
+      Number(id),
+      body.productId,
+      body.quantity ?? 1,
+    );
     return { success: true };
   }
 
@@ -204,7 +233,11 @@ export class CatalogController {
     @Param('productId') productId: string,
     @Body() body: { quantity: number },
   ) {
-    await this.catalogService.updateShoppingListItem(Number(listId), Number(productId), body.quantity);
+    await this.catalogService.updateShoppingListItem(
+      Number(listId),
+      Number(productId),
+      body.quantity,
+    );
     return { success: true };
   }
 
@@ -216,7 +249,10 @@ export class CatalogController {
     @Param('listId') listId: string,
     @Param('productId') productId: string,
   ) {
-    await this.catalogService.removeShoppingListItem(Number(listId), Number(productId));
+    await this.catalogService.removeShoppingListItem(
+      Number(listId),
+      Number(productId),
+    );
     return { success: true };
   }
 }

@@ -130,4 +130,9 @@ export class CatalogProductsQueryDto {
   })
   @IsNumber()
   offset?: number;
+
+  @IsOptional()
+  @Transform(({ value }) => value === 'true' || value === true)
+  @IsBoolean()
+  uncategorized?: boolean;
 }

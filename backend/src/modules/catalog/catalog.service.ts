@@ -1,4 +1,9 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  BadRequestException,
+  NotFoundException,
+} from '@nestjs/common';
+import slugify from 'slugify';
 import * as ExcelJS from 'exceljs';
 import type { Response } from 'express';
 import {
@@ -11,6 +16,7 @@ import {
   inArray,
   isNull,
   lte,
+  ne,
   or,
   sql,
 } from 'drizzle-orm';
@@ -132,7 +138,10 @@ export class CatalogService {
         count: sql<number>`count(DISTINCT ${products.id})`,
       })
       .from(categories)
-      .innerJoin(productCategories, eq(productCategories.categoryId, categories.id))
+      .innerJoin(
+        productCategories,
+        eq(productCategories.categoryId, categories.id),
+      )
       .innerJoin(products, eq(products.id, productCategories.productId))
       .innerJoin(productVariants, eq(productVariants.productId, products.id))
       .where(
@@ -151,6 +160,119 @@ export class CatalogService {
       categoryId: Number(row.categoryId),
       count: Number(row.count),
     }));
+  }
+
+  // ── Admin Category CRUD ──
+
+  async getAllCategoriesAdmin() {
+    const rows = await this.drizzleService.db
+      .select({
+        id: categories.id,
+        parentId: categories.parentId,
+        name: categories.name,
+        slug: categories.slug,
+        displayOrder: categories.displayOrder,
+        description: categories.description,
+        isActive: categories.isActive,
+        level: categories.level,
+        createdAt: categories.createdAt,
+        imagePath: media.path,
+      })
+      .from(categories)
+      .leftJoin(media, eq(categories.imageMediaId, media.id))
+      .where(isNull(categories.deletedAt))
+      .orderBy(asc(categories.displayOrder), asc(categories.name));
+
+    return rows.map((row) => ({
+      id: Number(row.id),
+      parentId: row.parentId ? Number(row.parentId) : null,
+      name: row.name,
+      slug: row.slug,
+      displayOrder: row.displayOrder ?? 0,
+      description: row.description,
+      isActive: row.isActive,
+      level: row.level ?? 0,
+      createdAt: row.createdAt,
+      imagePath: row.imagePath,
+    }));
+  }
+
+  async createCategory(data: { name: string; parentId?: number }) {
+    let slug = slugify(data.name, { lower: true, strict: true });
+    let level = 0;
+
+    if (data.parentId) {
+      const [parent] = await this.drizzleService.db
+        .select({ level: categories.level })
+        .from(categories)
+        .where(eq(categories.id, BigInt(data.parentId)));
+      if (!parent) throw new NotFoundException('Categoría padre no encontrada');
+      level = (parent.level ?? 0) + 1;
+    }
+
+    // Ensure unique slug
+    const existing = await this.drizzleService.db
+      .select({ slug: categories.slug })
+      .from(categories)
+      .where(eq(categories.slug, slug));
+    if (existing.length > 0) slug = `${slug}-${Date.now()}`;
+
+    const [inserted] = await this.drizzleService.db
+      .insert(categories)
+      .values({
+        name: data.name,
+        slug,
+        parentId: data.parentId ?? null,
+        level,
+        displayOrder: 0,
+        isActive: true,
+      })
+      .returning({ id: categories.id });
+
+    return { id: Number(inserted.id) };
+  }
+
+  async updateCategory(
+    id: number,
+    data: { name?: string; isActive?: boolean },
+  ) {
+    const updates: Record<string, any> = {};
+
+    if (data.name !== undefined) {
+      let slug = slugify(data.name, { lower: true, strict: true });
+      const existing = await this.drizzleService.db
+        .select({ id: categories.id })
+        .from(categories)
+        .where(and(eq(categories.slug, slug), ne(categories.id, BigInt(id))));
+      if (existing.length > 0) slug = `${slug}-${Date.now()}`;
+      updates.name = data.name;
+      updates.slug = slug;
+    }
+
+    if (data.isActive !== undefined) {
+      updates.isActive = data.isActive;
+    }
+
+    if (Object.keys(updates).length === 0) return { id };
+
+    const [updated] = await this.drizzleService.db
+      .update(categories)
+      .set(updates)
+      .where(eq(categories.id, BigInt(id)))
+      .returning({ id: categories.id });
+
+    if (!updated) throw new NotFoundException('Categoría no encontrada');
+    return { id };
+  }
+
+  async deleteCategory(id: number) {
+    const [deleted] = await this.drizzleService.db
+      .update(categories)
+      .set({ deletedAt: new Date().toISOString() })
+      .where(eq(categories.id, BigInt(id)))
+      .returning({ id: categories.id });
+
+    if (!deleted) throw new NotFoundException('Categoría no encontrada');
   }
 
   async getFeaturedBrands() {
@@ -222,7 +344,10 @@ export class CatalogService {
         count: sql<number>`count(DISTINCT ${products.id})`,
       })
       .from(productTypes)
-      .innerJoin(productTypeAssignments, eq(productTypeAssignments.productTypeId, productTypes.id))
+      .innerJoin(
+        productTypeAssignments,
+        eq(productTypeAssignments.productTypeId, productTypes.id),
+      )
       .innerJoin(products, eq(products.id, productTypeAssignments.productId))
       .innerJoin(productVariants, eq(productVariants.productId, products.id))
       .where(
@@ -234,7 +359,12 @@ export class CatalogService {
           isNull(productVariants.deletedAt),
         ),
       )
-      .groupBy(productTypes.id, productTypes.code, productTypes.name, productTypes.description)
+      .groupBy(
+        productTypes.id,
+        productTypes.code,
+        productTypes.name,
+        productTypes.description,
+      )
       .having(sql`count(DISTINCT ${products.id}) > 0`)
       .orderBy(asc(productTypes.name));
 
@@ -249,7 +379,9 @@ export class CatalogService {
 
   async getProductsCount(): Promise<{ total: number }> {
     const rows = await this.drizzleService.db
-      .select({ count: sql<number>`count(DISTINCT ${products.id})`.as('count') })
+      .select({
+        count: sql<number>`count(DISTINCT ${products.id})`.as('count'),
+      })
       .from(products)
       .innerJoin(productVariants, eq(productVariants.productId, products.id))
       .where(
@@ -264,11 +396,13 @@ export class CatalogService {
   }
 
   async createProduct(dto: CreateProductDto) {
-    const slug = dto.name
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/(^-|-$)/g, '')
-      + '-' + Date.now().toString(36);
+    const slug =
+      dto.name
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/(^-|-$)/g, '') +
+      '-' +
+      Date.now().toString(36);
 
     const sku = dto.sku || `SKU-${Date.now().toString(36).toUpperCase()}`;
 
@@ -292,7 +426,9 @@ export class CatalogService {
         sku,
         barcode: dto.barcode ?? null,
         currentPrice: String(dto.price),
-        currentComparePrice: dto.originalPrice ? String(dto.originalPrice) : null,
+        currentComparePrice: dto.originalPrice
+          ? String(dto.originalPrice)
+          : null,
         isActive: true,
       });
 
@@ -302,8 +438,11 @@ export class CatalogService {
           .insert(media)
           .values({
             path: dto.image,
-            fileName: dto.image.split('/').pop()?.substring(0, 50) ?? 'uploaded_image',
-            mimeType: dto.image.startsWith('data:') ? dto.image.split(';')[0].split(':')[1] : 'image/jpeg',
+            fileName:
+              dto.image.split('/').pop()?.substring(0, 50) ?? 'uploaded_image',
+            mimeType: dto.image.startsWith('data:')
+              ? dto.image.split(';')[0].split(':')[1]
+              : 'image/jpeg',
             mediaType: 'image',
             sizeBytes: 0,
             checksum: '',
@@ -355,7 +494,9 @@ export class CatalogService {
             sku: dto.sku ?? productVariants.sku,
             barcode: dto.barcode ?? null,
             currentPrice: String(dto.price),
-            currentComparePrice: dto.originalPrice ? String(dto.originalPrice) : null,
+            currentComparePrice: dto.originalPrice
+              ? String(dto.originalPrice)
+              : null,
           })
           .where(eq(productVariants.id, BigInt(variants[0].id)));
       }
@@ -364,15 +505,23 @@ export class CatalogService {
         const existingImage = await tx
           .select({ id: productImages.id })
           .from(productImages)
-          .where(and(eq(productImages.productId, pid), eq(productImages.isCover, true)))
+          .where(
+            and(
+              eq(productImages.productId, pid),
+              eq(productImages.isCover, true),
+            ),
+          )
           .limit(1);
 
         const insertedMedia = await tx
           .insert(media)
           .values({
             path: dto.image,
-            fileName: dto.image.split('/').pop()?.substring(0, 50) ?? 'updated_image',
-            mimeType: dto.image.startsWith('data:') ? dto.image.split(';')[0].split(':')[1] : 'image/jpeg',
+            fileName:
+              dto.image.split('/').pop()?.substring(0, 50) ?? 'updated_image',
+            mimeType: dto.image.startsWith('data:')
+              ? dto.image.split(';')[0].split(':')[1]
+              : 'image/jpeg',
             mediaType: 'image',
             sizeBytes: 0,
             checksum: '',
@@ -404,7 +553,8 @@ export class CatalogService {
     query: CatalogProductsQueryDto,
   ): Promise<CatalogProductResponse[]> {
     const normalizedCategories = query.categories?.filter(Boolean) ?? [];
-    const normalizedCategoryIds = query.categoryIds?.filter((id) => Number.isFinite(id)) ?? [];
+    const normalizedCategoryIds =
+      query.categoryIds?.filter((id) => Number.isFinite(id)) ?? [];
     const search = query.search?.trim();
     const sort = query.sort ?? 'relevancia';
     const limit = Math.min(Math.max(query.limit ?? 20, 1), 100);
@@ -420,7 +570,9 @@ export class CatalogService {
           name: categories.name,
         })
         .from(categories)
-        .where(and(eq(categories.isActive, true), isNull(categories.deletedAt)));
+        .where(
+          and(eq(categories.isActive, true), isNull(categories.deletedAt)),
+        );
 
       const normalizedSet = new Set(normalizedCategories);
       const normalizedIdSet = new Set(normalizedCategoryIds);
@@ -436,7 +588,8 @@ export class CatalogService {
 
       const rootIds = categoryRows
         .filter(
-          (row) => normalizedSet.has(row.name) || normalizedIdSet.has(Number(row.id)),
+          (row) =>
+            normalizedSet.has(row.name) || normalizedIdSet.has(Number(row.id)),
         )
         .map((row) => Number(row.id));
 
@@ -477,16 +630,16 @@ export class CatalogService {
       })
       .from(products)
       .innerJoin(productVariants, eq(productVariants.productId, products.id))
-      .leftJoin(
-        productCategories,
-        eq(productCategories.productId, products.id),
-      )
+      .leftJoin(productCategories, eq(productCategories.productId, products.id))
       .leftJoin(categories, eq(categories.id, productCategories.categoryId))
       .leftJoin(
         productTypeAssignments,
         eq(productTypeAssignments.productId, products.id),
       )
-      .leftJoin(productTypes, eq(productTypes.id, productTypeAssignments.productTypeId))
+      .leftJoin(
+        productTypes,
+        eq(productTypes.id, productTypeAssignments.productTypeId),
+      )
       .leftJoin(
         productImages,
         and(
@@ -503,7 +656,8 @@ export class CatalogService {
           isNull(productVariants.deletedAt),
           allowedCategoryBigIntIds.length > 0
             ? inArray(categories.id, allowedCategoryBigIntIds)
-            : normalizedCategories.length > 0 || normalizedCategoryIds.length > 0
+            : normalizedCategories.length > 0 ||
+                normalizedCategoryIds.length > 0
               ? sql`1 = 0`
               : undefined,
           query.isActive !== undefined
@@ -518,9 +672,7 @@ export class CatalogService {
           query.onSale
             ? sql`${productVariants.currentComparePrice} IS NOT NULL`
             : undefined,
-          query.brandId
-            ? eq(products.brandId, query.brandId)
-            : undefined,
+          query.brandId ? eq(products.brandId, query.brandId) : undefined,
           query.productTypeCode
             ? eq(productTypes.code, query.productTypeCode)
             : undefined,
@@ -532,6 +684,9 @@ export class CatalogService {
               )
             : undefined,
           this.buildPriceRangeCondition(query.priceRange),
+          query.uncategorized
+            ? sql`NOT EXISTS (SELECT 1 FROM product_categories pc WHERE pc.product_id = ${products.id})`
+            : undefined,
         ),
       )
       .orderBy(...this.buildSort(sort))
@@ -632,8 +787,14 @@ export class CatalogService {
       .innerJoin(productVariants, eq(productVariants.productId, products.id))
       .leftJoin(productCategories, eq(productCategories.productId, products.id))
       .leftJoin(categories, eq(categories.id, productCategories.categoryId))
-      .leftJoin(productTypeAssignments, eq(productTypeAssignments.productId, products.id))
-      .leftJoin(productTypes, eq(productTypes.id, productTypeAssignments.productTypeId))
+      .leftJoin(
+        productTypeAssignments,
+        eq(productTypeAssignments.productId, products.id),
+      )
+      .leftJoin(
+        productTypes,
+        eq(productTypes.id, productTypeAssignments.productTypeId),
+      )
       .leftJoin(brands, eq(brands.id, products.brandId))
       .where(and(eq(products.isActive, true), isNull(products.deletedAt)))
       .orderBy(asc(products.name));
@@ -673,8 +834,14 @@ export class CatalogService {
       });
     }
 
-    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-    res.setHeader('Content-Disposition', `attachment; filename=productos_${new Date().toISOString().slice(0, 10)}.xlsx`);
+    res.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    );
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename=productos_${new Date().toISOString().slice(0, 10)}.xlsx`,
+    );
     await workbook.xlsx.write(res);
     res.end();
   }
@@ -695,7 +862,10 @@ export class CatalogService {
       .limit(1);
     const branchId = branchRows[0]?.id ?? null;
 
-    if (!branchId) throw new BadRequestException('No hay sucursal activa para asignar inventario');
+    if (!branchId)
+      throw new BadRequestException(
+        'No hay sucursal activa para asignar inventario',
+      );
 
     for (const row of sourceProducts) {
       const codigo = (row.CODIGO as string)?.trim();
@@ -708,11 +878,17 @@ export class CatalogService {
 
       if (!nombre || !codigo) continue;
 
-      const slug = nombre.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+      const slug = nombre
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/(^-|-$)/g, '');
 
       // Upsert product
       const existingVariant = await this.drizzleService.db
-        .select({ id: productVariants.id, productId: productVariants.productId })
+        .select({
+          id: productVariants.id,
+          productId: productVariants.productId,
+        })
         .from(productVariants)
         .where(eq(productVariants.sku, codigo))
         .limit(1);
@@ -724,38 +900,50 @@ export class CatalogService {
         variantId = Number(existingVariant[0].id);
         productId = Number(existingVariant[0].productId);
 
-        await this.drizzleService.db.update(products).set({
-          name: nombre,
-          updatedAt: new Date().toISOString(),
-        }).where(eq(products.id, BigInt(productId)));
+        await this.drizzleService.db
+          .update(products)
+          .set({
+            name: nombre,
+            updatedAt: new Date().toISOString(),
+          })
+          .where(eq(products.id, BigInt(productId)));
 
-        await this.drizzleService.db.update(productVariants).set({
-          currentPrice: String(currentPrice),
-          currentComparePrice: comparePrice ? String(comparePrice) : null,
-          barcode: ean || null,
-        }).where(eq(productVariants.id, BigInt(variantId)));
+        await this.drizzleService.db
+          .update(productVariants)
+          .set({
+            currentPrice: String(currentPrice),
+            currentComparePrice: comparePrice ? String(comparePrice) : null,
+            barcode: ean || null,
+          })
+          .where(eq(productVariants.id, BigInt(variantId)));
 
         updated++;
       } else {
-        const insertedProduct = await this.drizzleService.db.insert(products).values({
-          name: nombre,
-          slug,
-          externalId: codigo,
-          isActive: true,
-          featured: false,
-          visibility: 'PUBLIC',
-        }).returning({ id: products.id });
+        const insertedProduct = await this.drizzleService.db
+          .insert(products)
+          .values({
+            name: nombre,
+            slug,
+            externalId: codigo,
+            isActive: true,
+            featured: false,
+            visibility: 'PUBLIC',
+          })
+          .returning({ id: products.id });
 
         productId = Number(insertedProduct[0].id);
 
-        const insertedVariant = await this.drizzleService.db.insert(productVariants).values({
-          productId,
-          sku: codigo,
-          barcode: ean || null,
-          currentPrice: String(currentPrice),
-          currentComparePrice: comparePrice ? String(comparePrice) : null,
-          isActive: true,
-        }).returning({ id: productVariants.id });
+        const insertedVariant = await this.drizzleService.db
+          .insert(productVariants)
+          .values({
+            productId,
+            sku: codigo,
+            barcode: ean || null,
+            currentPrice: String(currentPrice),
+            currentComparePrice: comparePrice ? String(comparePrice) : null,
+            isActive: true,
+          })
+          .returning({ id: productVariants.id });
 
         variantId = Number(insertedVariant[0].id);
 
@@ -766,14 +954,19 @@ export class CatalogService {
       const existingInv = await this.drizzleService.db
         .select({ id: inventory.id })
         .from(inventory)
-        .where(and(
-          eq(inventory.productVariantId, variantId),
-          eq(inventory.branchId, Number(branchId)),
-        ))
+        .where(
+          and(
+            eq(inventory.productVariantId, variantId),
+            eq(inventory.branchId, Number(branchId)),
+          ),
+        )
         .limit(1);
 
       if (existingInv.length > 0) {
-        await this.drizzleService.db.update(inventory).set({ stock }).where(eq(inventory.id, BigInt(existingInv[0].id)));
+        await this.drizzleService.db
+          .update(inventory)
+          .set({ stock })
+          .where(eq(inventory.id, BigInt(existingInv[0].id)));
       } else {
         await this.drizzleService.db.insert(inventory).values({
           productVariantId: variantId,
@@ -805,9 +998,7 @@ export class CatalogService {
         priority: branches.priority,
       })
       .from(branches)
-      .where(
-        and(eq(branches.isActive, true), isNull(branches.deletedAt)),
-      )
+      .where(and(eq(branches.isActive, true), isNull(branches.deletedAt)))
       .orderBy(asc(branches.priority));
 
     return rows.map((row) => ({
@@ -882,14 +1073,8 @@ export class CatalogService {
       })
       .from(favorites)
       .innerJoin(products, eq(products.id, favorites.productId))
-      .innerJoin(
-        productVariants,
-        eq(productVariants.productId, products.id),
-      )
-      .leftJoin(
-        productCategories,
-        eq(productCategories.productId, products.id),
-      )
+      .innerJoin(productVariants, eq(productVariants.productId, products.id))
+      .leftJoin(productCategories, eq(productCategories.productId, products.id))
       .leftJoin(
         sql`(
           SELECT pc.*, c.id AS cat_id, c.name AS cat_name, c.parent_id AS cat_parent_id
@@ -899,10 +1084,7 @@ export class CatalogService {
         ) AS LEAF_CAT`,
         sql`LEAF_CAT.product_id = ${products.id}`,
       )
-      .leftJoin(
-        categories,
-        eq(categories.id, productCategories.categoryId),
-      )
+      .leftJoin(categories, eq(categories.id, productCategories.categoryId))
       .leftJoin(
         sql`categories AS ROOT_CAT`,
         sql`ROOT_CAT.id = COALESCE(LEAF_CAT.cat_parent_id, ${productCategories.categoryId})`,
@@ -1000,10 +1182,7 @@ export class CatalogService {
       })
       .from(shoppingListItems)
       .innerJoin(products, eq(products.id, shoppingListItems.productId))
-      .innerJoin(
-        productVariants,
-        eq(productVariants.productId, products.id),
-      )
+      .innerJoin(productVariants, eq(productVariants.productId, products.id))
       .leftJoin(
         productImages,
         and(
@@ -1109,7 +1288,11 @@ export class CatalogService {
     }
   }
 
-  async updateShoppingListItem(listId: number, productId: number, quantity: number) {
+  async updateShoppingListItem(
+    listId: number,
+    productId: number,
+    quantity: number,
+  ) {
     if (quantity <= 0) {
       await this.drizzleService.db
         .delete(shoppingListItems)
