@@ -205,20 +205,13 @@ export function DailyDealsSection({
               </div>
             </div>
 
-            <div className="overflow-hidden flex-1 rounded-xl">
-              <div
-                ref={carouselRef}
-                className="flex transition-transform duration-500 ease-in-out"
-                style={{
-                  width: `${(dealProducts.length / VISIBLE) * 100}%`,
-                  transform: `translateX(-${carouselStart * (100 / VISIBLE)}%)`,
-                }}
-              >
-              {dealProducts.map((p, i) => {
+            <div className="flex-1 rounded-xl">
+              <div ref={carouselRef} className="grid grid-cols-2 md:grid-cols-3 gap-3">
+              {dealProducts.slice(carouselStart, carouselStart + VISIBLE).map((p, idx) => {
                 const qty = localQtys[p.id] || 1;
                 const discountPct = p.originalPrice ? Math.round((1 - p.price / p.originalPrice) * 100) : 0;
                 return (
-                  <div key={p.id} className={`bg-card border border-border rounded-xl overflow-hidden flex flex-col hover:shadow-md transition-shadow ${(i + 1) % VISIBLE !== 0 ? 'mr-3' : ''}`} style={{ width: `${100 / dealProducts.length}%` }}>
+                  <div key={p.id} className="bg-card border border-border rounded-xl overflow-hidden flex flex-col hover:shadow-md transition-shadow animate-[fadeIn_0.3s_ease-out]" style={{ animationDelay: `${idx * 80}ms`, animationFillMode: 'backwards' }}>
                     <button
                       className="relative bg-muted aspect-square overflow-hidden"
                       onClick={() => onProductClick(p)}

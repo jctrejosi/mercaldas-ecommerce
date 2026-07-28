@@ -1,5 +1,6 @@
-import { useRef, useEffect } from "react";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { useState, useRef, useEffect } from "react";
+import { createPortal } from "react-dom";
+import { ChevronLeft, ChevronRight, X, Search } from "lucide-react";
 
 interface ProductType {
   id: number;
@@ -43,12 +44,14 @@ export function QuickCategoriesSection({
   onProductTypeClick,
   onViewAll,
 }: QuickCategoriesSectionProps) {
+  const [expanded, setExpanded] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
 
   // Auto-scroll
   useEffect(() => {
     const el = scrollRef.current;
-    if (!el || productTypes.length === 0) return;
+    if (!el || productTypes.length === 0 || expanded) return;
     let animId: number;
     const step = () => {
       if (!el) return;
@@ -60,7 +63,7 @@ export function QuickCategoriesSection({
     };
     animId = requestAnimationFrame(step);
     return () => cancelAnimationFrame(animId);
-  }, [productTypes.length]);
+  }, [productTypes.length, expanded]);
 
   const scrollBy = (dir: number) => {
     scrollRef.current?.scrollBy({ left: dir * 300, behavior: "smooth" });
@@ -88,7 +91,7 @@ export function QuickCategoriesSection({
             Tipo de producto
           </h2>
           <button
-            onClick={onViewAll}
+            onClick={() => setExpanded(true)}
             className="text-xs font-medium text-muted-foreground flex items-center gap-1 hover:text-foreground transition-colors"
           >
             Ver todos <ChevronRight className="w-3.5 h-3.5" />
@@ -127,6 +130,51 @@ export function QuickCategoriesSection({
       </div>
     </section>
 
+
+      {/* Modal */}
+      {expanded && createPortal(
+        <div className="fixed inset-0 z-50 flex items-center justify-center w-dvw">
+          <div className="absolute inset-0 bg-black/40" onClick={() => { setExpanded(false); setSearchQuery(""); }} />
+          <div
+            className="relative bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[70vh] flex flex-col mx-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="shrink-0 p-6 pb-0">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-bold text-lg text-foreground">Todos los tipos de producto</h3>
+                <button onClick={() => { setExpanded(false); setSearchQuery(""); }} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-muted transition-colors">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+              <div className="relative mb-4">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <input
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Buscar tipo de producto..."
+                  className="w-full pl-9 pr-3 py-2 text-sm border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-300 bg-muted/50"
+                  autoFocus
+                />
+              </div>
+            </div>
+            <div className="flex-1 overflow-y-auto px-6 pb-6">
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
+                {productTypes
+                  .filter((pt) => pt.name.toLowerCase().includes(searchQuery.toLowerCase()))
+                  .map((pt, i) => (
+                  <ProductTypeButton
+                    key={pt.id}
+                    pt={pt}
+                    index={i}
+                    onClick={() => { onProductTypeClick(pt.code); setExpanded(false); setSearchQuery(""); }}
+                  />
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
     </>
   );
 }
