@@ -71,6 +71,16 @@ export function DailyDealsSection({
     return () => clearInterval(t);
   }, []);
 
+  // Auto-scroll carrusel de ofertas
+  useEffect(() => {
+    const maxStart = Math.max(0, dealProducts.length - VISIBLE);
+    if (maxStart <= 0) return;
+    const interval = setInterval(() => {
+      setCarouselStart((prev) => (prev + 1 > maxStart ? 0 : prev + 1));
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [dealProducts.length]);
+
   const scrollCarousel = (dir: number) => {
     const next = carouselStart + dir;
     if (next < 0 || next + VISIBLE > dealProducts.length) return;
@@ -195,12 +205,20 @@ export function DailyDealsSection({
               </div>
             </div>
 
-            <div ref={carouselRef} className="grid grid-cols-2 md:grid-cols-3 gap-3 flex-1">
-              {dealProducts.slice(carouselStart, carouselStart + VISIBLE).map((p) => {
+            <div className="overflow-hidden flex-1 rounded-xl">
+              <div
+                ref={carouselRef}
+                className="flex transition-transform duration-500 ease-in-out"
+                style={{
+                  width: `${(dealProducts.length / VISIBLE) * 100}%`,
+                  transform: `translateX(-${carouselStart * (100 / VISIBLE)}%)`,
+                }}
+              >
+              {dealProducts.map((p, i) => {
                 const qty = localQtys[p.id] || 1;
                 const discountPct = p.originalPrice ? Math.round((1 - p.price / p.originalPrice) * 100) : 0;
                 return (
-                  <div key={p.id} className="bg-card border border-border rounded-xl overflow-hidden flex flex-col hover:shadow-md transition-shadow">
+                  <div key={p.id} className={`bg-card border border-border rounded-xl overflow-hidden flex flex-col hover:shadow-md transition-shadow ${(i + 1) % VISIBLE !== 0 ? 'mr-3' : ''}`} style={{ width: `${100 / dealProducts.length}%` }}>
                     <button
                       className="relative bg-muted aspect-square overflow-hidden"
                       onClick={() => onProductClick(p)}
@@ -246,6 +264,7 @@ export function DailyDealsSection({
                 );
               })}
             </div>
+          </div>
           </div>
         </div>
       </div>

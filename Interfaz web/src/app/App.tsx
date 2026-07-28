@@ -6,6 +6,7 @@ import { ordersService } from "../services/orders.service";
 import { useOrderSocket } from "../hooks/useOrderSocket";
 import { useNotifications } from "../hooks/useNotifications";
 import { cartService } from "../services/cart.service";
+import { apiStatusService } from "../services/api-status.service";
 import type { Brand, Branch, CartItem, CatalogCategory, Order, Product } from "./types";
 import type { WompiConfigResponse } from "../services/orders.service";
 import { ProductDetailModal } from "./ProductDetailModal";
@@ -102,22 +103,32 @@ const [landingLoading, setLandingLoading] = useState(true);
   const [landingBranches, setLandingBranches] = useState<Branch[]>([]);
   const [landingProductTypes, setLandingProductTypes] = useState<{ id: number; code: string; name: string; count: number }[]>([]);
   const [apiError, setApiError] = useState<number | null>(null);
-  const [healthChecked, setHealthChecked] = useState(true);
+  const [healthChecked, setHealthChecked] = useState(false);
 
   const { customer, loading: customerLoading, login, register, socialLogin } = useCustomerAuth();
   const { notifications, unreadCount, markAsRead } = useNotifications(customer?.id ?? null);
   const [authError, setAuthError] = useState<string | null>(null);
   const [authLoading, setAuthLoading] = useState(false);
+  const [pendingPostLoginAction, setPendingPostLoginAction] = useState<null | "addresses" | "checkout">(null);
 
   useEffect(() => {
     if (initialDataLoaded) return;
     initialDataLoaded = true;
 
-    void catalogService.getCategories().then(setLandingCategories).catch(() => {});
-    void catalogService.getProducts({ onSale: true, sort: "descuento", limit: 8 }).then(setDealProducts).catch(() => {});
-    void catalogService.getFeaturedBrands().then(setFeaturedBrands).catch(() => {});
-    void catalogService.getBranches().then(setLandingBranches).catch(() => {});
-    void catalogService.getProductTypes().then(setLandingProductTypes).catch(() => {});
+    // Health check first — must succeed before loading data
+    apiStatusService.waitUntilReady()
+      .then(() => {
+        setHealthChecked(true);
+        void catalogService.getCategories().then(setLandingCategories).catch(() => {});
+        void catalogService.getProducts({ onSale: true, sort: "descuento", limit: 8 }).then(setDealProducts).catch(() => {});
+        void catalogService.getFeaturedBrands().then(setFeaturedBrands).catch(() => {});
+        void catalogService.getBranches().then(setLandingBranches).catch(() => {});
+        void catalogService.getProductTypes().then(setLandingProductTypes).catch(() => {});
+      })
+      .catch(() => {
+        setHealthChecked(true); // salir del loading para mostrar ErrorPage
+        setApiError(502);
+      });
   }, []);
 
   const fetchLandingProducts = useCallback(async (tab: string) => {
@@ -133,10 +144,10 @@ const [landingLoading, setLandingLoading] = useState(true);
 
   useEffect(() => { void fetchLandingProducts(activeTab); }, [activeTab, fetchLandingProducts]);
 
-  const handleLoginSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+   const handleLoginSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault(); setAuthError(null); setAuthLoading(true);
     const fd = new FormData(e.currentTarget);
-    try { await login(fd.get("email") as string, fd.get("password") as string); setLoginModal(false); if (cartItems.length > 0) { setCheckoutStep(1); setCheckoutOpen(true); } }
+    try { await login(fd.get("email") as string, fd.get("password") as string); setLoginModal(false); const action = pendingPostLoginAction; setPendingPostLoginAction(null); if (action === "addresses") { setCurrentView("account"); navigate("/account?tab=addresses"); } else if (action === "checkout" || cartItems.length > 0) { setCheckoutStep(1); setCheckoutOpen(true); } }
     catch (err: any) { setAuthError(err.message || "Error"); }
     finally { setAuthLoading(false); }
   };
@@ -171,6 +182,12 @@ const [landingLoading, setLandingLoading] = useState(true);
   const handleCategoryClick = (n: string) => { setCatalogSearch(n); setCatalogBrand(null); setCurrentView("catalog"); navigate("/catalog"); window.scrollTo({ top: 0, behavior: "smooth" }); };
   const handleBrandClick = (brandId: number) => { setCatalogBrand(brandId); setCatalogCategory([]); setCatalogSearch(""); setCurrentView("catalog"); navigate("/catalog"); window.scrollTo({ top: 0, behavior: "smooth" }); };
   const handleProductTypeClick = (code: string) => { setCatalogProductType(code); setCatalogCategory([]); setCatalogSearch(""); setCurrentView("catalog"); navigate("/catalog"); window.scrollTo({ top: 0, behavior: "smooth" }); };
+
+  const handleAddressClick = () => {
+    if (customer) { setCurrentView("account"); navigate("/account?tab=addresses"); return; }
+    setPendingPostLoginAction("addresses");
+    openModal("login");
+  };
 
   const placeOrder = async () => {
     if (!customer) { setCheckoutError("Debes iniciar sesion"); return; }
@@ -218,7 +235,7 @@ const [landingLoading, setLandingLoading] = useState(true);
   };
 
   useEffect(() => { void ordersService.getWompiConfig().then(setWompiConfig).catch(() => null); }, []);
-  const handleSocialSuccess = () => { setLoginModal(false); if (cartItems.length > 0) { setCheckoutStep(1); setCheckoutOpen(true); } };
+  const handleSocialSuccess = () => { setLoginModal(false); const action = pendingPostLoginAction; setPendingPostLoginAction(null); if (action === "addresses") { setCurrentView("account"); navigate("/account?tab=addresses"); } else if (cartItems.length > 0) { setCheckoutStep(1); setCheckoutOpen(true); } };
   const handleSocialError = (e: unknown) => setAuthError(e instanceof Error ? e.message : "Error");
 
   const headerProps: any = {
@@ -231,6 +248,7 @@ const [landingLoading, setLandingLoading] = useState(true);
     currentView, onHome: () => { setCurrentView("home"); navigate("/"); },
     onAccount: customer ? () => { setCurrentView("account"); navigate("/account"); } : undefined,
     onNavigateNotifs: () => { setCurrentView("account"); navigate("/account?tab=notifications"); },
+    onAddressClick: handleAddressClick,
     notifications, unreadNotifCount: unreadCount, onMarkNotifRead: markAsRead,
     fmt,
   };

@@ -48,9 +48,10 @@ export function QuickCategoriesSection({
   // Auto-scroll
   useEffect(() => {
     const el = scrollRef.current;
-    if (!el) return;
+    if (!el || productTypes.length === 0) return;
     let animId: number;
     const step = () => {
+      if (!el) return;
       el.scrollLeft += 0.5;
       if (el.scrollLeft >= el.scrollWidth - el.clientWidth) {
         el.scrollLeft = 0;
@@ -59,7 +60,7 @@ export function QuickCategoriesSection({
     };
     animId = requestAnimationFrame(step);
     return () => cancelAnimationFrame(animId);
-  }, []);
+  }, [productTypes.length]);
 
   const scrollBy = (dir: number) => {
     scrollRef.current?.scrollBy({ left: dir * 300, behavior: "smooth" });

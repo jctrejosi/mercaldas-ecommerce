@@ -43,6 +43,7 @@ interface HeaderProps {
   unreadNotifCount?: number;
   onMarkNotifRead?: (id: number) => void;
   onNavigateNotifs?: () => void;
+  onAddressClick?: () => void;
   fmt: (n: number) => string;
 }
 
@@ -75,6 +76,7 @@ export function Header({
   unreadNotifCount = 0,
   onMarkNotifRead,
   onNavigateNotifs,
+  onAddressClick,
   fmt,
 }: HeaderProps) {
   const [searchQuery, setSearchQuery] = useState("");
@@ -309,13 +311,15 @@ export function Header({
             className="flex items-center gap-1.5 text-xs"
             style={{ color: "rgba(255,255,255,0.65)" }}
           >
-            <MapPin className="w-3 h-3" />
-            <span>
-              Entrega en Manizales · Zona:{" "}
-              <strong className="text-white">
-                El Cable, Milán, Chipre y más
-              </strong>
-            </span>
+            <button onClick={onAddressClick} className="flex items-center gap-1.5 text-xs cursor-pointer hover:brightness-110 transition-all" style={{ color: "rgba(255,255,255,0.65)" }}>
+              <MapPin className="w-3 h-3" />
+              <span>
+                Entregar en ·{" "}
+                <strong className="text-white underline-offset-2 hover:underline">
+                  Administrar direcciones
+                </strong>
+              </span>
+            </button>
           </div>
           <div
             className="flex items-center gap-4 text-xs"
@@ -765,14 +769,14 @@ export function Header({
             </button>
           ))}
 
-          <div className="ml-auto flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer hover:text-foreground transition-colors">
+          <button onClick={onAddressClick} className="ml-auto flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer hover:text-foreground transition-colors">
             <MapPin className="w-3.5 h-3.5" />
             <span>
               Entregar en{" "}
-              <strong className="text-foreground">Manizales</strong>
+              <strong className="text-foreground">Administrar direcciones</strong>
             </span>
             <ChevronDown className="w-3 h-3" />
-          </div>
+          </button>
         </div>
       </nav>
     </header>
