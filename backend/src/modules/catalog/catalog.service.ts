@@ -175,25 +175,68 @@ export class CatalogService {
         description: categories.description,
         isActive: categories.isActive,
         level: categories.level,
+        metaTitle: categories.metaTitle,
+        metaDescription: categories.metaDescription,
         createdAt: categories.createdAt,
         imagePath: media.path,
+        productCount: sql<number>`(
+          SELECT COUNT(DISTINCT pc2.product_id)
+          FROM product_categories pc2
+          INNER JOIN products p2 ON p2.id = pc2.product_id
+          INNER JOIN product_variants pv2 ON pv2.product_id = p2.id
+          WHERE pc2.category_id = ${categories.id}
+            AND p2.is_active = true
+            AND p2.deleted_at IS NULL
+            AND pv2.is_active = true
+            AND pv2.deleted_at IS NULL
+        )`,
       })
       .from(categories)
       .leftJoin(media, eq(categories.imageMediaId, media.id))
       .where(isNull(categories.deletedAt))
       .orderBy(asc(categories.displayOrder), asc(categories.name));
 
-    return rows.map((row) => ({
+    const list = rows.map((row) => ({
       id: Number(row.id),
       parentId: row.parentId ? Number(row.parentId) : null,
       name: row.name,
       slug: row.slug,
       displayOrder: row.displayOrder ?? 0,
       description: row.description,
+      metaTitle: row.metaTitle,
+      metaDescription: row.metaDescription,
       isActive: row.isActive,
       level: row.level ?? 0,
       createdAt: row.createdAt,
       imagePath: row.imagePath,
+      productCount: Number(row.productCount ?? 0),
+    }));
+
+    // Propagate counts upward: a parent's count = its own + all descendants
+    const childrenByParent = new Map<number, number[]>();
+    for (const c of list) {
+      if (c.parentId !== null) {
+        const arr = childrenByParent.get(c.parentId) ?? [];
+        arr.push(c.id);
+        childrenByParent.set(c.parentId, arr);
+      }
+    }
+
+    const getSubtreeCount = (catId: number, visited: Set<number>): number => {
+      if (visited.has(catId)) return 0;
+      visited.add(catId);
+      const cat = list.find((c) => c.id === catId);
+      if (!cat) return 0;
+      let total = cat.productCount;
+      for (const childId of childrenByParent.get(catId) ?? []) {
+        total += getSubtreeCount(childId, visited);
+      }
+      return total;
+    };
+
+    return list.map((c) => ({
+      ...c,
+      productCount: getSubtreeCount(c.id, new Set()),
     }));
   }
 
@@ -234,7 +277,16 @@ export class CatalogService {
 
   async updateCategory(
     id: number,
-    data: { name?: string; isActive?: boolean },
+    data: {
+      name?: string;
+      parentId?: number | null;
+      description?: string | null;
+      displayOrder?: number;
+      metaTitle?: string | null;
+      metaDescription?: string | null;
+      isActive?: boolean;
+      imageUrl?: string;
+    },
   ) {
     const updates: Record<string, any> = {};
 
@@ -249,8 +301,45 @@ export class CatalogService {
       updates.slug = slug;
     }
 
-    if (data.isActive !== undefined) {
-      updates.isActive = data.isActive;
+    if (data.parentId !== undefined) {
+      let level = 0;
+      if (data.parentId !== null) {
+        const [parent] = await this.drizzleService.db
+          .select({ level: categories.level })
+          .from(categories)
+          .where(eq(categories.id, BigInt(data.parentId)));
+        if (parent) level = (parent.level ?? 0) + 1;
+      }
+      updates.parentId = data.parentId;
+      updates.level = level;
+    }
+
+    if (data.description !== undefined) updates.description = data.description;
+    if (data.displayOrder !== undefined)
+      updates.displayOrder = data.displayOrder;
+    if (data.metaTitle !== undefined) updates.metaTitle = data.metaTitle;
+    if (data.metaDescription !== undefined)
+      updates.metaDescription = data.metaDescription;
+    if (data.isActive !== undefined) updates.isActive = data.isActive;
+
+    if (data.imageUrl) {
+      const [inserted] = await this.drizzleService.db
+        .insert(media)
+        .values({
+          path: data.imageUrl,
+          fileName:
+            data.imageUrl.split('/').pop()?.substring(0, 50) ??
+            'category_image',
+          mimeType: 'image/jpeg',
+          mediaType: 'image',
+          provider: 'cloudinary',
+          sizeBytes: 0,
+          checksum: data.imageUrl.substring(0, 64),
+          status: 'active',
+          isPublic: true,
+        })
+        .returning({ id: media.id });
+      updates.imageMediaId = Number(inserted.id);
     }
 
     if (Object.keys(updates).length === 0) return { id };
@@ -273,6 +362,107 @@ export class CatalogService {
       .returning({ id: categories.id });
 
     if (!deleted) throw new NotFoundException('Categoría no encontrada');
+  }
+
+  // ── Category-Product relations ──
+
+  async getCategoryProducts(categoryId: number) {
+    // Gather all descendant category IDs
+    const allCats = await this.drizzleService.db
+      .select({ id: categories.id, parentId: categories.parentId })
+      .from(categories)
+      .where(isNull(categories.deletedAt));
+
+    const childrenByParent = new Map<number, number[]>();
+    for (const c of allCats) {
+      if (c.parentId !== null) {
+        const pid = Number(c.parentId);
+        const arr = childrenByParent.get(pid) ?? [];
+        arr.push(Number(c.id));
+        childrenByParent.set(pid, arr);
+      }
+    }
+
+    const collectDescendants = (id: number, visited: Set<number>): number[] => {
+      if (visited.has(id)) return [];
+      visited.add(id);
+      const ids = [id];
+      for (const childId of childrenByParent.get(id) ?? []) {
+        ids.push(...collectDescendants(childId, visited));
+      }
+      return ids;
+    };
+
+    const categoryIds = collectDescendants(categoryId, new Set());
+
+    const rows = await this.drizzleService.db
+      .select({
+        id: products.id,
+        name: products.name,
+        slug: products.slug,
+        price: productVariants.currentPrice,
+        image: media.path,
+        productTypeCode: productTypes.code,
+      })
+      .from(productCategories)
+      .innerJoin(products, eq(products.id, productCategories.productId))
+      .innerJoin(productVariants, eq(productVariants.productId, products.id))
+      .leftJoin(
+        productImages,
+        and(
+          eq(productImages.productId, products.id),
+          eq(productImages.isCover, true),
+        ),
+      )
+      .leftJoin(media, eq(media.id, productImages.mediaId))
+      .leftJoin(
+        productTypeAssignments,
+        eq(productTypeAssignments.productId, products.id),
+      )
+      .leftJoin(
+        productTypes,
+        eq(productTypes.id, productTypeAssignments.productTypeId),
+      )
+      .where(
+        and(
+          inArray(productCategories.categoryId, categoryIds),
+          eq(products.isActive, true),
+          isNull(products.deletedAt),
+          eq(productVariants.isActive, true),
+          isNull(productVariants.deletedAt),
+        ),
+      )
+      .orderBy(asc(products.name));
+
+    return rows.map((row) => ({
+      id: Number(row.id),
+      name: row.name,
+      slug: row.slug,
+      price: Number(row.price ?? 0),
+      image: row.image,
+      productTypeCode: row.productTypeCode,
+    }));
+  }
+
+  async addProductToCategory(categoryId: number, productId: number) {
+    await this.drizzleService.db
+      .insert(productCategories)
+      .values({
+        categoryId,
+        productId,
+      })
+      .onConflictDoNothing();
+  }
+
+  async removeProductFromCategory(categoryId: number, productId: number) {
+    await this.drizzleService.db
+      .delete(productCategories)
+      .where(
+        and(
+          eq(productCategories.categoryId, categoryId),
+          eq(productCategories.productId, productId),
+        ),
+      );
   }
 
   async getFeaturedBrands() {

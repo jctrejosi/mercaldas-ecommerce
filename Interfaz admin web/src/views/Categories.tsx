@@ -8,9 +8,8 @@ import {
   GripVertical,
   Eye,
   EyeOff,
-  Search,
-  X,
   AlertTriangle,
+  X,
 } from "lucide-react";
 import {
   catalogService,
@@ -24,91 +23,58 @@ interface AdminCategory {
   parentId: number | null;
   displayOrder: number;
   description: string | null;
+  metaTitle: string | null;
+  metaDescription: string | null;
   isActive: boolean;
   level: number;
   createdAt: string;
   imagePath: string | null;
+  productCount: number;
 }
 
 function CategoryRow({
   cat,
   depth = 0,
-  editingId,
-  editName,
-  setEditName,
-  onStartEdit,
-  onSaveEdit,
-  onCancelEdit,
+  onEdit,
   onDelete,
   onToggleActive,
 }: {
   cat: AdminCategory;
   depth?: number;
-  editingId: number | null;
-  editName: string;
-  setEditName: (v: string) => void;
-  onStartEdit: (cat: AdminCategory) => void;
-  onSaveEdit: (id: number) => void;
-  onCancelEdit: () => void;
+  onEdit: (cat: AdminCategory) => void;
   onDelete: (id: number) => void;
   onToggleActive: (id: number, isActive: boolean) => void;
 }) {
   return (
     <div className="divide-y divide-gray-50">
       <div
-        className="flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 transition-colors group"
+        className="flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 transition-colors group cursor-pointer"
         style={{ paddingLeft: depth * 24 + 16 }}
+        onClick={() => onEdit(cat)}
       >
-        <div className="text-gray-300 hover:text-gray-500 cursor-grab transition-colors">
+        <div
+          className="text-gray-300 hover:text-gray-500 cursor-grab transition-colors"
+          onClick={(e) => e.stopPropagation()}
+        >
           <GripVertical size={14} />
         </div>
         <div className="w-5" />
-        <span className="flex-1 text-sm font-medium text-gray-700 flex items-center gap-2">
-          {editingId === cat.id ? (
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                onSaveEdit(cat.id);
-              }}
-              className="flex items-center gap-2 flex-1"
-            >
-              <input
-                autoFocus
-                value={editName}
-                onChange={(e) => setEditName(e.target.value)}
-                className="flex-1 text-sm border border-gray-300 rounded-lg px-2 py-1 focus:outline-none focus:ring-2 focus:ring-amber-400"
-              />
-              <button
-                type="submit"
-                className="text-xs font-bold bg-amber-400 text-amber-900 px-2 py-1 rounded"
-              >
-                ✓
-              </button>
-              <button
-                type="button"
-                onClick={onCancelEdit}
-                className="text-xs text-gray-500 px-2 py-1 rounded hover:bg-gray-100"
-              >
-                ✕
-              </button>
-            </form>
-          ) : (
-            <>
-              <span>{cat.name}</span>
-              <span className="text-[10px] text-gray-400 font-normal">
-                {cat.slug}
-              </span>
-            </>
-          )}
+        <span className="flex-1 text-sm font-medium text-gray-700">
+          {cat.name}
         </span>
         {!cat.isActive && (
           <span className="text-[10px] bg-red-50 text-red-500 px-2 py-0.5 rounded-full font-semibold">
             Oculta
           </span>
         )}
-        <span className="text-xs text-gray-400">{cat.displayOrder ?? "-"}</span>
+        <span className="text-xs text-gray-400 w-16 text-right font-medium">
+          {cat.productCount} prod.
+        </span>
         <button
-          onClick={() => onToggleActive(cat.id, !cat.isActive)}
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggleActive(cat.id, !cat.isActive);
+          }}
           className={`w-7 h-7 flex items-center justify-center rounded-lg opacity-0 group-hover:opacity-100 transition-all ${
             cat.isActive
               ? "text-green-500 hover:bg-green-50"
@@ -119,13 +85,19 @@ function CategoryRow({
           {cat.isActive ? <Eye size={13} /> : <EyeOff size={13} />}
         </button>
         <button
-          onClick={() => onStartEdit(cat)}
+          onClick={(e) => {
+            e.stopPropagation();
+            onEdit(cat);
+          }}
           className="w-7 h-7 flex items-center justify-center rounded-lg opacity-0 group-hover:opacity-100 transition-all hover:bg-gray-100 text-gray-400 hover:text-gray-600"
         >
           <Edit size={13} />
         </button>
         <button
-          onClick={() => onDelete(cat.id)}
+          onClick={(e) => {
+            e.stopPropagation();
+            onDelete(cat.id);
+          }}
           className="w-7 h-7 flex items-center justify-center rounded-lg opacity-0 group-hover:opacity-100 transition-all hover:bg-red-50 text-gray-400 hover:text-red-500"
         >
           <Trash2 size={13} />
@@ -138,13 +110,37 @@ function CategoryRow({
 export default function Categories() {
   const [categories, setCategories] = useState<AdminCategory[]>([]);
   const [loading, setLoading] = useState(true);
-  const [editingId, setEditingId] = useState<number | null>(null);
-  const [editName, setEditName] = useState("");
   const [newName, setNewName] = useState("");
   const [newParent, setNewParent] = useState<number | string>("");
   const [showNewForm, setShowNewForm] = useState(false);
   const [uncategorized, setUncategorized] = useState<CatalogProduct[]>([]);
   const [uncatLoading, setUncatLoading] = useState(false);
+  const [editing, setEditing] = useState<AdminCategory | null>(null);
+  const [editForm, setEditForm] = useState<Record<string, any>>({});
+  const [uploading, setUploading] = useState(false);
+  const [editTab, setEditTab] = useState<"attrs" | "products">("attrs");
+  const [catProducts, setCatProducts] = useState<
+    Array<{
+      id: number;
+      name: string;
+      slug: string;
+      price: number;
+      image: string | null;
+      productTypeCode: string | null;
+    }>
+  >([]);
+  const [catProductsLoading, setCatProductsLoading] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<
+    Array<{
+      id: number;
+      name: string;
+      price: number;
+      image: string | null;
+      productTypeCode: string | null;
+    }>
+  >([]);
+  const [searching, setSearching] = useState(false);
 
   const loadCategories = async () => {
     try {
@@ -184,20 +180,6 @@ export default function Categories() {
     } catch {}
   };
 
-  const startEdit = (cat: AdminCategory) => {
-    setEditingId(cat.id);
-    setEditName(cat.name);
-  };
-
-  const saveEdit = async (id: number) => {
-    if (!editName.trim()) return;
-    try {
-      await catalogService.updateCategory(id, { name: editName.trim() });
-      setEditingId(null);
-      await loadCategories();
-    } catch {}
-  };
-
   const toggleActive = async (id: number, isActive: boolean) => {
     try {
       await catalogService.updateCategory(id, { isActive });
@@ -210,6 +192,120 @@ export default function Categories() {
   const deleteCategory = async (id: number) => {
     try {
       await catalogService.deleteCategory(id);
+      await loadCategories();
+    } catch {}
+  };
+
+  const openEdit = (cat: AdminCategory) => {
+    setEditing(cat);
+    setEditTab("attrs");
+    setEditForm({
+      name: cat.name,
+      description: cat.description || "",
+      parentId: cat.parentId ?? "",
+      displayOrder: cat.displayOrder,
+      metaTitle: cat.metaTitle || "",
+      metaDescription: cat.metaDescription || "",
+      isActive: cat.isActive,
+      imageUrl: cat.imagePath || "",
+    });
+    loadCategoryProducts(cat.id);
+  };
+
+  const loadCategoryProducts = async (catId: number) => {
+    setCatProductsLoading(true);
+    setSearchQuery("");
+    setSearchResults([]);
+    try {
+      setCatProducts(await catalogService.getCategoryProducts(catId));
+    } catch {
+      setCatProducts([]);
+    }
+    setCatProductsLoading(false);
+  };
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("code", `cat_${editing?.id ?? "new"}`);
+      const res = await fetch(
+        `${import.meta.env.VITE_API_URL || "http://localhost:3000"}/upload/image`,
+        {
+          method: "POST",
+          body: formData,
+        },
+      );
+      const data = await res.json();
+      setEditForm((f) => ({ ...f, imageUrl: data.url }));
+    } catch {}
+    setUploading(false);
+  };
+
+  const handleProductSearch = async () => {
+    if (!searchQuery.trim()) {
+      setSearchResults([]);
+      return;
+    }
+    setSearching(true);
+    try {
+      const data = await catalogService.getProducts({
+        search: searchQuery.trim(),
+        limit: 20,
+      });
+      const existingIds = new Set(catProducts.map((p) => p.id));
+      setSearchResults(
+        data
+          .filter((p) => !existingIds.has(p.id))
+          .map((p) => ({
+            id: p.id,
+            name: p.name,
+            price: p.price,
+            image: p.image || null,
+            productTypeCode: p.productTypeCode || null,
+          })),
+      );
+    } catch {
+      setSearchResults([]);
+    }
+    setSearching(false);
+  };
+
+  const addProduct = async (productId: number) => {
+    if (!editing) return;
+    try {
+      await catalogService.addProductToCategory(editing.id, productId);
+      await loadCategoryProducts(editing.id);
+      await loadCategories();
+    } catch {}
+  };
+
+  const removeProduct = async (productId: number) => {
+    if (!editing) return;
+    try {
+      await catalogService.removeProductFromCategory(editing.id, productId);
+      setCatProducts((prev) => prev.filter((p) => p.id !== productId));
+      await loadCategories();
+    } catch {}
+  };
+
+  const saveEdit = async () => {
+    if (!editing || !editForm.name?.trim()) return;
+    try {
+      await catalogService.updateCategory(editing.id, {
+        name: editForm.name.trim(),
+        description: editForm.description || null,
+        parentId: editForm.parentId ? Number(editForm.parentId) : null,
+        displayOrder: Number(editForm.displayOrder) || 0,
+        metaTitle: editForm.metaTitle || null,
+        metaDescription: editForm.metaDescription || null,
+        isActive: editForm.isActive,
+        imageUrl: editForm.imageUrl || undefined,
+      });
+      setEditing(null);
       await loadCategories();
     } catch {}
   };
@@ -247,7 +343,6 @@ export default function Categories() {
         </button>
       </div>
 
-      {/* Create form */}
       {showNewForm && (
         <div className="bg-white rounded-2xl border border-gray-100 p-4 flex items-center gap-3 flex-wrap">
           <input
@@ -283,7 +378,6 @@ export default function Categories() {
         </div>
       )}
 
-      {/* Stats */}
       <div className="grid grid-cols-3 gap-4">
         {[
           { label: "Categorías principales", value: String(parents.length) },
@@ -306,59 +400,326 @@ export default function Categories() {
         ))}
       </div>
 
-      {/* Category tree */}
-      <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
-        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 bg-gray-50">
-          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
-            Categoría
-          </p>
-          <div className="flex gap-12 text-xs font-semibold text-gray-500 uppercase tracking-wider">
-            <span>Orden</span>
-            <span>Acciones</span>
-          </div>
-        </div>
-        <div className="divide-y divide-gray-50">
-          {parents.length === 0 ? (
-            <div className="py-16 text-center">
-              <p className="text-sm text-gray-400">Sin categorías aún</p>
-              <p className="text-xs text-gray-400 mt-1">
-                Crea tu primera categoría usando el botón superior
-              </p>
+      <div className="flex gap-5">
+        {/* Category tree */}
+        <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden flex-1">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 bg-gray-50">
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+              Categoría
+            </p>
+            <div className="flex gap-8 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+              <span>Productos</span>
+              <span>Acciones</span>
             </div>
-          ) : (
-            parents.map((parent) => (
-              <div key={parent.id}>
-                <CategoryRow
-                  cat={parent}
-                  editingId={editingId}
-                  editName={editName}
-                  setEditName={setEditName}
-                  onStartEdit={startEdit}
-                  onSaveEdit={saveEdit}
-                  onCancelEdit={() => setEditingId(null)}
-                  onDelete={deleteCategory}
-                  onToggleActive={toggleActive}
-                />
-                {childrenOf(parent.id).map((child) => (
+          </div>
+          <div className="divide-y divide-gray-50">
+            {parents.length === 0 ? (
+              <div className="py-16 text-center">
+                <p className="text-sm text-gray-400">Sin categorías aún</p>
+                <p className="text-xs text-gray-400 mt-1">
+                  Crea tu primera categoría
+                </p>
+              </div>
+            ) : (
+              parents.map((parent) => (
+                <div key={parent.id}>
                   <CategoryRow
-                    key={child.id}
-                    cat={child}
-                    depth={1}
-                    editingId={editingId}
-                    editName={editName}
-                    setEditName={setEditName}
-                    onStartEdit={startEdit}
-                    onSaveEdit={saveEdit}
-                    onCancelEdit={() => setEditingId(null)}
+                    cat={parent}
+                    onEdit={openEdit}
                     onDelete={deleteCategory}
                     onToggleActive={toggleActive}
                   />
-                ))}
-              </div>
-            ))
-          )}
+                  {childrenOf(parent.id).map((child) => (
+                    <CategoryRow
+                      key={child.id}
+                      cat={child}
+                      depth={1}
+                      onEdit={openEdit}
+                      onDelete={deleteCategory}
+                      onToggleActive={toggleActive}
+                    />
+                  ))}
+                </div>
+              ))
+            )}
+          </div>
         </div>
       </div>
+
+      {/* Edit panel - floating overlay */}
+      {editing && (
+        <>
+          <div
+            className="fixed inset-0 bg-black/30 z-40"
+            onClick={() => setEditing(null)}
+          />
+          <div className="fixed right-0 top-0 bottom-0 w-96 bg-white shadow-2xl z-50 overflow-y-auto">
+            <div className="sticky top-0 bg-white border-b border-gray-100 px-5 py-4 flex items-center justify-between">
+              <h3 className="font-bold text-sm text-gray-900">
+                Editar categoría
+              </h3>
+              <button
+                onClick={() => setEditing(null)}
+                className="p-1 rounded-lg hover:bg-gray-100 text-gray-400"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* Tabs */}
+            <div className="flex border-b border-gray-100">
+              <button
+                onClick={() => setEditTab("attrs")}
+                className={`flex-1 py-2.5 text-xs font-semibold transition-colors ${editTab === "attrs" ? "text-amber-600 border-b-2 border-amber-400" : "text-gray-400 hover:text-gray-600"}`}
+              >
+                Atributos
+              </button>
+              <button
+                onClick={() => setEditTab("products")}
+                className={`flex-1 py-2.5 text-xs font-semibold transition-colors ${editTab === "products" ? "text-amber-600 border-b-2 border-amber-400" : "text-gray-400 hover:text-gray-600"}`}
+              >
+                Productos ({catProducts.length})
+              </button>
+            </div>
+
+            {editTab === "attrs" && (
+              <div className="px-5 py-4 space-y-4">
+                {[
+                  { key: "name", label: "Nombre", type: "text" },
+                  { key: "description", label: "Descripción", type: "text" },
+                  {
+                    key: "metaTitle",
+                    label: "Meta título (SEO)",
+                    type: "text",
+                  },
+                  {
+                    key: "metaDescription",
+                    label: "Meta descripción (SEO)",
+                    type: "text",
+                  },
+                ].map(({ key, label, type }) => (
+                  <div key={key}>
+                    <label className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider block mb-1">
+                      {label}
+                    </label>
+                    <input
+                      type={type}
+                      value={editForm[key] ?? ""}
+                      onChange={(e) =>
+                        setEditForm((f) => ({ ...f, [key]: e.target.value }))
+                      }
+                      className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-amber-400"
+                    />
+                  </div>
+                ))}
+
+                {/* Image upload */}
+                <div>
+                  <label className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider block mb-1">
+                    Imagen
+                  </label>
+                  {editForm.imageUrl ? (
+                    <div className="relative mb-2">
+                      <img
+                        src={editForm.imageUrl}
+                        alt="Preview"
+                        className="w-full h-24 object-cover rounded-lg border border-gray-200"
+                      />
+                      <button
+                        onClick={() =>
+                          setEditForm((f) => ({ ...f, imageUrl: "" }))
+                        }
+                        className="absolute top-1 right-1 w-5 h-5 rounded-full bg-red-500 text-white flex items-center justify-center text-xs hover:bg-red-600"
+                      >
+                        <X size={10} />
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="w-full h-24 rounded-lg border-2 border-dashed border-gray-200 flex items-center justify-center text-gray-400">
+                      {editing.imagePath ? (
+                        <img
+                          src={editing.imagePath}
+                          alt={editing.name}
+                          className="w-full h-full object-cover rounded-lg"
+                        />
+                      ) : (
+                        "Sin imagen"
+                      )}
+                    </div>
+                  )}
+                  <label className="mt-2 flex items-center justify-center gap-1 px-3 py-2 text-xs font-semibold border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors">
+                    {uploading ? "Subiendo..." : "Subir imagen"}
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleImageUpload}
+                      className="hidden"
+                      disabled={uploading}
+                    />
+                  </label>
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider block mb-1">
+                    Categoría padre
+                  </label>
+                  <select
+                    value={editForm.parentId ?? ""}
+                    onChange={(e) =>
+                      setEditForm((f) => ({ ...f, parentId: e.target.value }))
+                    }
+                    className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none"
+                  >
+                    <option value="">Principal (sin padre)</option>
+                    {parents
+                      .filter((p) => p.id !== editing.id)
+                      .map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.name}
+                        </option>
+                      ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider block mb-1">
+                    Orden
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={editForm.displayOrder ?? 0}
+                    onChange={(e) =>
+                      setEditForm((f) => ({
+                        ...f,
+                        displayOrder: e.target.value,
+                      }))
+                    }
+                    className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-amber-400"
+                  />
+                </div>
+
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={editForm.isActive ?? true}
+                    onChange={(e) =>
+                      setEditForm((f) => ({ ...f, isActive: e.target.checked }))
+                    }
+                    className="rounded accent-amber-400"
+                  />
+                  <span className="text-sm text-gray-700">Visible</span>
+                </label>
+
+                <button
+                  onClick={saveEdit}
+                  className="w-full py-2.5 rounded-xl text-sm font-bold bg-amber-400 text-amber-900 hover:bg-amber-500 transition-colors"
+                >
+                  Guardar cambios
+                </button>
+              </div>
+            )}
+
+            {editTab === "products" && (
+              <div className="px-5 py-4 space-y-4">
+                {/* Current products */}
+                <div>
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
+                    Productos en esta categoría
+                  </p>
+                  {catProductsLoading ? (
+                    <div className="flex justify-center py-6">
+                      <div className="w-5 h-5 border-2 border-gray-300 border-t-amber-400 rounded-full animate-spin" />
+                    </div>
+                  ) : catProducts.length === 0 ? (
+                    <p className="text-xs text-gray-400 py-4 text-center">
+                      Sin productos asignados
+                    </p>
+                  ) : (
+                    <div className="flex flex-col gap-2 max-h-60 overflow-y-auto">
+                      {catProducts.map((p) => (
+                        <div
+                          key={p.id}
+                          className="flex items-center gap-2 p-2 bg-gray-50 rounded-lg"
+                        >
+                          <div className="w-8 h-8 rounded bg-gray-200 overflow-hidden shrink-0">
+                            {p.image && (
+                              <img
+                                src={p.image}
+                                alt={p.name}
+                                className="w-full h-full object-cover"
+                              />
+                            )}
+                          </div>
+                          <span className="text-xs text-gray-700 flex-1 truncate">
+                            {p.name}
+                          </span>
+                          <button
+                            onClick={() => removeProduct(p.id)}
+                            className="w-6 h-6 rounded flex items-center justify-center hover:bg-red-50 text-gray-400 hover:text-red-500 transition-colors"
+                            title="Quitar de categoría"
+                          >
+                            <X size={12} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Add product */}
+                <div>
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
+                    Buscar y asignar
+                  </p>
+                  <div className="flex gap-2">
+                    <input
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      onKeyDown={(e) =>
+                        e.key === "Enter" && handleProductSearch()
+                      }
+                      placeholder="Buscar producto..."
+                      className="flex-1 text-xs border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-amber-400"
+                    />
+                    <button
+                      onClick={handleProductSearch}
+                      className="px-3 py-2 text-xs font-semibold bg-amber-400 text-amber-900 rounded-lg hover:bg-amber-500 transition-colors"
+                    >
+                      {searching ? "..." : "Buscar"}
+                    </button>
+                  </div>
+                  {searchResults.length > 0 && (
+                    <div className="mt-2 flex flex-col gap-1.5 max-h-48 overflow-y-auto">
+                      {searchResults.map((p) => (
+                        <button
+                          key={p.id}
+                          onClick={() => addProduct(p.id)}
+                          className="flex items-center gap-2 p-2 bg-gray-50 rounded-lg hover:bg-amber-50 transition-colors text-left"
+                        >
+                          <div className="w-8 h-8 rounded bg-gray-200 overflow-hidden shrink-0">
+                            {p.image && (
+                              <img
+                                src={p.image}
+                                alt={p.name}
+                                className="w-full h-full object-cover"
+                              />
+                            )}
+                          </div>
+                          <span className="text-xs text-gray-700 flex-1 truncate">
+                            {p.name}
+                          </span>
+                          <Plus size={12} className="text-amber-500 shrink-0" />
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        </>
+      )}
 
       {/* Uncategorized products */}
       <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
@@ -382,9 +743,6 @@ export default function Categories() {
             <p className="text-sm text-gray-400">
               Todos los productos están clasificados
             </p>
-            <p className="text-xs text-gray-400 mt-1">
-              Los productos sin categoría aparecerán aquí para ser asignados
-            </p>
           </div>
         ) : (
           <div className="divide-y divide-gray-50 max-h-80 overflow-y-auto">
@@ -393,7 +751,7 @@ export default function Categories() {
                 key={p.id}
                 className="flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 transition-colors"
               >
-                <div className="w-9 h-9 rounded-lg bg-gray-100 overflow-hidden flex-shrink-0">
+                <div className="w-9 h-9 rounded-lg bg-gray-100 overflow-hidden shrink-0">
                   {p.image && (
                     <img
                       src={p.image}
@@ -414,11 +772,6 @@ export default function Categories() {
                     }).format(p.price)}
                   </p>
                 </div>
-                {p.productTypeCode && (
-                  <span className="text-[10px] bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">
-                    {p.productTypeCode}
-                  </span>
-                )}
               </div>
             ))}
           </div>

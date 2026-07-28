@@ -124,10 +124,13 @@ export const catalogService = {
       parentId: number | null;
       displayOrder: number;
       description: string | null;
+      metaTitle: string | null;
+      metaDescription: string | null;
       isActive: boolean;
       level: number;
       createdAt: string;
       imagePath: string | null;
+      productCount: number;
     }>
   > {
     return fetchJson(`${API_BASE_URL}/admin/catalog/categories`);
@@ -145,7 +148,16 @@ export const catalogService = {
 
   async updateCategory(
     id: number,
-    data: { name?: string; isActive?: boolean },
+    data: {
+      name?: string;
+      parentId?: number | null;
+      description?: string | null;
+      displayOrder?: number;
+      metaTitle?: string | null;
+      metaDescription?: string | null;
+      isActive?: boolean;
+      imageUrl?: string;
+    },
   ): Promise<{ id: number }> {
     return fetchJson(`${API_BASE_URL}/admin/catalog/categories/${id}`, {
       method: "POST",
@@ -165,6 +177,49 @@ export const catalogService = {
       {
         method: "POST",
         body: JSON.stringify({ uncategorized: true, limit: 50 }),
+      },
+    );
+  },
+
+  async getCategoryProducts(
+    categoryId: number,
+  ): Promise<
+    Array<{
+      id: number;
+      name: string;
+      slug: string;
+      price: number;
+      image: string | null;
+      productTypeCode: string | null;
+    }>
+  > {
+    return fetchJson(
+      `${API_BASE_URL}/admin/catalog/categories/${categoryId}/products`,
+    );
+  },
+
+  async addProductToCategory(
+    categoryId: number,
+    productId: number,
+  ): Promise<void> {
+    await fetch(
+      `${API_BASE_URL}/admin/catalog/categories/${categoryId}/products`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ productId }),
+      },
+    );
+  },
+
+  async removeProductFromCategory(
+    categoryId: number,
+    productId: number,
+  ): Promise<void> {
+    await fetch(
+      `${API_BASE_URL}/admin/catalog/categories/${categoryId}/products/${productId}`,
+      {
+        method: "DELETE",
       },
     );
   },
