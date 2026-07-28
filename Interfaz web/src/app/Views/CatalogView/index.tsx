@@ -60,6 +60,7 @@ export function CatalogPage({
 
   useEffect(() => {
     catalogService.getFeaturedBrands().then(setBrands).catch(() => {});
+    catalogService.getProductTypes().then(setProductTypes).catch(() => {});
   }, []);
   const PAGE_SIZE = 20;
 
@@ -94,6 +95,7 @@ export function CatalogPage({
     catalogSort,
     catalogSearch,
     catalogBrand,
+    catalogProductType,
   ]);
 
   // Debounce search input
@@ -182,7 +184,7 @@ export function CatalogPage({
     catalogCategory.length +
     (catalogOnSale ? 1 : 0) +
     (catalogPriceRange !== "all" ? 1 : 0) +
-    (catalogBrand ? 1 : 0);
+    catalogProductType ? 1 : 0;
 
   const clearAll = () => {
     setCatalogCategory([]);
@@ -190,6 +192,7 @@ export function CatalogPage({
     setCatalogPriceRange("all");
     setCatalogSearch("");
     setCatalogBrand(null);
+    setCatalogProductType("");
   };
 
   const SidebarContent = () => (
@@ -582,9 +585,9 @@ export function CatalogPage({
 
         {/* Products column */}
         <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
-          {/* Sort row + mobile filters trigger */}
+          {/* Sort row + chips */}
           <div className="flex items-center justify-between gap-3 mb-4 flex-shrink-0">
-            <div className="flex items-center gap-2 ml-auto">
+            <div className="flex items-start flex-wrap gap-1.5">
               {/* Mobile filters button */}
               <button
                 onClick={() => setMobileFiltersOpen(true)}
@@ -612,103 +615,91 @@ export function CatalogPage({
                   </span>
                 )}
               </button>
-              {/* Sort */}
-              <select
-                value={catalogSort}
-                onChange={(e) => setCatalogSort(e.target.value)}
-                className="pl-3 pr-7 py-2 text-xs rounded-lg border border-border bg-white focus:outline-none appearance-none cursor-pointer font-medium"
-                style={{
-                  backgroundImage:
-                    "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236B7280' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E\")",
-                  backgroundRepeat: "no-repeat",
-                  backgroundPosition: "right 6px center",
-                }}
-              >
-                {SORT_OPTIONS.map((o) => (
-                  <option key={o.id} value={o.id}>
-                    {o.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
 
-          {/* Active filter chips */}
-          {(catalogCategory.length > 0 ||
-            catalogOnSale ||
-            catalogPriceRange !== "all" ||
-            catalogSearch ||
-            catalogBrand) && (
-            <div className="flex flex-wrap gap-1.5 mb-3">
-              {catalogCategory.map((cat) => (
-                <span
-                  key={cat}
-                  className="flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold border-2 border-foreground text-foreground"
-                >
-                  {getCategoryName(cat)}
-                  <button
-                    onClick={() => toggleCategory(cat)}
-                    className="hover:opacity-60 ml-0.5"
-                  >
-                    <X className="w-2.5 h-2.5" />
+              {(catalogCategory.length > 0 ||
+                catalogOnSale ||
+                catalogPriceRange !== "all" ||
+                catalogSearch ||
+                catalogBrand ||
+                catalogProductType) && (
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {catalogCategory.map((cat) => (
+                    <span
+                      key={cat}
+                      className="flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold border-2 border-foreground text-foreground"
+                    >
+                      {getCategoryName(cat)}
+                      <button onClick={() => toggleCategory(cat)} className="hover:opacity-60 ml-0.5">
+                        <X className="w-2.5 h-2.5" />
+                      </button>
+                    </span>
+                  ))}
+                  {catalogOnSale && (
+                    <span className="flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold text-white" style={{ background: "#FF4444" }}>
+                      Solo ofertas
+                      <button onClick={() => setCatalogOnSale(false)} className="hover:opacity-70 ml-0.5">
+                        <X className="w-2.5 h-2.5" />
+                      </button>
+                    </span>
+                  )}
+                  {catalogPriceRange !== "all" && (
+                    <span className="flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold border border-border text-muted-foreground">
+                      {PRICE_RANGES.find((r) => r.id === catalogPriceRange)?.label}
+                      <button onClick={() => setCatalogPriceRange("all")} className="hover:opacity-70 ml-0.5">
+                        <X className="w-2.5 h-2.5" />
+                      </button>
+                    </span>
+                  )}
+                  {catalogBrand && (
+                    <span className="flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold border border-border text-muted-foreground">
+                      {brands.find(b => b.id === catalogBrand)?.name || `Marca #${catalogBrand}`}
+                      <button onClick={() => setCatalogBrand(null)} className="hover:opacity-70 ml-0.5">
+                        <X className="w-2.5 h-2.5" />
+                      </button>
+                    </span>
+                  )}
+                  {catalogProductType && (
+                    <span className="flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold border border-border text-muted-foreground">
+                      {productTypes.find(pt => pt.code === catalogProductType)?.name || catalogProductType}
+                      <button onClick={() => setCatalogProductType("")} className="hover:opacity-70 ml-0.5">
+                        <X className="w-2.5 h-2.5" />
+                      </button>
+                    </span>
+                  )}
+                  {catalogSearch && (
+                    <span className="flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold border border-border text-muted-foreground">
+                      "{catalogSearch}"
+                      <button onClick={() => setCatalogSearch("")} className="hover:opacity-70 ml-0.5">
+                        <X className="w-2.5 h-2.5" />
+                      </button>
+                    </span>
+                  )}
+                  <button onClick={clearAll} className="text-xs text-muted-foreground underline hover:text-foreground transition-colors ml-1 whitespace-nowrap">
+                    Limpiar todo
                   </button>
-                </span>
-              ))}
-              {catalogOnSale && (
-                <span
-                  className="flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold text-white"
-                  style={{ background: "#FF4444" }}
-                >
-                  Solo ofertas
-                  <button
-                    onClick={() => setCatalogOnSale(false)}
-                    className="hover:opacity-70 ml-0.5"
-                  >
-                    <X className="w-2.5 h-2.5" />
-                  </button>
-                </span>
+                </div>
               )}
-              {catalogPriceRange !== "all" && (
-                <span className="flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold border border-border text-muted-foreground">
-                  {PRICE_RANGES.find((r) => r.id === catalogPriceRange)?.label}
-                  <button
-                    onClick={() => setCatalogPriceRange("all")}
-                    className="hover:opacity-70 ml-0.5"
-                  >
-                    <X className="w-2.5 h-2.5" />
-                  </button>
-                </span>
-              )}
-              {catalogBrand && (
-                <span className="flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold border border-border text-muted-foreground">
-                  Marca #{catalogBrand}
-                  <button
-                    onClick={() => setCatalogBrand(null)}
-                    className="hover:opacity-70 ml-0.5"
-                  >
-                    <X className="w-2.5 h-2.5" />
-                  </button>
-                </span>
-              )}
-              {catalogSearch && (
-                <span className="flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold border border-border text-muted-foreground">
-                  "{catalogSearch}"
-                  <button
-                    onClick={() => setCatalogSearch("")}
-                    className="hover:opacity-70 ml-0.5"
-                  >
-                    <X className="w-2.5 h-2.5" />
-                  </button>
-                </span>
-              )}
-              <button
-                onClick={clearAll}
-                className="text-xs text-muted-foreground underline hover:text-foreground transition-colors self-center ml-1"
-              >
-                Limpiar todo
-              </button>
             </div>
-          )}
+
+            {/* Sort */}
+            <select
+              value={catalogSort}
+              onChange={(e) => setCatalogSort(e.target.value)}
+              className="pl-3 pr-7 py-2 text-xs rounded-lg border border-border bg-white focus:outline-none appearance-none cursor-pointer font-medium shrink-0"
+              style={{
+                backgroundImage:
+                  "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236B7280' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E\")",
+                backgroundRepeat: "no-repeat",
+                backgroundPosition: "right 6px center",
+              }}
+            >
+              {SORT_OPTIONS.map((o) => (
+                <option key={o.id} value={o.id}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          </div>
 
           {/* Grid */}
           <div

@@ -170,7 +170,7 @@ const [landingLoading, setLandingLoading] = useState(true);
   const cartCount = cartItems.reduce((s, c) => s + c.quantity, 0);
   const handleCategoryClick = (n: string) => { setCatalogSearch(n); setCatalogBrand(null); setCurrentView("catalog"); navigate("/catalog"); window.scrollTo({ top: 0, behavior: "smooth" }); };
   const handleBrandClick = (brandId: number) => { setCatalogBrand(brandId); setCatalogCategory([]); setCatalogSearch(""); setCurrentView("catalog"); navigate("/catalog"); window.scrollTo({ top: 0, behavior: "smooth" }); };
-  const handleProductTypeClick = (code: string) => { setCurrentView("catalog"); navigate("/catalog"); window.scrollTo({ top: 0, behavior: "smooth" }); };
+  const handleProductTypeClick = (code: string) => { setCatalogProductType(code); setCatalogCategory([]); setCatalogSearch(""); setCurrentView("catalog"); navigate("/catalog"); window.scrollTo({ top: 0, behavior: "smooth" }); };
 
   const placeOrder = async () => {
     if (!customer) { setCheckoutError("Debes iniciar sesion"); return; }
