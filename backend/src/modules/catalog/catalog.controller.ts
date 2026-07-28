@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Query, Res, BadRequestException, UploadedFile, UseInterceptors } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Post, Query, Res, BadRequestException, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import type { Response } from 'express';
 import { ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
@@ -6,6 +6,8 @@ import { Public } from '../../common/decorators/public.decorator';
 import { CatalogService } from './catalog.service';
 import { CatalogProductsQueryDto } from './dto/catalog-products-query.dto';
 import { CreateProductDto } from './dto/create-product.dto';
+import { CustomerJwtAuthGuard } from '../customer-auth/guards/customer-jwt-auth.guard';
+import { CurrentUser } from '../../common/decorators/current-user.decorator';
 
 @ApiTags('Catalog')
 @Controller('catalog')
@@ -106,5 +108,36 @@ export class CatalogController {
   @ApiResponse({ status: 200, description: 'Listado de tipos de producto' })
   getProductTypes() {
     return this.catalogService.getProductTypes();
+  }
+
+  // ── Favorites ──
+
+  @UseGuards(CustomerJwtAuthGuard)
+  @Get('favorites')
+  @ApiOperation({ summary: 'Obtener productos favoritos del cliente' })
+  async getFavorites(@CurrentUser() customer: { sub: number }) {
+    return this.catalogService.getFavorites(customer.sub);
+  }
+
+  @UseGuards(CustomerJwtAuthGuard)
+  @Post('favorites/:productId')
+  @ApiOperation({ summary: 'Agregar producto a favoritos' })
+  async addFavorite(
+    @CurrentUser() customer: { sub: number },
+    @Param('productId') productId: string,
+  ) {
+    await this.catalogService.addFavorite(customer.sub, Number(productId));
+    return { success: true };
+  }
+
+  @UseGuards(CustomerJwtAuthGuard)
+  @Delete('favorites/:productId')
+  @ApiOperation({ summary: 'Quitar producto de favoritos' })
+  async removeFavorite(
+    @CurrentUser() customer: { sub: number },
+    @Param('productId') productId: string,
+  ) {
+    await this.catalogService.removeFavorite(customer.sub, Number(productId));
+    return { success: true };
   }
 }

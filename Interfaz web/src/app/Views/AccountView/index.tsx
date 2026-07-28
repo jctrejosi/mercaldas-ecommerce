@@ -469,8 +469,8 @@ export function UserAdminView({ appOrders, cartItems, customer, onAdd, onRemove,
   const [section, setSection] = useState<AccountSection>(initialSection);
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [trackingOrderId, setTrackingOrderId] = useState<string>("");
-  const [favorites, setFavorites] = useState<Product[]>(INIT_FAVORITES);
-  const [lists, setLists] = useState<ShoppingList[]>(INIT_LISTS);
+  const [favorites, setFavorites] = useState<Product[]>([]);
+  const [favoritesLoading, setFavoritesLoading] = useState(false);
   const [selectedListId, setSelectedListId] = useState<string>(INIT_LISTS[0].id);
   const [addresses, setAddresses] = useState<SavedAddress[]>(INIT_ADDRESSES);
   const [payments, setPayments] = useState<SavedPayment[]>(INIT_PAYMENTS);
@@ -493,6 +493,22 @@ export function UserAdminView({ appOrders, cartItems, customer, onAdd, onRemove,
   useEffect(() => {
     ordersService.getOrders().then(setApiOrders).catch(() => {}).finally(() => setOrdersLoading(false));
   }, []);
+
+  // Load favorites when section changes to favorites or customer changes
+  useEffect(() => {
+    if (customer) {
+      setFavoritesLoading(true);
+      catalogService.getFavorites()
+        .then(setFavorites)
+        .catch(() => setFavorites([]))
+        .finally(() => setFavoritesLoading(false));
+    }
+  }, [customer, section]);
+
+  const removeFromFavorites = (productId: number) => {
+    setFavorites(prev => prev.filter(p => p.id !== productId));
+    catalogService.removeFavorite(productId).catch(() => {});
+  };
 
   const allOrders: AcctOrder[] = [
     ...apiOrders.map((o) => ({
@@ -1002,6 +1018,14 @@ export function UserAdminView({ appOrders, cartItems, customer, onAdd, onRemove,
       return ms && mc;
     });
 
+    if (favoritesLoading) {
+      return (
+        <div className="flex items-center justify-center py-20">
+          <div className="w-6 h-6 border-2 border-foreground border-t-transparent rounded-full animate-spin" />
+        </div>
+      );
+    }
+
     return (
       <div>
         <div className="flex items-center justify-between mb-5">
@@ -1063,7 +1087,7 @@ export function UserAdminView({ appOrders, cartItems, customer, onAdd, onRemove,
                     <div className="relative aspect-square bg-muted overflow-hidden">
                       <img src={p.image} alt={p.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
                       <button
-                        onClick={() => setFavorites((prev) => prev.filter((f) => f.id !== p.id))}
+                        onClick={() => removeFromFavorites(p.id)}
                         className="absolute top-2 right-2 w-7 h-7 rounded-full bg-white/90 flex items-center justify-center shadow hover:bg-white transition-colors"
                       >
                         <Heart className="w-3.5 h-3.5" fill="#FF4444" stroke="#FF4444" />

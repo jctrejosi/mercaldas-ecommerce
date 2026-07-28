@@ -19,6 +19,7 @@ import {
   branches,
   brands,
   categories,
+  favorites,
   inventory,
   media,
   productCategories,
@@ -836,7 +837,7 @@ export class CatalogService {
     }
   }
 
-  private buildSort(sort: string) {
+  private buildSort(sort: string | undefined): ReturnType<typeof asc>[] {
     switch (sort) {
       case 'precio-asc':
         return [asc(productVariants.currentPrice), asc(products.name)];
@@ -854,5 +855,117 @@ export class CatalogService {
       default:
         return [desc(products.featured), asc(products.name)];
     }
+  }
+
+  // ── Favorites ──
+
+  async getFavorites(customerId: number): Promise<CatalogProductResponse[]> {
+    const rows = await this.drizzleService.db
+      .select({
+        id: products.id,
+        externalId: products.externalId,
+        slug: products.slug,
+        name: products.name,
+        description: products.description,
+        price: productVariants.currentPrice,
+        comparePrice: productVariants.currentComparePrice,
+        image: media.path,
+        categoryName: sql<string>`COALESCE(LEAF_CAT.name, ROOT_CAT.name, 'Sin categoría')`,
+        categoryId: sql<number>`COALESCE(LEAF_CAT.id, ROOT_CAT.id, 0)`,
+        productTypeCode: productTypes.code,
+        productTypeName: productTypes.name,
+        isActive: products.isActive,
+        isFeatured: products.featured,
+        stock: inventory.stock,
+      })
+      .from(favorites)
+      .innerJoin(products, eq(products.id, favorites.productId))
+      .innerJoin(
+        productVariants,
+        eq(productVariants.productId, products.id),
+      )
+      .leftJoin(
+        productCategories,
+        eq(productCategories.productId, products.id),
+      )
+      .leftJoin(
+        sql`(
+          SELECT pc.*, c.id AS cat_id, c.name AS cat_name, c.parent_id AS cat_parent_id
+          FROM product_categories pc
+          INNER JOIN categories c ON c.id = pc.category_id
+          WHERE c.parent_id IS NOT NULL
+        ) AS LEAF_CAT`,
+        sql`LEAF_CAT.product_id = ${products.id}`,
+      )
+      .leftJoin(
+        categories,
+        eq(categories.id, productCategories.categoryId),
+      )
+      .leftJoin(
+        sql`categories AS ROOT_CAT`,
+        sql`ROOT_CAT.id = COALESCE(LEAF_CAT.cat_parent_id, ${productCategories.categoryId})`,
+      )
+      .leftJoin(
+        productTypeAssignments,
+        eq(productTypeAssignments.productId, products.id),
+      )
+      .leftJoin(
+        productTypes,
+        eq(productTypes.id, productTypeAssignments.productTypeId),
+      )
+      .leftJoin(
+        productImages,
+        and(
+          eq(productImages.productId, products.id),
+          eq(productImages.isCover, true),
+        ),
+      )
+      .leftJoin(media, eq(media.id, productImages.mediaId))
+      .leftJoin(inventory, eq(inventory.productVariantId, productVariants.id))
+      .where(
+        and(
+          eq(favorites.customerId, customerId),
+          eq(products.isActive, true),
+          isNull(products.deletedAt),
+        ),
+      )
+      .orderBy(desc(favorites.createdAt), asc(products.name));
+
+    return rows.map((row: any) => ({
+      id: Number(row.id),
+      externalId: row.externalId,
+      slug: row.slug,
+      name: row.name,
+      description: row.description,
+      price: Number(row.price ?? 0),
+      originalPrice: row.comparePrice ? Number(row.comparePrice) : undefined,
+      image: row.image,
+      images: row.image ? [row.image] : [],
+      category: row.categoryName,
+      categoryId: Number(row.categoryId ?? 0),
+      productTypeCode: row.productTypeCode,
+      productTypeName: row.productTypeName,
+      isActive: row.isActive,
+      isFeatured: Boolean(row.isFeatured),
+      stock: Number(row.stock ?? 0),
+    }));
+  }
+
+  async addFavorite(customerId: number, productId: number) {
+    await this.drizzleService.db
+      .insert(favorites)
+      .values({ customerId, productId })
+      .onConflictDoNothing();
+  }
+
+  async removeFavorite(customerId: number, productId: number) {
+    await this.drizzleService.db
+      .delete(favorites)
+      .where(
+        and(
+          eq(favorites.customerId, customerId),
+          eq(favorites.productId, productId),
+        ),
+      );
   }
 }

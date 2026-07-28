@@ -43,6 +43,7 @@ async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
   const response = await fetch(url, {
     credentials: "include",
     ...init,
+    headers: { ...init?.headers },
   });
 
   if (!response.ok) {
@@ -127,5 +128,25 @@ export const catalogService = {
     });
 
     return products.filter((item) => item.id !== product.id);
+  },
+
+  // ── Favorites ──
+
+  async getFavorites(): Promise<Product[]> {
+    return fetchJson<Product[]>(`${API_BASE_URL}/catalog/favorites`);
+  },
+
+  async addFavorite(productId: number): Promise<void> {
+    await fetch(`${API_BASE_URL}/catalog/favorites/${productId}`, {
+      method: "POST",
+      credentials: "include",
+    });
+  },
+
+  async removeFavorite(productId: number): Promise<void> {
+    await fetch(`${API_BASE_URL}/catalog/favorites/${productId}`, {
+      method: "DELETE",
+      credentials: "include",
+    });
   },
 };
