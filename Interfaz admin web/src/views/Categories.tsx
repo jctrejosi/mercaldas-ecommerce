@@ -137,6 +137,7 @@ export default function Categories() {
       price: number;
       image: string | null;
       productTypeCode: string | null;
+      category: string;
     }>
   >([]);
   const [searching, setSearching] = useState(false);
@@ -149,6 +150,7 @@ export default function Categories() {
   const [replaceProduct, setReplaceProduct] = useState<{
     productId: number;
     name: string;
+    currentCategory: string;
   } | null>(null);
   const [catSearch, setCatSearch] = useState("");
   const [catDropdownOpen, setCatDropdownOpen] = useState(false);
@@ -300,6 +302,7 @@ export default function Categories() {
                 price: p.price,
                 image: p.image || null,
                 productTypeCode: p.productTypeCode || null,
+                category: p.category,
               })),
           );
         } catch {
@@ -324,6 +327,7 @@ export default function Categories() {
               price: p.price,
               image: p.image || null,
               productTypeCode: p.productTypeCode || null,
+              category: p.category,
             })),
         );
       } catch {
@@ -844,7 +848,11 @@ export default function Categories() {
                     <button
                       key={p.id}
                       onClick={() =>
-                        setReplaceProduct({ productId: p.id, name: p.name })
+                        setReplaceProduct({
+                          productId: p.id,
+                          name: p.name,
+                          currentCategory: p.category || "Ninguna",
+                        })
                       }
                       className="flex items-center gap-3 p-2 bg-gray-50 rounded-lg hover:bg-amber-50 transition-colors text-left"
                     >
@@ -906,8 +914,11 @@ export default function Categories() {
                 <span className="font-semibold">{replaceProduct.name}</span>
               </p>
               <p className="text-xs text-gray-500 mb-5">
-                Este producto ya tiene una categoría asignada. Se reemplazará
-                por{" "}
+                Categoría actual:{" "}
+                <span className="font-semibold">
+                  {replaceProduct.currentCategory}
+                </span>
+                . Se reemplazará por{" "}
                 <span className="font-semibold text-amber-700">
                   {editing?.name}
                 </span>
