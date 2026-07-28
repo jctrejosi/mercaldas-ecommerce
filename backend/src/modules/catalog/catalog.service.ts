@@ -28,6 +28,8 @@ import {
   productTypes,
   products,
   productVariants,
+  shoppingLists,
+  shoppingListItems,
 } from '../../../drizzle/schema';
 import { CatalogProductsQueryDto } from './dto/catalog-products-query.dto';
 import { CreateProductDto } from './dto/create-product.dto';
@@ -965,6 +967,178 @@ export class CatalogService {
         and(
           eq(favorites.customerId, customerId),
           eq(favorites.productId, productId),
+        ),
+      );
+  }
+
+  // ── Shopping Lists ──
+
+  async getShoppingLists(customerId: number) {
+    const lists = await this.drizzleService.db
+      .select({
+        id: shoppingLists.id,
+        name: shoppingLists.name,
+        createdAt: shoppingLists.createdAt,
+      })
+      .from(shoppingLists)
+      .where(eq(shoppingLists.customerId, customerId))
+      .orderBy(desc(shoppingLists.createdAt));
+
+    // Get items for all lists
+    const listIds = lists.map((l) => Number(l.id));
+    if (listIds.length === 0) return [];
+
+    const items = await this.drizzleService.db
+      .select({
+        listId: shoppingListItems.listId,
+        productId: shoppingListItems.productId,
+        quantity: shoppingListItems.quantity,
+        productName: products.name,
+        productPrice: productVariants.currentPrice,
+        productImage: media.path,
+        unit: sql<string>`${productVariants.sku}`,
+      })
+      .from(shoppingListItems)
+      .innerJoin(products, eq(products.id, shoppingListItems.productId))
+      .innerJoin(
+        productVariants,
+        eq(productVariants.productId, products.id),
+      )
+      .leftJoin(
+        productImages,
+        and(
+          eq(productImages.productId, products.id),
+          eq(productImages.isCover, true),
+        ),
+      )
+      .leftJoin(media, eq(media.id, productImages.mediaId))
+      .where(inArray(shoppingListItems.listId, listIds))
+      .orderBy(asc(shoppingListItems.addedAt));
+
+    return lists.map((list) => ({
+      id: Number(list.id),
+      name: list.name,
+      createdAt: list.createdAt,
+      items: items
+        .filter((i) => Number(i.listId) === Number(list.id))
+        .map((i) => ({
+          productId: Number(i.productId),
+          productName: i.productName,
+          productPrice: Number(i.productPrice ?? 0),
+          productImage: i.productImage,
+          quantity: i.quantity,
+        })),
+    }));
+  }
+
+  async createShoppingList(customerId: number, name: string) {
+    const [inserted] = await this.drizzleService.db
+      .insert(shoppingLists)
+      .values({ customerId, name })
+      .returning({ id: shoppingLists.id });
+    return { id: Number(inserted.id) };
+  }
+
+  async updateShoppingList(customerId: number, listId: number, name: string) {
+    await this.drizzleService.db
+      .update(shoppingLists)
+      .set({ name, updatedAt: new Date().toISOString() })
+      .where(
+        and(
+          eq(shoppingLists.id, BigInt(listId)),
+          eq(shoppingLists.customerId, customerId),
+        ),
+      );
+  }
+
+  async deleteShoppingList(customerId: number, listId: number) {
+    await this.drizzleService.db
+      .delete(shoppingLists)
+      .where(
+        and(
+          eq(shoppingLists.id, BigInt(listId)),
+          eq(shoppingLists.customerId, customerId),
+        ),
+      );
+  }
+
+  async addToShoppingList(
+    customerId: number,
+    listId: number,
+    productId: number,
+    quantity = 1,
+  ) {
+    // Verify list ownership
+    const [list] = await this.drizzleService.db
+      .select({ id: shoppingLists.id })
+      .from(shoppingLists)
+      .where(
+        and(
+          eq(shoppingLists.id, BigInt(listId)),
+          eq(shoppingLists.customerId, customerId),
+        ),
+      );
+
+    if (!list) throw new Error('Lista no encontrada');
+
+    // Check if product already in list
+    const [existing] = await this.drizzleService.db
+      .select({ id: shoppingListItems.id })
+      .from(shoppingListItems)
+      .where(
+        and(
+          eq(shoppingListItems.listId, listId),
+          eq(shoppingListItems.productId, productId),
+        ),
+      );
+
+    if (existing) {
+      await this.drizzleService.db
+        .update(shoppingListItems)
+        .set({ quantity: sql`${shoppingListItems.quantity} + ${quantity}` })
+        .where(
+          and(
+            eq(shoppingListItems.listId, listId),
+            eq(shoppingListItems.productId, productId),
+          ),
+        );
+    } else {
+      await this.drizzleService.db
+        .insert(shoppingListItems)
+        .values({ listId, productId, quantity });
+    }
+  }
+
+  async updateShoppingListItem(listId: number, productId: number, quantity: number) {
+    if (quantity <= 0) {
+      await this.drizzleService.db
+        .delete(shoppingListItems)
+        .where(
+          and(
+            eq(shoppingListItems.listId, listId),
+            eq(shoppingListItems.productId, productId),
+          ),
+        );
+    } else {
+      await this.drizzleService.db
+        .update(shoppingListItems)
+        .set({ quantity })
+        .where(
+          and(
+            eq(shoppingListItems.listId, listId),
+            eq(shoppingListItems.productId, productId),
+          ),
+        );
+    }
+  }
+
+  async removeShoppingListItem(listId: number, productId: number) {
+    await this.drizzleService.db
+      .delete(shoppingListItems)
+      .where(
+        and(
+          eq(shoppingListItems.listId, listId),
+          eq(shoppingListItems.productId, productId),
         ),
       );
   }

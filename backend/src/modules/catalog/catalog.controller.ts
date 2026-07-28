@@ -140,4 +140,83 @@ export class CatalogController {
     await this.catalogService.removeFavorite(customer.sub, Number(productId));
     return { success: true };
   }
+
+  // ── Shopping Lists ──
+
+  @UseGuards(CustomerJwtAuthGuard)
+  @Get('shopping-lists')
+  @ApiOperation({ summary: 'Obtener listas de compras del cliente' })
+  async getShoppingLists(@CurrentUser() customer: { sub: number }) {
+    return this.catalogService.getShoppingLists(customer.sub);
+  }
+
+  @UseGuards(CustomerJwtAuthGuard)
+  @Post('shopping-lists')
+  @ApiOperation({ summary: 'Crear lista de compras' })
+  async createShoppingList(
+    @CurrentUser() customer: { sub: number },
+    @Body() body: { name: string },
+  ) {
+    return this.catalogService.createShoppingList(customer.sub, body.name);
+  }
+
+  @UseGuards(CustomerJwtAuthGuard)
+  @Post('shopping-lists/:id')
+  @ApiOperation({ summary: 'Actualizar nombre de lista de compras' })
+  async updateShoppingList(
+    @CurrentUser() customer: { sub: number },
+    @Param('id') id: string,
+    @Body() body: { name: string },
+  ) {
+    await this.catalogService.updateShoppingList(customer.sub, Number(id), body.name);
+    return { success: true };
+  }
+
+  @UseGuards(CustomerJwtAuthGuard)
+  @Delete('shopping-lists/:id')
+  @ApiOperation({ summary: 'Eliminar lista de compras' })
+  async deleteShoppingList(
+    @CurrentUser() customer: { sub: number },
+    @Param('id') id: string,
+  ) {
+    await this.catalogService.deleteShoppingList(customer.sub, Number(id));
+    return { success: true };
+  }
+
+  @UseGuards(CustomerJwtAuthGuard)
+  @Post('shopping-lists/:id/items')
+  @ApiOperation({ summary: 'Agregar producto a lista de compras' })
+  async addToList(
+    @CurrentUser() customer: { sub: number },
+    @Param('id') id: string,
+    @Body() body: { productId: number; quantity?: number },
+  ) {
+    await this.catalogService.addToShoppingList(customer.sub, Number(id), body.productId, body.quantity ?? 1);
+    return { success: true };
+  }
+
+  @UseGuards(CustomerJwtAuthGuard)
+  @Post('shopping-lists/:listId/items/:productId')
+  @ApiOperation({ summary: 'Actualizar cantidad de item en lista' })
+  async updateListItem(
+    @CurrentUser() _customer: { sub: number },
+    @Param('listId') listId: string,
+    @Param('productId') productId: string,
+    @Body() body: { quantity: number },
+  ) {
+    await this.catalogService.updateShoppingListItem(Number(listId), Number(productId), body.quantity);
+    return { success: true };
+  }
+
+  @UseGuards(CustomerJwtAuthGuard)
+  @Delete('shopping-lists/:listId/items/:productId')
+  @ApiOperation({ summary: 'Quitar producto de lista de compras' })
+  async removeFromList(
+    @CurrentUser() _customer: { sub: number },
+    @Param('listId') listId: string,
+    @Param('productId') productId: string,
+  ) {
+    await this.catalogService.removeShoppingListItem(Number(listId), Number(productId));
+    return { success: true };
+  }
 }

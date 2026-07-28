@@ -3280,3 +3280,60 @@ export const promotionProducts = pgTable(
     ),
   ],
 );
+
+// ── Shopping Lists ──
+
+export const shoppingLists = pgTable(
+  'shopping_lists',
+  {
+    id: bigserial({ mode: 'bigint' }).primaryKey().notNull(),
+    customerId: bigint('customer_id', { mode: 'number' }).notNull(),
+    name: varchar({ length: 255 }).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'string' })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    index('idx_shopping_lists_customer').using(
+      'btree',
+      table.customerId.asc().nullsLast().op('int8_ops'),
+    ),
+    foreignKey({
+      columns: [table.customerId],
+      foreignColumns: [customers.id],
+      name: 'shopping_lists_customer_id_fkey',
+    }).onDelete('cascade'),
+  ],
+);
+
+export const shoppingListItems = pgTable(
+  'shopping_list_items',
+  {
+    id: bigserial({ mode: 'bigint' }).primaryKey().notNull(),
+    listId: bigint('list_id', { mode: 'number' }).notNull(),
+    productId: bigint('product_id', { mode: 'number' }).notNull(),
+    quantity: integer().default(1).notNull(),
+    addedAt: timestamp('added_at', { withTimezone: true, mode: 'string' })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    index('idx_shopping_list_items_list').using(
+      'btree',
+      table.listId.asc().nullsLast().op('int8_ops'),
+    ),
+    foreignKey({
+      columns: [table.listId],
+      foreignColumns: [shoppingLists.id],
+      name: 'shopping_list_items_list_id_fkey',
+    }).onDelete('cascade'),
+    foreignKey({
+      columns: [table.productId],
+      foreignColumns: [products.id],
+      name: 'shopping_list_items_product_id_fkey',
+    }).onDelete('cascade'),
+  ],
+);

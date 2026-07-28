@@ -149,4 +149,72 @@ export const catalogService = {
       credentials: "include",
     });
   },
+
+  // ── Shopping Lists ──
+
+  async getShoppingLists(): Promise<
+    Array<{
+      id: number;
+      name: string;
+      createdAt: string;
+      items: Array<{
+        productId: number;
+        productName: string;
+        productPrice: number;
+        productImage: string | null;
+        quantity: number;
+      }>;
+    }>
+  > {
+    return fetchJson(`${API_BASE_URL}/catalog/shopping-lists`);
+  },
+
+  async createShoppingList(name: string): Promise<{ id: number }> {
+    return fetchJson(`${API_BASE_URL}/catalog/shopping-lists`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name }),
+    });
+  },
+
+  async updateShoppingList(id: number, name: string): Promise<void> {
+    await fetch(`${API_BASE_URL}/catalog/shopping-lists/${id}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ name }),
+    });
+  },
+
+  async deleteShoppingList(id: number): Promise<void> {
+    await fetch(`${API_BASE_URL}/catalog/shopping-lists/${id}`, {
+      method: "DELETE",
+      credentials: "include",
+    });
+  },
+
+  async addToShoppingList(listId: number, productId: number, quantity = 1): Promise<void> {
+    await fetch(`${API_BASE_URL}/catalog/shopping-lists/${listId}/items`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ productId, quantity }),
+    });
+  },
+
+  async updateShoppingListItem(listId: number, productId: number, quantity: number): Promise<void> {
+    await fetch(`${API_BASE_URL}/catalog/shopping-lists/${listId}/items/${productId}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ quantity }),
+    });
+  },
+
+  async removeShoppingListItem(listId: number, productId: number): Promise<void> {
+    await fetch(`${API_BASE_URL}/catalog/shopping-lists/${listId}/items/${productId}`, {
+      method: "DELETE",
+      credentials: "include",
+    });
+  },
 };
