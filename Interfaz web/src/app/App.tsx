@@ -211,6 +211,14 @@ export default function App() {
     null | "addresses" | "checkout"
   >(null);
 
+  // Redirect /account to / if not logged in
+  useEffect(() => {
+    if (customerLoading) return;
+    if (location.pathname.startsWith("/account") && !customer) {
+      navigate("/", { replace: true });
+    }
+  }, [location.pathname, customer, customerLoading]);
+
   useEffect(() => {
     if (initialDataLoaded) return;
     initialDataLoaded = true;
@@ -590,10 +598,12 @@ export default function App() {
           navigate("/account");
         }
       : undefined,
-    onNavigateNotifs: () => {
-      setCurrentView("account");
-      navigate("/account?tab=notifications");
-    },
+    onNavigateNotifs: customer
+      ? () => {
+          setCurrentView("account");
+          navigate("/account?tab=notifications");
+        }
+      : undefined,
     onAddressClick: handleAddressClick,
     notifications,
     unreadNotifCount: unreadCount,

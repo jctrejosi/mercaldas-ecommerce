@@ -50,6 +50,10 @@ import type { CartItem, Order, Product } from "../../types";
 import type { AppNotification } from "../../../hooks/useNotifications";
 import { ordersService } from "../../../services/orders.service";
 import { catalogService } from "../../../services/catalog.service";
+import {
+  customerAddressService,
+  type CustomerAddress,
+} from "../../../services/customer-auth.service";
 
 const MOCK_PRODUCTS: Product[] = [
   {
@@ -1012,7 +1016,8 @@ export function UserAdminView({
   >([]);
   const [listsLoading, setListsLoading] = useState(false);
   const [selectedListId, setSelectedListId] = useState<number | null>(null);
-  const [addresses, setAddresses] = useState<SavedAddress[]>(INIT_ADDRESSES);
+  const [addresses, setAddresses] = useState<SavedAddress[]>([]);
+  const [addressesLoading, setAddressesLoading] = useState(false);
   const [payments, setPayments] = useState<SavedPayment[]>(INIT_PAYMENTS);
   const [coupons, setCoupons] = useState<Coupon[]>(INIT_COUPONS);
   const [notifs, setNotifs] = useState<AcctNotif[]>(() =>
@@ -1073,6 +1078,30 @@ export function UserAdminView({
         .finally(() => setListsLoading(false));
     }
   }, [customer, section]);
+
+  // Load addresses
+  useEffect(() => {
+    if (customer && section === "addresses") {
+      setAddressesLoading(true);
+      customerAddressService
+        .getAddresses()
+        .then((data) => setAddresses(data.map(mapCustomerAddress)))
+        .catch(() => setAddresses([]))
+        .finally(() => setAddressesLoading(false));
+    }
+  }, [customer, section]);
+
+  const mapCustomerAddress = (a: CustomerAddress): SavedAddress => ({
+    id: String(a.id),
+    label: a.alias || "Dirección",
+    icon: "📍",
+    name: "",
+    phone: "",
+    address: a.addressLine1,
+    city: a.city,
+    notes: a.deliveryInstructions || a.reference || "",
+    isDefault: a.isDefault,
+  });
 
   const removeFromFavorites = (productId: number) => {
     setFavorites((prev) => prev.filter((p) => p.id !== productId));
@@ -2576,30 +2605,55 @@ export function UserAdminView({
   const AddressesSection = () => {
     const [showForm, setShowForm] = useState(false);
     const [form, setForm] = useState<Partial<SavedAddress>>({});
+    const [saving, setSaving] = useState(false);
 
-    const setDefault = (id: string) =>
-      setAddresses((prev) =>
-        prev.map((a) => ({ ...a, isDefault: a.id === id })),
-      );
-    const deleteAddr = (id: string) =>
-      setAddresses((prev) => prev.filter((a) => a.id !== id));
-    const saveAddr = () => {
-      if (!form.label || !form.address) return;
-      const na: SavedAddress = {
-        id: `a${Date.now()}`,
-        label: form.label ?? "",
-        icon: "📍",
-        name: form.name ?? "",
-        phone: form.phone ?? "",
-        address: form.address ?? "",
-        city: form.city ?? "Manizales",
-        notes: form.notes ?? "",
-        isDefault: false,
-      };
-      setAddresses((prev) => [...prev, na]);
-      setShowForm(false);
-      setForm({});
+    const refreshAddresses = async () => {
+      try {
+        const data = await customerAddressService.getAddresses();
+        setAddresses(data.map(mapCustomerAddress));
+      } catch {}
     };
+
+    const setDefault = async (id: string) => {
+      try {
+        await customerAddressService.setDefault(Number(id));
+        setAddresses((prev) =>
+          prev.map((a) => ({ ...a, isDefault: a.id === id })),
+        );
+      } catch {}
+    };
+
+    const deleteAddr = async (id: string) => {
+      try {
+        await customerAddressService.deleteAddress(Number(id));
+        setAddresses((prev) => prev.filter((a) => a.id !== id));
+      } catch {}
+    };
+
+    const saveAddr = async () => {
+      if (!form.label || !form.address) return;
+      setSaving(true);
+      try {
+        await customerAddressService.createAddress({
+          alias: form.label,
+          addressLine1: form.address,
+          city: form.city || "Manizales",
+          reference: form.notes || undefined,
+        });
+        await refreshAddresses();
+        setShowForm(false);
+        setForm({});
+      } catch {}
+      setSaving(false);
+    };
+
+    if (addressesLoading) {
+      return (
+        <div className="flex items-center justify-center py-20">
+          <div className="w-6 h-6 border-2 border-foreground border-t-transparent rounded-full animate-spin" />
+        </div>
+      );
+    }
 
     return (
       <div>
@@ -2633,7 +2687,7 @@ export function UserAdminView({
             {addresses.map((addr) => (
               <AcctCard
                 key={addr.id}
-                className={`p-4 ${addr.isDefault ? "ring-2 ring-foreground" : ""}`}
+                className={`p-4 ${addr.isDefault ? "outline-2 outline-foreground outline" : ""}`}
               >
                 <div className="flex items-start justify-between mb-3">
                   <div className="flex items-center gap-2">
@@ -2726,10 +2780,11 @@ export function UserAdminView({
                   <div className="flex gap-2 mt-1">
                     <button
                       onClick={saveAddr}
-                      className="flex-1 py-2 rounded-lg text-xs font-bold transition-all hover:brightness-95"
+                      disabled={saving}
+                      className="flex-1 py-2 rounded-lg text-xs font-bold transition-all hover:brightness-95 disabled:opacity-50"
                       style={{ background: "#FFF200", color: "#1A1A2E" }}
                     >
-                      Guardar
+                      {saving ? "Guardando..." : "Guardar"}
                     </button>
                     <button
                       onClick={() => {
@@ -3114,8 +3169,64 @@ export function UserAdminView({
   /* ── Purchase History ── */
   const HistorySection = () => {
     const [histSearch, setHistSearch] = useState("");
-    const [histCategory, setHistCategory] = useState("Todos");
     const [histDate, setHistDate] = useState("Todos");
+
+    const parseOrderDate = (dateStr: string): Date => {
+      const meses: Record<string, number> = {
+        enero: 0,
+        febrero: 1,
+        marzo: 2,
+        abril: 3,
+        mayo: 4,
+        junio: 5,
+        julio: 6,
+        agosto: 7,
+        septiembre: 8,
+        octubre: 9,
+        noviembre: 10,
+        diciembre: 11,
+        jan: 0,
+        feb: 1,
+        mar: 2,
+        apr: 3,
+        may: 4,
+        jun: 5,
+        jul: 6,
+        aug: 7,
+        sep: 8,
+        oct: 9,
+        nov: 10,
+        dec: 11,
+      };
+      const d = new Date(dateStr);
+      if (!isNaN(d.getTime())) return d;
+      const m = dateStr.match(/(\d+)\s+de\s+(\S+)\s+de\s+(\d+)/);
+      if (m) return new Date(+m[3], meses[m[2].toLowerCase()] ?? 0, +m[1]);
+      const m2 = dateStr.match(/(\d+)\s+(\S+)\s+(\d+)/);
+      if (m2) return new Date(+m2[3], meses[m2[2].toLowerCase()] ?? 0, +m2[1]);
+      return new Date(0);
+    };
+
+    const isInRange = (dateStr: string): boolean => {
+      if (histDate === "Todos") return true;
+      const d = parseOrderDate(dateStr);
+      const now = new Date();
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const yesterday = new Date(today);
+      yesterday.setDate(yesterday.getDate() - 1);
+      const orderDay = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+
+      if (histDate === "Hoy") return orderDay.getTime() === today.getTime();
+      if (histDate === "Ayer")
+        return orderDay.getTime() === yesterday.getTime();
+
+      const diffMs = now.getTime() - d.getTime();
+      const diffDays = diffMs / (1000 * 60 * 60 * 24);
+      if (histDate === "Último mes") return diffDays <= 30;
+      if (histDate === "Últimos 3 meses") return diffDays <= 90;
+      if (histDate === "Este año") return d.getFullYear() === now.getFullYear();
+      return true;
+    };
 
     const allProducts = allOrders.flatMap((o) =>
       o.items.map((i) => ({
@@ -3125,18 +3236,20 @@ export function UserAdminView({
         status: o.status,
       })),
     );
-    const cats = [
+    const dates = [
       "Todos",
-      ...Array.from(new Set(allProducts.map((p) => p.category))),
+      "Hoy",
+      "Ayer",
+      "Último mes",
+      "Últimos 3 meses",
+      "Este año",
     ];
-    const dates = ["Todos", "Último mes", "Últimos 3 meses", "Este año"];
 
     const filtered = allProducts.filter((p) => {
       const ms =
         histSearch.trim() === "" ||
         p.name.toLowerCase().includes(histSearch.toLowerCase());
-      const mc = histCategory === "Todos" || p.category === histCategory;
-      return ms && mc;
+      return ms && isInRange(p.orderDate);
     });
 
     return (
@@ -3164,15 +3277,6 @@ export function UserAdminView({
               }}
             />
           </div>
-          <select
-            value={histCategory}
-            onChange={(e) => setHistCategory(e.target.value)}
-            className="px-3 py-2 text-xs rounded-xl border border-border bg-white focus:outline-none font-medium"
-          >
-            {cats.map((c) => (
-              <option key={c}>{c}</option>
-            ))}
-          </select>
           <select
             value={histDate}
             onChange={(e) => setHistDate(e.target.value)}
@@ -4150,6 +4254,7 @@ export function UserAdminView({
             maxHeight: "calc(100vh - 8rem)",
             overflowY: "auto",
             scrollbarWidth: "thin",
+            padding: "1rem",
           }}
         >
           <div style={{ minHeight: "min-content" }}>{renderSection()}</div>
