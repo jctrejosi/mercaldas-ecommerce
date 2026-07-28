@@ -355,6 +355,13 @@ export class CatalogService {
   }
 
   async deleteCategory(id: number) {
+    // Promote children to root level
+    await this.drizzleService.db
+      .update(categories)
+      .set({ parentId: null, level: 0 })
+      .where(eq(categories.parentId, id));
+
+    // Soft delete the category
     const [deleted] = await this.drizzleService.db
       .update(categories)
       .set({ deletedAt: new Date().toISOString() })

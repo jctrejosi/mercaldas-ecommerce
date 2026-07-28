@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   ChevronRight,
   ChevronDown,
@@ -10,6 +10,7 @@ import {
   EyeOff,
   AlertTriangle,
   X,
+  Search,
 } from "lucide-react";
 import {
   catalogService,
@@ -141,6 +142,14 @@ export default function Categories() {
     }>
   >([]);
   const [searching, setSearching] = useState(false);
+  const [showAddProduct, setShowAddProduct] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState<AdminCategory | null>(
+    null,
+  );
+  const [assignProductId, setAssignProductId] = useState<number | null>(null);
+  const [assignCategoryId, setAssignCategoryId] = useState<number | string>("");
+  const [catSearch, setCatSearch] = useState("");
+  const [catDropdownOpen, setCatDropdownOpen] = useState(false);
 
   const loadCategories = async () => {
     try {
@@ -190,9 +199,30 @@ export default function Categories() {
   };
 
   const deleteCategory = async (id: number) => {
+    const cat = categories.find((c) => c.id === id);
+    if (cat) setDeleteConfirm(cat);
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteConfirm) return;
     try {
-      await catalogService.deleteCategory(id);
+      await catalogService.deleteCategory(deleteConfirm.id);
+      if (editing?.id === deleteConfirm.id) setEditing(null);
       await loadCategories();
+    } catch {}
+    setDeleteConfirm(null);
+  };
+
+  const assignProduct = async () => {
+    if (!assignProductId || !assignCategoryId) return;
+    try {
+      await catalogService.addProductToCategory(
+        Number(assignCategoryId),
+        assignProductId,
+      );
+      setAssignProductId(null);
+      setAssignCategoryId("");
+      await Promise.all([loadCategories(), loadUncategorized()]);
     } catch {}
   };
 
@@ -245,41 +275,82 @@ export default function Categories() {
     setUploading(false);
   };
 
-  const handleProductSearch = async () => {
-    if (!searchQuery.trim()) {
-      setSearchResults([]);
-      return;
+  const handleProductSearch = useCallback(
+    async (query: string) => {
+      if (!query.trim()) {
+        // Load default products when search is empty
+        setSearching(true);
+        try {
+          const data = await catalogService.getProducts({
+            limit: 20,
+            sort: "relevancia",
+          });
+          const existingIds = new Set(catProducts.map((p) => p.id));
+          setSearchResults(
+            data
+              .filter((p) => !existingIds.has(p.id))
+              .slice(0, 8)
+              .map((p) => ({
+                id: p.id,
+                name: p.name,
+                price: p.price,
+                image: p.image || null,
+                productTypeCode: p.productTypeCode || null,
+              })),
+          );
+        } catch {
+          setSearchResults([]);
+        }
+        setSearching(false);
+        return;
+      }
+      setSearching(true);
+      try {
+        const data = await catalogService.getProducts({
+          search: query.trim(),
+          limit: 20,
+        });
+        const existingIds = new Set(catProducts.map((p) => p.id));
+        setSearchResults(
+          data
+            .filter((p) => !existingIds.has(p.id))
+            .map((p) => ({
+              id: p.id,
+              name: p.name,
+              price: p.price,
+              image: p.image || null,
+              productTypeCode: p.productTypeCode || null,
+            })),
+        );
+      } catch {
+        setSearchResults([]);
+      }
+      setSearching(false);
+    },
+    [catProducts],
+  );
+
+  // Load default products when submodal opens
+  useEffect(() => {
+    if (showAddProduct) {
+      setSearchQuery("");
+      handleProductSearch("");
     }
-    setSearching(true);
-    try {
-      const data = await catalogService.getProducts({
-        search: searchQuery.trim(),
-        limit: 20,
-      });
-      const existingIds = new Set(catProducts.map((p) => p.id));
-      setSearchResults(
-        data
-          .filter((p) => !existingIds.has(p.id))
-          .map((p) => ({
-            id: p.id,
-            name: p.name,
-            price: p.price,
-            image: p.image || null,
-            productTypeCode: p.productTypeCode || null,
-          })),
-      );
-    } catch {
-      setSearchResults([]);
-    }
-    setSearching(false);
-  };
+  }, [showAddProduct]);
+
+  // Debounce search
+  useEffect(() => {
+    if (!showAddProduct) return;
+    const timer = setTimeout(() => handleProductSearch(searchQuery), 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery, showAddProduct, handleProductSearch]);
 
   const addProduct = async (productId: number) => {
     if (!editing) return;
     try {
       await catalogService.addProductToCategory(editing.id, productId);
       await loadCategoryProducts(editing.id);
-      await loadCategories();
+      await Promise.all([loadCategories(), loadUncategorized()]);
     } catch {}
   };
 
@@ -288,7 +359,7 @@ export default function Categories() {
     try {
       await catalogService.removeProductFromCategory(editing.id, productId);
       setCatProducts((prev) => prev.filter((p) => p.id !== productId));
-      await loadCategories();
+      await Promise.all([loadCategories(), loadUncategorized()]);
     } catch {}
   };
 
@@ -622,99 +693,55 @@ export default function Categories() {
 
             {editTab === "products" && (
               <div className="px-5 py-4 space-y-4">
-                {/* Current products */}
-                <div>
-                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
-                    Productos en esta categoría
-                  </p>
-                  {catProductsLoading ? (
-                    <div className="flex justify-center py-6">
-                      <div className="w-5 h-5 border-2 border-gray-300 border-t-amber-400 rounded-full animate-spin" />
-                    </div>
-                  ) : catProducts.length === 0 ? (
-                    <p className="text-xs text-gray-400 py-4 text-center">
-                      Sin productos asignados
-                    </p>
-                  ) : (
-                    <div className="flex flex-col gap-2 max-h-60 overflow-y-auto">
-                      {catProducts.map((p) => (
-                        <div
-                          key={p.id}
-                          className="flex items-center gap-2 p-2 bg-gray-50 rounded-lg"
-                        >
-                          <div className="w-8 h-8 rounded bg-gray-200 overflow-hidden shrink-0">
-                            {p.image && (
-                              <img
-                                src={p.image}
-                                alt={p.name}
-                                className="w-full h-full object-cover"
-                              />
-                            )}
-                          </div>
-                          <span className="text-xs text-gray-700 flex-1 truncate">
-                            {p.name}
-                          </span>
-                          <button
-                            onClick={() => removeProduct(p.id)}
-                            className="w-6 h-6 rounded flex items-center justify-center hover:bg-red-50 text-gray-400 hover:text-red-500 transition-colors"
-                            title="Quitar de categoría"
-                          >
-                            <X size={12} />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
+                <button
+                  onClick={() => setShowAddProduct(true)}
+                  className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold bg-amber-400 text-amber-900 hover:bg-amber-500 transition-colors"
+                >
+                  <Plus size={14} />
+                  Añadir productos
+                </button>
 
-                {/* Add product */}
-                <div>
-                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
-                    Buscar y asignar
-                  </p>
-                  <div className="flex gap-2">
-                    <input
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      onKeyDown={(e) =>
-                        e.key === "Enter" && handleProductSearch()
-                      }
-                      placeholder="Buscar producto..."
-                      className="flex-1 text-xs border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-amber-400"
-                    />
-                    <button
-                      onClick={handleProductSearch}
-                      className="px-3 py-2 text-xs font-semibold bg-amber-400 text-amber-900 rounded-lg hover:bg-amber-500 transition-colors"
-                    >
-                      {searching ? "..." : "Buscar"}
-                    </button>
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                  Productos ({catProducts.length})
+                </p>
+                {catProductsLoading ? (
+                  <div className="flex justify-center py-6">
+                    <div className="w-5 h-5 border-2 border-gray-300 border-t-amber-400 rounded-full animate-spin" />
                   </div>
-                  {searchResults.length > 0 && (
-                    <div className="mt-2 flex flex-col gap-1.5 max-h-48 overflow-y-auto">
-                      {searchResults.map((p) => (
+                ) : catProducts.length === 0 ? (
+                  <p className="text-xs text-gray-400 py-4 text-center">
+                    Sin productos asignados
+                  </p>
+                ) : (
+                  <div className="flex flex-col gap-2 max-h-[calc(100vh-18rem)] overflow-y-auto">
+                    {catProducts.map((p) => (
+                      <div
+                        key={p.id}
+                        className="flex items-center gap-2 p-2 bg-gray-50 rounded-lg"
+                      >
+                        <div className="w-8 h-8 rounded bg-gray-200 overflow-hidden shrink-0">
+                          {p.image && (
+                            <img
+                              src={p.image}
+                              alt={p.name}
+                              className="w-full h-full object-cover"
+                            />
+                          )}
+                        </div>
+                        <span className="text-xs text-gray-700 truncate">
+                          {p.name}
+                        </span>
                         <button
-                          key={p.id}
-                          onClick={() => addProduct(p.id)}
-                          className="flex items-center gap-2 p-2 bg-gray-50 rounded-lg hover:bg-amber-50 transition-colors text-left"
+                          onClick={() => removeProduct(p.id)}
+                          className="w-6 h-6 rounded flex items-center justify-center hover:bg-red-50 text-gray-400 hover:text-red-500 transition-colors shrink-0"
+                          title="Quitar de categoría"
                         >
-                          <div className="w-8 h-8 rounded bg-gray-200 overflow-hidden shrink-0">
-                            {p.image && (
-                              <img
-                                src={p.image}
-                                alt={p.name}
-                                className="w-full h-full object-cover"
-                              />
-                            )}
-                          </div>
-                          <span className="text-xs text-gray-700 flex-1 truncate">
-                            {p.name}
-                          </span>
-                          <Plus size={12} className="text-amber-500 shrink-0" />
+                          <X size={12} />
                         </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -749,7 +776,12 @@ export default function Categories() {
             {uncategorized.map((p) => (
               <div
                 key={p.id}
-                className="flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 transition-colors"
+                onClick={() => {
+                  setAssignProductId(p.id);
+                  setAssignCategoryId("");
+                  setCatSearch("");
+                }}
+                className="flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 transition-colors cursor-pointer"
               >
                 <div className="w-9 h-9 rounded-lg bg-gray-100 overflow-hidden shrink-0">
                   {p.image && (
@@ -777,6 +809,263 @@ export default function Categories() {
           </div>
         )}
       </div>
+
+      {/* Add product submodal */}
+      {showAddProduct && (
+        <>
+          <div
+            className="fixed inset-0 bg-black/40 z-[60]"
+            onClick={() => setShowAddProduct(false)}
+          />
+          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+            <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-bold text-sm text-gray-900">
+                  Añadir productos a "{editing?.name}"
+                </h3>
+                <button
+                  onClick={() => setShowAddProduct(false)}
+                  className="p-1 rounded-lg hover:bg-gray-100 text-gray-400"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+              <div className="flex gap-2 mb-3">
+                <div className="flex-1 relative">
+                  <input
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Buscar producto..."
+                    className="w-full text-sm border border-gray-200 rounded-lg pl-9 pr-3 py-2 focus:outline-none focus:ring-2 focus:ring-amber-400"
+                  />
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
+                </div>
+              </div>
+              {searchResults.length > 0 ? (
+                <div className="flex flex-col gap-1.5 max-h-80 overflow-y-auto">
+                  {searchResults.map((p) => (
+                    <button
+                      key={p.id}
+                      onClick={() => addProduct(p.id)}
+                      className="flex items-center gap-3 p-2 bg-gray-50 rounded-lg hover:bg-amber-50 transition-colors text-left"
+                    >
+                      <div className="w-9 h-9 rounded-lg bg-gray-200 overflow-hidden shrink-0">
+                        {p.image && (
+                          <img
+                            src={p.image}
+                            alt={p.name}
+                            className="w-full h-full object-cover"
+                          />
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-medium text-gray-700 truncate">
+                          {p.name}
+                        </p>
+                        <p className="text-[10px] text-gray-400">
+                          {new Intl.NumberFormat("es-CO", {
+                            style: "currency",
+                            currency: "COP",
+                            maximumFractionDigits: 0,
+                          }).format(p.price)}
+                        </p>
+                      </div>
+                      <Plus size={14} className="text-amber-500 shrink-0" />
+                    </button>
+                  ))}
+                </div>
+              ) : searchQuery.trim() && !searching ? (
+                <p className="text-xs text-gray-400 py-8 text-center">
+                  Sin resultados
+                </p>
+              ) : null}
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Assign category modal */}
+      {assignProductId && (
+        <>
+          <div
+            className="fixed inset-0 bg-black/40 z-[55]"
+            onClick={() => setAssignProductId(null)}
+          />
+          <div className="fixed inset-0 z-[55] flex items-center justify-center p-4">
+            <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6">
+              <div className="flex items-center justify-between mb-5">
+                <h3 className="font-bold text-sm text-gray-900">
+                  Asignar categoría
+                </h3>
+                <button
+                  onClick={() => setAssignProductId(null)}
+                  className="p-1 rounded-lg hover:bg-gray-100 text-gray-400"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+              <div className="bg-gray-50 rounded-xl p-3 mb-4 flex items-center gap-3">
+                {uncategorized.find((p) => p.id === assignProductId)?.image && (
+                  <img
+                    src={
+                      uncategorized.find((p) => p.id === assignProductId)!
+                        .image!
+                    }
+                    alt=""
+                    className="w-12 h-12 rounded-xl object-cover shrink-0"
+                  />
+                )}
+                <div className="min-w-0">
+                  <p className="text-xs font-semibold text-gray-700 truncate">
+                    {uncategorized.find((p) => p.id === assignProductId)?.name}
+                  </p>
+                </div>
+              </div>
+
+              <label className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider block mb-2">
+                Seleccionar categoría
+              </label>
+
+              {/* Searchable category picker */}
+              <div className="relative mb-4">
+                <input
+                  value={
+                    assignCategoryId
+                      ? categories.find(
+                          (c) => c.id === Number(assignCategoryId),
+                        )?.name || ""
+                      : catSearch
+                  }
+                  onChange={(e) => {
+                    if (assignCategoryId) {
+                      setAssignCategoryId("");
+                      setCatSearch(e.target.value);
+                    } else {
+                      setCatSearch(e.target.value);
+                    }
+                    setCatDropdownOpen(true);
+                  }}
+                  onFocus={() => setCatDropdownOpen(true)}
+                  onBlur={() =>
+                    setTimeout(() => setCatDropdownOpen(false), 200)
+                  }
+                  placeholder="Buscar o elegir categoría..."
+                  className={`w-full text-sm border rounded-xl pl-4 pr-9 py-2.5 focus:outline-none focus:ring-2 ${!assignCategoryId && catSearch.trim() ? "border-red-300 focus:ring-red-300" : "border-gray-200 focus:ring-amber-400"}`}
+                />
+                {assignCategoryId && (
+                  <button
+                    onClick={() => setAssignCategoryId("")}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full bg-gray-200 hover:bg-gray-300 flex items-center justify-center transition-colors"
+                  >
+                    <X size={12} className="text-gray-500" />
+                  </button>
+                )}
+                {catDropdownOpen && (
+                  <div className="absolute z-10 mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-lg max-h-52 overflow-y-auto">
+                    {(() => {
+                      const filtered = categories.filter(
+                        (c) =>
+                          c.isActive &&
+                          (!catSearch ||
+                            c.name
+                              .toLowerCase()
+                              .includes(catSearch.toLowerCase())),
+                      );
+                      if (filtered.length === 0 && catSearch.trim()) {
+                        return (
+                          <div className="px-4 py-3 text-xs text-red-500">
+                            No se encontró "{catSearch}"
+                          </div>
+                        );
+                      }
+                      return filtered.map((c) => (
+                        <button
+                          key={c.id}
+                          onMouseDown={(e) => e.preventDefault()}
+                          onClick={() => {
+                            setAssignCategoryId(c.id);
+                            setCatSearch("");
+                            setCatDropdownOpen(false);
+                          }}
+                          className={`w-full text-left px-4 py-2 text-sm hover:bg-amber-50 transition-colors flex items-center gap-2 ${Number(assignCategoryId) === c.id ? "bg-amber-50 font-semibold text-amber-900" : "text-gray-700"}`}
+                          style={{ paddingLeft: 16 + c.level * 16 }}
+                        >
+                          {c.level === 0 ? (
+                            <span className="text-xs opacity-50">📁</span>
+                          ) : (
+                            <span className="text-xs opacity-50 ml-1">↳</span>
+                          )}
+                          {c.name}
+                        </button>
+                      ));
+                    })()}
+                  </div>
+                )}
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setAssignProductId(null)}
+                  className="flex-1 py-2.5 rounded-xl text-sm font-semibold border border-gray-200 hover:bg-gray-50 transition-colors text-gray-500"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={assignProduct}
+                  disabled={!assignCategoryId}
+                  className="flex-1 py-2.5 rounded-xl text-sm font-bold bg-amber-400 text-amber-900 hover:bg-amber-500 transition-colors disabled:opacity-40"
+                >
+                  Asignar
+                </button>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Delete confirmation modal */}
+      {deleteConfirm && (
+        <>
+          <div
+            className="fixed inset-0 bg-black/40 z-50"
+            onClick={() => setDeleteConfirm(null)}
+          />
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 rounded-full bg-red-50 flex items-center justify-center">
+                  <Trash2 size={18} className="text-red-500" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-sm text-gray-900">
+                    Eliminar categoría
+                  </h3>
+                  <p className="text-xs text-gray-500">
+                    "{deleteConfirm.name}"
+                  </p>
+                </div>
+              </div>
+              <p className="text-sm text-gray-600 mb-5">
+                ¿Estás seguro? Las subcategorías de esta categoría pasarán a ser
+                categorías principales.
+              </p>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setDeleteConfirm(null)}
+                  className="flex-1 py-2.5 rounded-xl text-sm font-semibold border border-gray-200 hover:bg-gray-50 transition-colors text-gray-500"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={confirmDelete}
+                  className="flex-1 py-2.5 rounded-xl text-sm font-bold bg-red-500 hover:bg-red-600 text-white transition-colors"
+                >
+                  Eliminar
+                </button>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }
