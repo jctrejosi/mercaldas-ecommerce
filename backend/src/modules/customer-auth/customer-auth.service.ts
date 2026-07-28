@@ -12,8 +12,9 @@ import { DrizzleService } from '../../database/drizzle.service';
 import {
   customers,
   customerRefreshTokens,
+  customerAddresses,
 } from '../../../drizzle/schema';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, desc, sql } from 'drizzle-orm';
 import { CustomerLoginDto } from './dto/customer-login.dto';
 import { CustomerRegisterDto } from './dto/customer-register.dto';
 import { CustomerSocialLoginDto } from './dto/customer-social-login.dto';
@@ -612,6 +613,191 @@ export class CustomerAuthService {
         avatarUrl: customer.avatarUrl,
       },
     };
+  }
+
+  // ── Customer Addresses ──
+
+  async getAddresses(customerId: number) {
+    const rows = await this.db
+      .select({
+        id: customerAddresses.id,
+        alias: customerAddresses.alias,
+        addressLine1: customerAddresses.addressLine1,
+        addressLine2: customerAddresses.addressLine2,
+        city: customerAddresses.city,
+        state: customerAddresses.state,
+        country: customerAddresses.country,
+        deliveryInstructions: customerAddresses.deliveryInstructions,
+        reference: customerAddresses.reference,
+        isDefault: customerAddresses.isDefault,
+        createdAt: customerAddresses.createdAt,
+      })
+      .from(customerAddresses)
+      .where(
+        and(
+          eq(customerAddresses.customerId, customerId),
+          sql`${customerAddresses.deletedAt} IS NULL`,
+        ),
+      )
+      .orderBy(desc(customerAddresses.isDefault), desc(customerAddresses.createdAt));
+
+    return rows.map((row) => ({
+      id: Number(row.id),
+      alias: row.alias,
+      addressLine1: row.addressLine1,
+      addressLine2: row.addressLine2,
+      city: row.city,
+      state: row.state,
+      country: row.country,
+      deliveryInstructions: row.deliveryInstructions,
+      reference: row.reference,
+      isDefault: row.isDefault,
+      createdAt: row.createdAt,
+    }));
+  }
+
+  async createAddress(
+    customerId: number,
+    dto: {
+      alias?: string;
+      addressLine1: string;
+      addressLine2?: string;
+      city: string;
+      reference?: string;
+      deliveryInstructions?: string;
+      isDefault?: boolean;
+    },
+  ) {
+    // If setting as default, unset any existing default
+    if (dto.isDefault) {
+      await this.db
+        .update(customerAddresses)
+        .set({ isDefault: false })
+        .where(eq(customerAddresses.customerId, customerId));
+    }
+
+    const [inserted] = await this.db
+      .insert(customerAddresses)
+      .values({
+        customerId,
+        alias: dto.alias ?? null,
+        addressLine1: dto.addressLine1,
+        addressLine2: dto.addressLine2 ?? null,
+        city: dto.city,
+        reference: dto.reference ?? null,
+        deliveryInstructions: dto.deliveryInstructions ?? null,
+        isDefault: dto.isDefault ?? false,
+      })
+      .returning({ id: customerAddresses.id });
+
+    return { id: Number(inserted.id) };
+  }
+
+  async updateAddress(
+    customerId: number,
+    addressId: number,
+    dto: {
+      alias?: string;
+      addressLine1?: string;
+      addressLine2?: string;
+      city?: string;
+      reference?: string;
+      deliveryInstructions?: string;
+      isDefault?: boolean;
+    },
+  ) {
+    // Verify ownership
+    const [existing] = await this.db
+      .select({ id: customerAddresses.id })
+      .from(customerAddresses)
+      .where(
+        and(
+          eq(customerAddresses.id, BigInt(addressId)),
+        eq(customerAddresses.customerId, customerId),
+      ),
+    );
+
+    if (!existing) throw new NotFoundException('Dirección no encontrada');
+
+    // If setting as default, unset any existing default
+    if (dto.isDefault) {
+      await this.db
+        .update(customerAddresses)
+        .set({ isDefault: false })
+        .where(eq(customerAddresses.customerId, customerId));
+    }
+
+    await this.db
+      .update(customerAddresses)
+      .set({
+        ...(dto.alias !== undefined && { alias: dto.alias }),
+        ...(dto.addressLine1 !== undefined && {
+          addressLine1: dto.addressLine1,
+        }),
+        ...(dto.addressLine2 !== undefined && {
+          addressLine2: dto.addressLine2,
+        }),
+        ...(dto.city !== undefined && { city: dto.city }),
+        ...(dto.reference !== undefined && { reference: dto.reference }),
+        ...(dto.deliveryInstructions !== undefined && {
+          deliveryInstructions: dto.deliveryInstructions,
+        }),
+        ...(dto.isDefault !== undefined && { isDefault: dto.isDefault }),
+        updatedAt: new Date().toISOString(),
+      })
+      .where(eq(customerAddresses.id, BigInt(addressId)));
+
+    return { id: addressId };
+  }
+
+  async deleteAddress(customerId: number, addressId: number) {
+    const [existing] = await this.db
+      .select({ id: customerAddresses.id })
+      .from(customerAddresses)
+      .where(
+        and(
+          eq(customerAddresses.id, BigInt(addressId)),
+          eq(customerAddresses.customerId, customerId),
+        ),
+      );
+
+    if (!existing) throw new NotFoundException('Dirección no encontrada');
+
+    await this.db
+      .update(customerAddresses)
+      .set({ deletedAt: new Date().toISOString() })
+      .where(eq(customerAddresses.id, BigInt(addressId)));
+
+    return { success: true };
+  }
+
+  async setDefaultAddress(customerId: number, addressId: number) {
+    // Verify ownership
+    const [existing] = await this.db
+      .select({ id: customerAddresses.id })
+      .from(customerAddresses)
+      .where(
+        and(
+          eq(customerAddresses.id, BigInt(addressId)),
+          eq(customerAddresses.customerId, customerId),
+        ),
+      );
+
+    if (!existing) throw new NotFoundException('Dirección no encontrada');
+
+    // Unset all defaults for this customer
+    await this.db
+      .update(customerAddresses)
+      .set({ isDefault: false })
+      .where(eq(customerAddresses.customerId, customerId));
+
+    // Set this one as default
+    await this.db
+      .update(customerAddresses)
+      .set({ isDefault: true })
+      .where(eq(customerAddresses.id, BigInt(addressId)));
+
+    return { success: true };
   }
 
   private buildFullName(

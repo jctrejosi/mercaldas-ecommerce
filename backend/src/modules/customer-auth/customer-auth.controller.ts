@@ -2,7 +2,10 @@ import {
   Controller,
   Post,
   Get,
+  Put,
+  Delete,
   Body,
+  Param,
   UseGuards,
   HttpCode,
   HttpStatus,
@@ -145,6 +148,68 @@ export class CustomerAuthController {
     }
 
     return this.customerAuthService.logout(customer.sub, body?.refreshToken);
+  }
+
+  // ── Addresses ──
+
+  @UseGuards(CustomerJwtAuthGuard)
+  @Get('addresses')
+  @ApiCookieAuth('customer_access_token')
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: 'Obtener direcciones del cliente' })
+  async getAddresses(@CurrentUser() customer: AuthenticatedCustomer) {
+    return this.customerAuthService.getAddresses(customer.sub);
+  }
+
+  @UseGuards(CustomerJwtAuthGuard)
+  @Post('addresses')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiCookieAuth('customer_access_token')
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: 'Crear dirección' })
+  async createAddress(
+    @CurrentUser() customer: AuthenticatedCustomer,
+    @Body() dto: any,
+  ) {
+    return this.customerAuthService.createAddress(customer.sub, dto);
+  }
+
+  @UseGuards(CustomerJwtAuthGuard)
+  @Put('addresses/:id')
+  @ApiCookieAuth('customer_access_token')
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: 'Actualizar dirección' })
+  async updateAddress(
+    @CurrentUser() customer: AuthenticatedCustomer,
+    @Param('id') id: string,
+    @Body() dto: any,
+  ) {
+    return this.customerAuthService.updateAddress(customer.sub, Number(id), dto);
+  }
+
+  @UseGuards(CustomerJwtAuthGuard)
+  @Delete('addresses/:id')
+  @ApiCookieAuth('customer_access_token')
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: 'Eliminar dirección (soft delete)' })
+  async deleteAddress(
+    @CurrentUser() customer: AuthenticatedCustomer,
+    @Param('id') id: string,
+  ) {
+    return this.customerAuthService.deleteAddress(customer.sub, Number(id));
+  }
+
+  @UseGuards(CustomerJwtAuthGuard)
+  @Post('addresses/:id/default')
+  @HttpCode(HttpStatus.OK)
+  @ApiCookieAuth('customer_access_token')
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: 'Establecer dirección como predeterminada' })
+  async setDefaultAddress(
+    @CurrentUser() customer: AuthenticatedCustomer,
+    @Param('id') id: string,
+  ) {
+    return this.customerAuthService.setDefaultAddress(customer.sub, Number(id));
   }
 
   private setAuthCookies(
