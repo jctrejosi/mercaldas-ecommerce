@@ -452,6 +452,7 @@ function PaymentMethodIcon({ method }: { method: string }) {
 export interface UserAdminViewProps {
   appOrders: Order[];
   cartItems: CartItem[];
+  customer: { firstName?: string; fullName?: string; email?: string } | null;
   onAdd: (p: Product, quantity?: number) => void;
   onRemove: (id: number) => void;
   onProductClick: (p: Product) => void;
@@ -464,7 +465,7 @@ export interface UserAdminViewProps {
   fmt?: (n: number) => string;
 }
 
-export function UserAdminView({ appOrders, cartItems, onAdd, onRemove, onProductClick, onBack, onViewCatalog, initialSection = "orders", notifications = [], unreadNotifCount = 0, onMarkNotifRead }: UserAdminViewProps) {
+export function UserAdminView({ appOrders, cartItems, customer, onAdd, onRemove, onProductClick, onBack, onViewCatalog, initialSection = "orders", notifications = [], unreadNotifCount = 0, onMarkNotifRead }: UserAdminViewProps) {
   const [section, setSection] = useState<AccountSection>(initialSection);
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [trackingOrderId, setTrackingOrderId] = useState<string>("");
@@ -555,12 +556,8 @@ export function UserAdminView({ appOrders, cartItems, onAdd, onRemove, onProduct
             C
           </div>
           <div className="min-w-0">
-            <p className="font-bold text-sm text-foreground truncate">Carlos Gómez</p>
-            <p className="text-xs text-muted-foreground truncate">carlos@gmail.com</p>
-            <div className="flex items-center gap-1 mt-0.5">
-              <Award className="w-3 h-3" style={{ color: "#F5C518" }} />
-              <span className="text-xs font-semibold" style={{ color: "#F5C518" }}>{LOYALTY_PTS.toLocaleString()} puntos</span>
-            </div>
+            <p className="font-bold text-sm text-foreground truncate">{customer?.fullName || customer?.firstName || "Cliente"}</p>
+            <p className="text-xs text-muted-foreground truncate">{customer?.email || ""}</p>
           </div>
         </div>
       </AcctCard>
@@ -1955,7 +1952,7 @@ export function UserAdminView({ appOrders, cartItems, onAdd, onRemove, onProduct
   const ProfileSection = () => {
     const [showPwd, setShowPwd] = useState(false);
     const [saved, setSaved] = useState(false);
-    const [profile, setProfile] = useState({ name: "Carlos Gómez", phone: "310 456 7890", email: "carlos@gmail.com", password: "" });
+    const [profile, setProfile] = useState({ name: customer?.fullName || customer?.firstName || "Cliente", phone: "", email: customer?.email || "", password: "" });
     const [privacyPromo, setPrivacyPromo] = useState(true);
     const [privacyData, setPrivacyData] = useState(false);
 
@@ -1986,10 +1983,6 @@ export function UserAdminView({ appOrders, cartItems, onAdd, onRemove, onProduct
               <div>
                 <p className="font-bold text-foreground">{profile.name}</p>
                 <p className="text-xs text-muted-foreground">{profile.email}</p>
-                <div className="flex items-center gap-1 mt-0.5">
-                  <Award className="w-3 h-3" style={{ color: "#F5C518" }} />
-                  <span className="text-xs font-semibold" style={{ color: "#F5C518" }}>{LOYALTY_PTS.toLocaleString()} puntos</span>
-                </div>
               </div>
             </div>
 
@@ -2150,8 +2143,8 @@ export function UserAdminView({ appOrders, cartItems, onAdd, onRemove, onProduct
               <div className="flex items-center gap-3 mb-4">
                 <div className="w-12 h-12 rounded-2xl flex items-center justify-center font-black text-xl" style={{ background: "#FFF200", color: "#1A1A2E" }}>C</div>
                 <div>
-                  <p className="font-bold text-sm">Carlos Gómez</p>
-                  <p className="text-xs text-muted-foreground">{LOYALTY_PTS.toLocaleString()} puntos</p>
+                  <p className="font-bold text-sm">{customer?.fullName || customer?.firstName || "Cliente"}</p>
+                  <p className="text-xs text-muted-foreground">{customer?.email || ""}</p>
                 </div>
               </div>
               <nav className="flex flex-col gap-0.5">

@@ -20,6 +20,8 @@ import { Logo } from "../Logo";
 import type { CartItem, CatalogCategory, Product } from "../types";
 import { catalogService } from "../../services/catalog.service";
 import { NotificationsDropdown } from "./NotificationsDropdown";
+import { AddressModal, getAddressDisplay } from "./AddressModal";
+import { type CustomerAddress, customerAddressService } from "../../services/customer-auth.service";
 import type { AppNotification } from "../../hooks/useNotifications";
 
 interface HeaderProps {
@@ -90,6 +92,19 @@ export function Header({
   const categoriesRef = useRef<HTMLDivElement>(null);
   const [notifOpen, setNotifOpen] = useState(false);
   const notifRef = useRef<HTMLDivElement>(null);
+  const [addressModalOpen, setAddressModalOpen] = useState(false);
+  const [defaultAddress, setDefaultAddress] = useState<CustomerAddress | null>(null);
+
+  // Load default address when customer changes
+  useEffect(() => {
+    if (customer) {
+      customerAddressService.getAddresses().then(addrs => {
+        setDefaultAddress(addrs.find(a => a.isDefault) ?? null);
+      }).catch(() => {});
+    } else {
+      setDefaultAddress(null);
+    }
+  }, [customer]);
   useEffect(() => {
     const handler = (e: MouseEvent) => { if (notifRef.current && !notifRef.current.contains(e.target as Node)) setNotifOpen(false); };
     document.addEventListener('mousedown', handler);
@@ -311,12 +326,12 @@ export function Header({
             className="flex items-center gap-1.5 text-xs"
             style={{ color: "rgba(255,255,255,0.65)" }}
           >
-            <button onClick={onAddressClick} className="flex items-center gap-1.5 text-xs cursor-pointer hover:brightness-110 transition-all" style={{ color: "rgba(255,255,255,0.65)" }}>
+            <button onClick={() => setAddressModalOpen(true)} className="flex items-center gap-1.5 text-xs cursor-pointer hover:brightness-110 transition-all" style={{ color: "rgba(255,255,255,0.65)" }}>
               <MapPin className="w-3 h-3" />
               <span>
                 Entregar en ·{" "}
                 <strong className="text-white underline-offset-2 hover:underline">
-                  Administrar direcciones
+                  {getAddressDisplay(defaultAddress)}
                 </strong>
               </span>
             </button>
@@ -769,16 +784,18 @@ export function Header({
             </button>
           ))}
 
-          <button onClick={onAddressClick} className="ml-auto flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer hover:text-foreground transition-colors">
+          <button onClick={() => setAddressModalOpen(true)} className="ml-auto flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer hover:text-foreground transition-colors">
             <MapPin className="w-3.5 h-3.5" />
             <span>
               Entregar en{" "}
-              <strong className="text-foreground">Administrar direcciones</strong>
+              <strong className="text-foreground">{getAddressDisplay(defaultAddress)}</strong>
             </span>
             <ChevronDown className="w-3 h-3" />
           </button>
         </div>
       </nav>
+
+      <AddressModal open={addressModalOpen} onClose={() => setAddressModalOpen(false)} customer={customer} onLoginModal={onLoginModal} onAddressesChange={(addr) => setDefaultAddress(addr)} />
     </header>
   );
 }

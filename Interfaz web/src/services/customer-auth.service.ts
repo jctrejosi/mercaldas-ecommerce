@@ -182,3 +182,86 @@ export const customerAuthService = {
     return result;
   },
 };
+
+export interface CustomerAddress {
+  id: number;
+  alias: string | null;
+  addressLine1: string;
+  addressLine2: string | null;
+  city: string;
+  state: string | null;
+  country: string;
+  deliveryInstructions: string | null;
+  reference: string | null;
+  isDefault: boolean;
+  createdAt: string;
+}
+
+export const customerAddressService = {
+  async getAddresses(): Promise<CustomerAddress[]> {
+    const response = await fetch(`${API_BASE_URL}/customer-auth/addresses`, {
+      credentials: "include",
+      headers: getAuthHeaders(),
+    });
+    if (!response.ok) throw new Error("Error al obtener direcciones");
+    return response.json();
+  },
+
+  async createAddress(data: {
+    alias?: string;
+    addressLine1: string;
+    addressLine2?: string;
+    city: string;
+    reference?: string;
+    deliveryInstructions?: string;
+    isDefault?: boolean;
+  }): Promise<{ id: number }> {
+    const response = await fetch(`${API_BASE_URL}/customer-auth/addresses`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...getAuthHeaders() },
+      credentials: "include",
+      body: JSON.stringify(data),
+    });
+    if (!response.ok) throw new Error("Error al crear dirección");
+    return response.json();
+  },
+
+  async updateAddress(id: number, data: Partial<{
+    alias: string;
+    addressLine1: string;
+    addressLine2: string;
+    city: string;
+    reference: string;
+    deliveryInstructions: string;
+    isDefault: boolean;
+  }>): Promise<{ id: number }> {
+    const response = await fetch(`${API_BASE_URL}/customer-auth/addresses/${id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", ...getAuthHeaders() },
+      credentials: "include",
+      body: JSON.stringify(data),
+    });
+    if (!response.ok) throw new Error("Error al actualizar dirección");
+    return response.json();
+  },
+
+  async deleteAddress(id: number): Promise<{ success: boolean }> {
+    const response = await fetch(`${API_BASE_URL}/customer-auth/addresses/${id}`, {
+      method: "DELETE",
+      credentials: "include",
+      headers: getAuthHeaders(),
+    });
+    if (!response.ok) throw new Error("Error al eliminar dirección");
+    return response.json();
+  },
+
+  async setDefault(id: number): Promise<{ success: boolean }> {
+    const response = await fetch(`${API_BASE_URL}/customer-auth/addresses/${id}/default`, {
+      method: "POST",
+      credentials: "include",
+      headers: getAuthHeaders(),
+    });
+    if (!response.ok) throw new Error("Error al establecer dirección predeterminada");
+    return response.json();
+  },
+};
