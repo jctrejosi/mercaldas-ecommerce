@@ -355,6 +355,16 @@ export default function App() {
     }
   }, [cartHydrated, cartItems, customer]);
 
+  // Load orders
+  useEffect(() => {
+    if (customer && !customerLoading) {
+      ordersService
+        .getOrders()
+        .then(setOrders)
+        .catch(() => {});
+    }
+  }, [customer, customerLoading]);
+
   const addToCart = (p: Product, q: number = 1) => {
     if (!p.id || Number(p.id) <= 0) return;
     setCartItems((prev) => {

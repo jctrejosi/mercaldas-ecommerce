@@ -96,14 +96,18 @@ export function OrdersPanel({
             <div className="divide-y divide-border">
               {orders.map((order) => {
                 const statusColor = {
+                  pendiente: "#FF9500",
                   preparando: "#FF9500",
                   "en camino": "#007AFF",
                   entregado: "#34C759",
+                  cancelado: "#EF4444",
                 }[order.status];
                 const statusLabel = {
+                  pendiente: "Pendiente",
                   preparando: "Preparando",
                   "en camino": "En camino",
                   entregado: "Entregado",
+                  cancelado: "Cancelado",
                 }[order.status];
                 return (
                   <button
@@ -116,9 +120,7 @@ export function OrdersPanel({
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 justify-between">
-                        <span className="font-bold text-sm">
-                          {order.id}
-                        </span>
+                        <span className="font-bold text-sm">{order.id}</span>
                         <span
                           className="text-xs font-bold px-2 py-0.5 rounded-full text-white shrink-0"
                           style={{ background: statusColor }}
@@ -145,19 +147,25 @@ export function OrdersPanel({
           {selectedOrder &&
             (() => {
               const statusColor = {
+                pendiente: "#FF9500",
                 preparando: "#FF9500",
                 "en camino": "#007AFF",
                 entregado: "#34C759",
+                cancelado: "#EF4444",
               }[selectedOrder.status];
               const statusLabel = {
+                pendiente: "Pendiente",
                 preparando: "Preparando tu pedido",
                 "en camino": "En camino",
                 entregado: "Entregado",
+                cancelado: "Cancelado",
               }[selectedOrder.status];
               const stepNum = {
+                pendiente: 0,
                 preparando: 1,
                 "en camino": 2,
                 entregado: 3,
+                cancelado: -1,
               }[selectedOrder.status];
               const trackSteps = [
                 "Confirmado",
@@ -194,16 +202,14 @@ export function OrdersPanel({
                           <div
                             className="w-3 h-3 rounded-full shrink-0"
                             style={{
-                              background:
-                                i <= stepNum ? "#34C759" : "#D1D5DB",
+                              background: i <= stepNum ? "#34C759" : "#D1D5DB",
                             }}
                           />
                           {i < trackSteps.length - 1 && (
                             <div
                               className="h-0.5 flex-1"
                               style={{
-                                background:
-                                  i < stepNum ? "#34C759" : "#D1D5DB",
+                                background: i < stepNum ? "#34C759" : "#D1D5DB",
                               }}
                             />
                           )}
