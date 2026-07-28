@@ -87,6 +87,20 @@ export class AdminCatalogController {
     return { success: true };
   }
 
+  @Public()
+  @Post('products/:productId/replace-category')
+  @ApiOperation({ summary: 'Reemplazar categoría de un producto' })
+  async replaceProductCategory(
+    @Param('productId') productId: string,
+    @Body() body: { categoryId: number },
+  ) {
+    await this.catalogService.replaceProductCategory(
+      Number(productId),
+      body.categoryId,
+    );
+    return { success: true };
+  }
+
   // ── Products ──
 
   @Public()

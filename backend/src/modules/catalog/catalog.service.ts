@@ -472,6 +472,19 @@ export class CatalogService {
       );
   }
 
+  async replaceProductCategory(productId: number, newCategoryId: number) {
+    // Remove all existing category assignments for this product
+    await this.drizzleService.db
+      .delete(productCategories)
+      .where(eq(productCategories.productId, productId));
+
+    // Assign the new category
+    await this.drizzleService.db.insert(productCategories).values({
+      categoryId: newCategoryId,
+      productId,
+    });
+  }
+
   async getFeaturedBrands() {
     const rows = await this.drizzleService.db
       .select({
@@ -656,6 +669,14 @@ export class CatalogService {
         });
       }
 
+      // Assign category if provided
+      if (dto.categoryId) {
+        await tx.insert(productCategories).values({
+          productId,
+          categoryId: dto.categoryId,
+        });
+      }
+
       return { id: productId, slug, sku };
     });
 
@@ -738,6 +759,19 @@ export class CatalogService {
             mediaId,
             isCover: true,
             position: 0,
+          });
+        }
+      }
+
+      // Update category if provided
+      if (dto.categoryId !== undefined) {
+        await tx
+          .delete(productCategories)
+          .where(eq(productCategories.productId, pid));
+        if (dto.categoryId) {
+          await tx.insert(productCategories).values({
+            productId: pid,
+            categoryId: dto.categoryId,
           });
         }
       }

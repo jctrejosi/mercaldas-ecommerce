@@ -181,9 +181,7 @@ export const catalogService = {
     );
   },
 
-  async getCategoryProducts(
-    categoryId: number,
-  ): Promise<
+  async getCategoryProducts(categoryId: number): Promise<
     Array<{
       id: number;
       name: string;
@@ -220,6 +218,20 @@ export const catalogService = {
       `${API_BASE_URL}/admin/catalog/categories/${categoryId}/products/${productId}`,
       {
         method: "DELETE",
+      },
+    );
+  },
+
+  async replaceProductCategory(
+    productId: number,
+    categoryId: number,
+  ): Promise<void> {
+    await fetch(
+      `${API_BASE_URL}/admin/catalog/products/${productId}/replace-category`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ categoryId }),
       },
     );
   },

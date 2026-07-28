@@ -111,9 +111,7 @@ function CategoryRow({
 export default function Categories() {
   const [categories, setCategories] = useState<AdminCategory[]>([]);
   const [loading, setLoading] = useState(true);
-  const [newName, setNewName] = useState("");
-  const [newParent, setNewParent] = useState<number | string>("");
-  const [showNewForm, setShowNewForm] = useState(false);
+  const [creating, setCreating] = useState(false);
   const [uncategorized, setUncategorized] = useState<CatalogProduct[]>([]);
   const [uncatLoading, setUncatLoading] = useState(false);
   const [editing, setEditing] = useState<AdminCategory | null>(null);
@@ -148,6 +146,10 @@ export default function Categories() {
   );
   const [assignProductId, setAssignProductId] = useState<number | null>(null);
   const [assignCategoryId, setAssignCategoryId] = useState<number | string>("");
+  const [replaceProduct, setReplaceProduct] = useState<{
+    productId: number;
+    name: string;
+  } | null>(null);
   const [catSearch, setCatSearch] = useState("");
   const [catDropdownOpen, setCatDropdownOpen] = useState(false);
 
@@ -175,18 +177,19 @@ export default function Categories() {
     loadUncategorized();
   }, []);
 
-  const createCategory = async () => {
-    if (!newName.trim()) return;
-    try {
-      await catalogService.createCategory({
-        name: newName.trim(),
-        parentId: newParent ? Number(newParent) : undefined,
-      });
-      setNewName("");
-      setNewParent("");
-      setShowNewForm(false);
-      await loadCategories();
-    } catch {}
+  const openNewCategory = () => {
+    setCreating(true);
+    setEditTab("attrs");
+    setEditForm({
+      name: "",
+      description: "",
+      parentId: "",
+      displayOrder: 0,
+      metaTitle: "",
+      metaDescription: "",
+      isActive: true,
+      imageUrl: "",
+    });
   };
 
   const toggleActive = async (id: number, isActive: boolean) => {
@@ -227,6 +230,7 @@ export default function Categories() {
   };
 
   const openEdit = (cat: AdminCategory) => {
+    setCreating(false);
     setEditing(cat);
     setEditTab("attrs");
     setEditForm({
@@ -348,10 +352,13 @@ export default function Categories() {
   const addProduct = async (productId: number) => {
     if (!editing) return;
     try {
-      await catalogService.addProductToCategory(editing.id, productId);
+      await catalogService.replaceProductCategory(productId, editing.id);
       await loadCategoryProducts(editing.id);
+      setSearchResults((prev) => prev.filter((p) => p.id !== productId));
+      setShowAddProduct(false);
       await Promise.all([loadCategories(), loadUncategorized()]);
     } catch {}
+    setReplaceProduct(null);
   };
 
   const removeProduct = async (productId: number) => {
@@ -364,7 +371,28 @@ export default function Categories() {
   };
 
   const saveEdit = async () => {
-    if (!editing || !editForm.name?.trim()) return;
+    if (!editForm.name?.trim()) return;
+    if (creating) {
+      try {
+        const { id } = await catalogService.createCategory({
+          name: editForm.name.trim(),
+          parentId: editForm.parentId ? Number(editForm.parentId) : undefined,
+        });
+        await catalogService.updateCategory(id, {
+          description: editForm.description || null,
+          displayOrder: Number(editForm.displayOrder) || 0,
+          metaTitle: editForm.metaTitle || null,
+          metaDescription: editForm.metaDescription || null,
+          isActive: editForm.isActive,
+          imageUrl: editForm.imageUrl || undefined,
+        });
+        setCreating(false);
+        setEditing(null);
+        await loadCategories();
+      } catch {}
+      return;
+    }
+    if (!editing) return;
     try {
       await catalogService.updateCategory(editing.id, {
         name: editForm.name.trim(),
@@ -403,51 +431,12 @@ export default function Categories() {
           </p>
         </div>
         <button
-          onClick={() => {
-            setShowNewForm(!showNewForm);
-            setNewName("");
-            setNewParent("");
-          }}
+          onClick={openNewCategory}
           className="flex items-center gap-2 px-3 py-2 text-sm font-bold text-amber-900 bg-amber-400 hover:bg-amber-500 rounded-xl transition-colors"
         >
           <Plus size={14} /> Nueva categoría
         </button>
       </div>
-
-      {showNewForm && (
-        <div className="bg-white rounded-2xl border border-gray-100 p-4 flex items-center gap-3 flex-wrap">
-          <input
-            value={newName}
-            onChange={(e) => setNewName(e.target.value)}
-            placeholder="Nombre de la categoría..."
-            className="flex-1 min-w-[200px] text-sm border border-gray-200 rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-amber-400"
-          />
-          <select
-            value={newParent}
-            onChange={(e) => setNewParent(e.target.value)}
-            className="text-sm border border-gray-200 rounded-xl px-4 py-2.5 focus:outline-none"
-          >
-            <option value="">Principal (sin padre)</option>
-            {parents.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
-          </select>
-          <button
-            onClick={createCategory}
-            className="px-5 py-2.5 rounded-xl text-sm font-bold bg-amber-400 text-amber-900 hover:bg-amber-500 transition-colors"
-          >
-            Crear
-          </button>
-          <button
-            onClick={() => setShowNewForm(false)}
-            className="px-4 py-2.5 rounded-xl text-sm border border-gray-200 hover:bg-gray-50 transition-colors text-gray-500"
-          >
-            Cancelar
-          </button>
-        </div>
-      )}
 
       <div className="grid grid-cols-3 gap-4">
         {[
@@ -517,20 +506,26 @@ export default function Categories() {
         </div>
       </div>
 
-      {/* Edit panel - floating overlay */}
-      {editing && (
+      {/* Edit/Create panel - floating overlay */}
+      {(editing || creating) && (
         <>
           <div
             className="fixed inset-0 bg-black/30 z-40"
-            onClick={() => setEditing(null)}
+            onClick={() => {
+              setEditing(null);
+              setCreating(false);
+            }}
           />
           <div className="fixed right-0 top-0 bottom-0 w-96 bg-white shadow-2xl z-50 overflow-y-auto">
             <div className="sticky top-0 bg-white border-b border-gray-100 px-5 py-4 flex items-center justify-between">
               <h3 className="font-bold text-sm text-gray-900">
-                Editar categoría
+                {creating ? "Nueva categoría" : "Editar categoría"}
               </h3>
               <button
-                onClick={() => setEditing(null)}
+                onClick={() => {
+                  setEditing(null);
+                  setCreating(false);
+                }}
                 className="p-1 rounded-lg hover:bg-gray-100 text-gray-400"
               >
                 <X size={16} />
@@ -538,20 +533,22 @@ export default function Categories() {
             </div>
 
             {/* Tabs */}
-            <div className="flex border-b border-gray-100">
-              <button
-                onClick={() => setEditTab("attrs")}
-                className={`flex-1 py-2.5 text-xs font-semibold transition-colors ${editTab === "attrs" ? "text-amber-600 border-b-2 border-amber-400" : "text-gray-400 hover:text-gray-600"}`}
-              >
-                Atributos
-              </button>
-              <button
-                onClick={() => setEditTab("products")}
-                className={`flex-1 py-2.5 text-xs font-semibold transition-colors ${editTab === "products" ? "text-amber-600 border-b-2 border-amber-400" : "text-gray-400 hover:text-gray-600"}`}
-              >
-                Productos ({catProducts.length})
-              </button>
-            </div>
+            {editing && (
+              <div className="flex border-b border-gray-100">
+                <button
+                  onClick={() => setEditTab("attrs")}
+                  className={`flex-1 py-2.5 text-xs font-semibold transition-colors ${editTab === "attrs" ? "text-amber-600 border-b-2 border-amber-400" : "text-gray-400 hover:text-gray-600"}`}
+                >
+                  Atributos
+                </button>
+                <button
+                  onClick={() => setEditTab("products")}
+                  className={`flex-1 py-2.5 text-xs font-semibold transition-colors ${editTab === "products" ? "text-amber-600 border-b-2 border-amber-400" : "text-gray-400 hover:text-gray-600"}`}
+                >
+                  Productos ({catProducts.length})
+                </button>
+              </div>
+            )}
 
             {editTab === "attrs" && (
               <div className="px-5 py-4 space-y-4">
@@ -607,7 +604,7 @@ export default function Categories() {
                     </div>
                   ) : (
                     <div className="w-full h-24 rounded-lg border-2 border-dashed border-gray-200 flex items-center justify-center text-gray-400">
-                      {editing.imagePath ? (
+                      {editing?.imagePath ? (
                         <img
                           src={editing.imagePath}
                           alt={editing.name}
@@ -643,7 +640,7 @@ export default function Categories() {
                   >
                     <option value="">Principal (sin padre)</option>
                     {parents
-                      .filter((p) => p.id !== editing.id)
+                      .filter((p) => (editing ? p.id !== editing.id : true))
                       .map((p) => (
                         <option key={p.id} value={p.id}>
                           {p.name}
@@ -686,7 +683,7 @@ export default function Categories() {
                   onClick={saveEdit}
                   className="w-full py-2.5 rounded-xl text-sm font-bold bg-amber-400 text-amber-900 hover:bg-amber-500 transition-colors"
                 >
-                  Guardar cambios
+                  {creating ? "Crear categoría" : "Guardar cambios"}
                 </button>
               </div>
             )}
@@ -846,7 +843,9 @@ export default function Categories() {
                   {searchResults.map((p) => (
                     <button
                       key={p.id}
-                      onClick={() => addProduct(p.id)}
+                      onClick={() =>
+                        setReplaceProduct({ productId: p.id, name: p.name })
+                      }
                       className="flex items-center gap-3 p-2 bg-gray-50 rounded-lg hover:bg-amber-50 transition-colors text-left"
                     >
                       <div className="w-9 h-9 rounded-lg bg-gray-200 overflow-hidden shrink-0">
@@ -879,6 +878,55 @@ export default function Categories() {
                   Sin resultados
                 </p>
               ) : null}
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Replace category confirmation */}
+      {replaceProduct && (
+        <>
+          <div
+            className="fixed inset-0 bg-black/40 z-[65]"
+            onClick={() => setReplaceProduct(null)}
+          />
+          <div className="fixed inset-0 z-[65] flex items-center justify-center p-4">
+            <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 rounded-full bg-amber-50 flex items-center justify-center">
+                  <AlertTriangle size={18} className="text-amber-500" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-sm text-gray-900">
+                    Reemplazar categoría
+                  </h3>
+                </div>
+              </div>
+              <p className="text-sm text-gray-600 mb-2">
+                <span className="font-semibold">{replaceProduct.name}</span>
+              </p>
+              <p className="text-xs text-gray-500 mb-5">
+                Este producto ya tiene una categoría asignada. Se reemplazará
+                por{" "}
+                <span className="font-semibold text-amber-700">
+                  {editing?.name}
+                </span>
+                .
+              </p>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setReplaceProduct(null)}
+                  className="flex-1 py-2.5 rounded-xl text-sm font-semibold border border-gray-200 hover:bg-gray-50 transition-colors text-gray-500"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={() => addProduct(replaceProduct.productId)}
+                  className="flex-1 py-2.5 rounded-xl text-sm font-bold bg-amber-400 text-amber-900 hover:bg-amber-500 transition-colors"
+                >
+                  Reemplazar
+                </button>
+              </div>
             </div>
           </div>
         </>
