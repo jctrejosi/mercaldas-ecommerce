@@ -35,11 +35,12 @@ export default function App() {
   const location = useLocation();
   const navigate = useNavigate();
   const [currentView, setCurrentView] = useState<"home" | "catalog" | "account">(
-    location.pathname === "/catalog" ? "catalog" : "home",
+    location.pathname === "/catalog" ? "catalog" : location.pathname.startsWith("/account") ? "account" : "home",
   );
 
   useEffect(() => {
     if (location.pathname === "/catalog") setCurrentView("catalog");
+    else if (location.pathname.startsWith("/account")) setCurrentView("account");
     else if (location.pathname === "/") setCurrentView("home");
   }, [location.pathname]);
 

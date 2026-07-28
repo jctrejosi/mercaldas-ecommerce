@@ -9,6 +9,7 @@ import {
 import type { CartItem, Order, Product } from "../../types";
 import type { AppNotification } from "../../../hooks/useNotifications";
 import { ordersService } from "../../../services/orders.service";
+import { catalogService } from "../../../services/catalog.service";
 
 const MOCK_PRODUCTS: Product[] = [
   {
@@ -1048,7 +1049,7 @@ export function UserAdminView({ appOrders, cartItems, customer, onAdd, onRemove,
             title="Sin favoritos aún"
             subtitle="Guarda tus productos favoritos para encontrarlos fácilmente en tu próxima compra."
             cta="Explorar productos"
-            onCta={onBack}
+            onCta={onViewCatalog}
           />
         ) : (
           <>
