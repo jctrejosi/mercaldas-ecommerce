@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import {
   Plus,
   Search,
@@ -11,7 +11,7 @@ import {
   Star,
   Upload,
 } from "lucide-react";
-import { catalogService } from "../services/catalog.service";
+import { catalogService, CatalogProduct } from "../services/catalog.service";
 
 type AdminBrand = {
   id: number;
@@ -52,6 +52,7 @@ export default function Brands() {
       price: number;
       image: string | null;
       productTypeCode: string | null;
+      brandName: string | null;
     }>
   >([]);
   const [brandProductsLoading, setBrandProductsLoading] = useState(false);
@@ -68,6 +69,91 @@ export default function Brands() {
   >([]);
   const [productSearching, setProductSearching] = useState(false);
   const [showAddProduct, setShowAddProduct] = useState(false);
+
+  // Unbranded products
+  const [unbranded, setUnbranded] = useState<CatalogProduct[]>([]);
+  const [unbrandedLoading, setUnbrandedLoading] = useState(false);
+  const [unbrandedSearch, setUnbrandedSearch] = useState("");
+  const [unbrandedOffset, setUnbrandedOffset] = useState(0);
+  const [unbrandedHasMore, setUnbrandedHasMore] = useState(true);
+  const [unbrandedTotal, setUnbrandedTotal] = useState(0);
+  const unbrandedSentinelRef = useRef<HTMLDivElement>(null);
+
+  // Assign brand modal
+  const [assignProductId, setAssignProductId] = useState<number | null>(null);
+  const [assignBrandId, setAssignBrandId] = useState("");
+  const [assignBrandSearch, setAssignBrandSearch] = useState("");
+  const [assignBrandDropdownOpen, setAssignBrandDropdownOpen] = useState(false);
+
+  const loadUnbranded = async (reset = false) => {
+    setUnbrandedLoading(true);
+    const offset = reset ? 0 : unbrandedOffset;
+    try {
+      const [countData, data] = await Promise.all([
+        catalogService.getUnbrandedCount(),
+        catalogService.getUnbrandedProducts(
+          offset,
+          20,
+          unbrandedSearch || undefined,
+        ),
+      ]);
+      if (reset) {
+        setUnbrandedTotal(countData.total);
+        setUnbranded(data);
+        setUnbrandedOffset(20);
+      } else {
+        setUnbranded((prev) => [...prev, ...data]);
+        setUnbrandedOffset(offset + 20);
+      }
+      setUnbrandedHasMore(data.length === 20);
+    } catch {
+      if (reset) setUnbranded([]);
+    }
+    setUnbrandedLoading(false);
+  };
+
+  // Load unbranded on mount
+  useEffect(() => {
+    loadUnbranded(true);
+  }, []);
+
+  // Infinite scroll for unbranded
+  useEffect(() => {
+    if (!unbrandedHasMore || unbrandedLoading) return;
+    const el = unbrandedSentinelRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) loadUnbranded(false);
+      },
+      { rootMargin: "200px" },
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [unbrandedHasMore, unbrandedLoading]);
+
+  // Debounce search for unbranded
+  useEffect(() => {
+    if (!unbrandedSearch) {
+      loadUnbranded(true);
+      return;
+    }
+    const timer = setTimeout(() => loadUnbranded(true), 400);
+    return () => clearTimeout(timer);
+  }, [unbrandedSearch]);
+
+  const assignBrandToProduct = async () => {
+    if (!assignProductId || !assignBrandId) return;
+    try {
+      await catalogService.addProductToBrand(
+        Number(assignBrandId),
+        assignProductId,
+      );
+      setAssignProductId(null);
+      setAssignBrandId("");
+      await Promise.all([loadBrands(), loadUnbranded(true)]);
+    } catch {}
+  };
 
   const loadBrands = useCallback(async () => {
     try {
@@ -101,6 +187,7 @@ export default function Brands() {
   const openCreate = () => {
     setCreating(true);
     setEditing(null);
+    setEditTab("general");
     setForm({
       name: "",
       code: "",
@@ -190,7 +277,7 @@ export default function Brands() {
 
     try {
       if (creating) {
-        await catalogService.createBrand({
+        const result = await catalogService.createBrand({
           name,
           code: form.code || undefined,
           website: form.website || undefined,
@@ -199,6 +286,14 @@ export default function Brands() {
           isFeatured: form.isFeatured ?? false,
           imageUrl: imageUrl || form.imageUrl || undefined,
         });
+        // Assign products collected during creation
+        if (brandProducts.length > 0) {
+          await Promise.all(
+            brandProducts.map((p) =>
+              catalogService.addProductToBrand(result.id, p.id),
+            ),
+          );
+        }
       } else if (editing) {
         await catalogService.updateBrand(editing.id, {
           name: name !== editing.name ? name : undefined,
@@ -239,7 +334,8 @@ export default function Brands() {
     setProductSearch("");
     setProductSearchResults([]);
     try {
-      setBrandProducts(await catalogService.getBrandProducts(brandId));
+      const data = await catalogService.getBrandProducts(brandId);
+      setBrandProducts(data.map((p) => ({ ...p, brandName: null })));
     } catch {
       setBrandProducts([]);
     }
@@ -291,23 +387,42 @@ export default function Brands() {
   }, [productSearch, showAddProduct, handleProductSearch]);
 
   const addProduct = async (productId: number) => {
-    if (!editing) return;
-    try {
-      await catalogService.addProductToBrand(editing.id, productId);
-      await loadBrandProducts(editing.id);
-      setProductSearchResults((prev) => prev.filter((p) => p.id !== productId));
-      setShowAddProduct(false);
-      await loadBrands();
-    } catch {}
+    if (editing) {
+      try {
+        await catalogService.addProductToBrand(editing.id, productId);
+        await loadBrandProducts(editing.id);
+        setProductSearchResults((prev) =>
+          prev.filter((p) => p.id !== productId),
+        );
+        setShowAddProduct(false);
+        await loadBrands();
+      } catch {}
+    } else {
+      const product = productSearchResults.find((p) => p.id === productId);
+      if (product) {
+        setBrandProducts((prev) => [...prev, product]);
+        setProductSearchResults((prev) =>
+          prev.filter((p) => p.id !== productId),
+        );
+      }
+    }
   };
 
   const removeProduct = async (productId: number) => {
-    if (!editing) return;
-    try {
-      await catalogService.removeProductFromBrand(editing.id, productId);
+    if (editing) {
+      try {
+        await catalogService.removeProductFromBrand(editing.id, productId);
+        setBrandProducts((prev) => prev.filter((p) => p.id !== productId));
+        await loadBrands();
+      } catch {}
+    } else {
+      // Create mode — just remove from local state
       setBrandProducts((prev) => prev.filter((p) => p.id !== productId));
-      await loadBrands();
-    } catch {}
+      const product = brandProducts.find((p) => p.id === productId);
+      if (product) {
+        setProductSearchResults((prev) => [...prev, product]);
+      }
+    }
   };
 
   const isPanelOpen = creating || !!editing;
@@ -449,6 +564,169 @@ export default function Brands() {
         </div>
       )}
 
+      {/* ── Unbranded Products ── */}
+      <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 bg-gray-50">
+          <div className="flex items-center gap-2">
+            <Package size={14} className="text-gray-400" />
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+              Productos sin marca
+            </p>
+          </div>
+          <span className="text-xs bg-amber-50 text-amber-700 px-2 py-0.5 rounded-full font-semibold">
+            {unbrandedTotal}
+          </span>
+        </div>
+        <div className="px-4 py-3 border-b border-gray-50">
+          <div className="relative">
+            <Search
+              size={13}
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+            />
+            <input
+              value={unbrandedSearch}
+              onChange={(e) => setUnbrandedSearch(e.target.value)}
+              placeholder="Buscar productos sin marca..."
+              className="w-full pl-9 pr-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-400"
+            />
+          </div>
+        </div>
+        {unbrandedLoading && unbranded.length === 0 ? (
+          <div className="flex items-center justify-center py-12">
+            <div className="w-6 h-6 border-2 border-gray-300 border-t-amber-400 rounded-full animate-spin" />
+          </div>
+        ) : unbranded.length === 0 && !unbrandedLoading ? (
+          <div className="py-12 text-center">
+            <p className="text-sm text-gray-400">
+              Todos los productos tienen marca asignada
+            </p>
+          </div>
+        ) : (
+          <div className="divide-y divide-gray-50 max-h-96 overflow-y-auto">
+            {unbranded.map((p) => (
+              <div
+                key={p.id}
+                onClick={() => {
+                  setAssignProductId(p.id);
+                  setAssignBrandId("");
+                  setAssignBrandSearch("");
+                  setAssignBrandDropdownOpen(false);
+                }}
+                className="flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 transition-colors cursor-pointer"
+              >
+                <div className="w-8 h-8 rounded bg-gray-100 overflow-hidden shrink-0 flex items-center justify-center">
+                  {p.image ? (
+                    <img
+                      src={p.image}
+                      alt={p.name}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <Package size={14} className="text-gray-300" />
+                  )}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-medium text-gray-800 truncate">
+                    {p.name}
+                  </p>
+                  {p.productTypeCode && (
+                    <p className="text-[10px] text-gray-400">
+                      {p.productTypeCode}
+                    </p>
+                  )}
+                </div>
+              </div>
+            ))}
+            <div ref={unbrandedSentinelRef} className="h-4" />
+            {unbrandedLoading && unbranded.length > 0 && (
+              <div className="flex justify-center py-4">
+                <div className="w-5 h-5 border-2 border-gray-300 border-t-amber-400 rounded-full animate-spin" />
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Assign brand modal */}
+      {assignProductId !== null && (
+        <>
+          <div
+            className="fixed inset-0 bg-black/40 z-[60]"
+            onClick={() => setAssignProductId(null)}
+          />
+          <div className="fixed inset-0 z-[70] flex items-center justify-center">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm mx-4 p-5">
+              <h4 className="font-bold text-sm text-gray-900 mb-4">
+                Asignar marca a producto
+              </h4>
+              <div className="relative mb-4">
+                <Search
+                  size={14}
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"
+                />
+                <input
+                  value={assignBrandSearch}
+                  onChange={(e) => {
+                    setAssignBrandSearch(e.target.value);
+                    setAssignBrandDropdownOpen(true);
+                  }}
+                  onFocus={() => setAssignBrandDropdownOpen(true)}
+                  placeholder="Buscar marca..."
+                  className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-300"
+                  autoFocus
+                />
+                {assignBrandDropdownOpen && (
+                  <div
+                    className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-xl z-10 max-h-48 overflow-y-auto"
+                    onMouseDown={(e) => e.preventDefault()}
+                  >
+                    {brands
+                      .filter((b) =>
+                        b.name
+                          .toLowerCase()
+                          .includes(assignBrandSearch.toLowerCase()),
+                      )
+                      .map((b) => (
+                        <button
+                          key={b.id}
+                          onClick={() => {
+                            setAssignBrandId(String(b.id));
+                            setAssignBrandSearch(b.name);
+                            setAssignBrandDropdownOpen(false);
+                          }}
+                          className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-50 transition-colors ${
+                            String(b.id) === assignBrandId
+                              ? "bg-amber-50 font-semibold"
+                              : ""
+                          }`}
+                        >
+                          {b.name}
+                        </button>
+                      ))}
+                    {brands.filter((b) =>
+                      b.name
+                        .toLowerCase()
+                        .includes(assignBrandSearch.toLowerCase()),
+                    ).length === 0 && (
+                      <p className="px-3 py-4 text-xs text-gray-400 text-center">
+                        No se encontraron marcas
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+              <button
+                onClick={assignBrandToProduct}
+                disabled={!assignBrandId}
+                className="w-full py-2 rounded-xl text-sm font-bold bg-amber-400 text-amber-900 hover:bg-amber-500 transition-colors disabled:opacity-50"
+              >
+                Asignar marca
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+
       {/* ── Edit/Create Panel (Drawer from right) ── */}
       {isPanelOpen && (
         <div className="fixed right-0 top-0 bottom-0 w-96 bg-white shadow-2xl z-50 overflow-y-auto">
@@ -477,8 +755,8 @@ export default function Brands() {
             </button>
           </div>
 
-          {/* Tab bar (edit only) */}
-          {editing && (
+          {/* Tab bar */}
+          {isPanelOpen && (
             <div className="flex border-b border-gray-100">
               <button
                 onClick={() => setEditTab("general")}

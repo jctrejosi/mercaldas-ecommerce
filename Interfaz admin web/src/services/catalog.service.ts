@@ -326,6 +326,26 @@ export const catalogService = {
     );
   },
 
+  async getUnbrandedCount(): Promise<{ total: number }> {
+    return fetchJson<{ total: number }>(
+      `${API_BASE_URL}/catalog/products/count?unbranded=true`,
+    );
+  },
+
+  async getUnbrandedProducts(
+    offset = 0,
+    limit = 20,
+    search?: string,
+  ): Promise<CatalogProduct[]> {
+    return fetchJson<CatalogProduct[]>(
+      `${API_BASE_URL}/admin/catalog/products`,
+      {
+        method: "POST",
+        body: JSON.stringify({ unbranded: true, limit, offset, search }),
+      },
+    );
+  },
+
   async replaceProductCategory(
     productId: number,
     categoryId: number,
