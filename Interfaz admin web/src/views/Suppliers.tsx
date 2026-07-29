@@ -73,6 +73,12 @@ export default function Suppliers() {
   const [prodSearching, setProdSearching] = useState(false);
   const [showAddProduct, setShowAddProduct] = useState(false);
 
+  // Assign supplier modal (from unsupplied list)
+  const [assignProductId, setAssignProductId] = useState<number | null>(null);
+  const [assignSupplierId, setAssignSupplierId] = useState("");
+  const [assignSearch, setAssignSearch] = useState("");
+  const [assignDropdownOpen, setAssignDropdownOpen] = useState(false);
+
   // Unsupplied products
   const [unsupplied, setUnsupplied] = useState<CatalogProduct[]>([]);
   const [unsuppliedLoading, setUnsuppliedLoading] = useState(false);
@@ -357,6 +363,24 @@ export default function Suppliers() {
     await loadSuppliers();
   };
 
+  const assignSupplierToProduct = async () => {
+    if (!assignProductId || !assignSupplierId) return;
+    try {
+      await fetch(
+        `${import.meta.env.VITE_API_URL || "http://localhost:3000"}/admin/catalog/products/${assignProductId}/suppliers`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ supplierId: Number(assignSupplierId) }),
+        },
+      );
+      setAssignProductId(null);
+      setAssignSupplierId("");
+      await Promise.all([loadSuppliers(), loadUnsupplied(true)]);
+    } catch {}
+  };
+
+  // ── Brand Products ──
   const isPanelOpen = creating || !!editing;
 
   return (
@@ -545,6 +569,12 @@ export default function Suppliers() {
             {unsupplied.map((p) => (
               <div
                 key={p.id}
+                onClick={() => {
+                  setAssignProductId(p.id);
+                  setAssignSupplierId("");
+                  setAssignSearch("");
+                  setAssignDropdownOpen(false);
+                }}
                 className="flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 transition-colors cursor-pointer"
               >
                 <div className="w-8 h-8 rounded bg-gray-100 overflow-hidden shrink-0 flex items-center justify-center">
@@ -780,43 +810,6 @@ export default function Suppliers() {
                   placeholder="www.empresa.com"
                   className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-300"
                 />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider block mb-1">
-                    Días pago
-                  </label>
-                  <input
-                    value={form.paymentTermsDays ?? ""}
-                    onChange={(e) =>
-                      setForm((f) => ({
-                        ...f,
-                        paymentTermsDays: e.target.value,
-                      }))
-                    }
-                    placeholder="30"
-                    type="number"
-                    className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-300"
-                  />
-                </div>
-                <div>
-                  <label className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider block mb-1">
-                    Moneda
-                  </label>
-                  <input
-                    value={form.currencyCode ?? ""}
-                    onChange={(e) =>
-                      setForm((f) => ({
-                        ...f,
-                        currencyCode: e.target.value.toUpperCase(),
-                      }))
-                    }
-                    placeholder="COP"
-                    maxLength={3}
-                    className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-300"
-                  />
-                </div>
               </div>
 
               <div>
@@ -1106,29 +1099,19 @@ export default function Suppliers() {
                 )}
               </div>
               <div className="grid grid-cols-3 gap-3">
-                {[
-                  { label: "Productos", value: selected.productCount },
-                  {
-                    label: "Días pago",
-                    value: selected.paymentTermsDays
-                      ? `${selected.paymentTermsDays} d.`
-                      : "—",
-                  },
-                  {
-                    label: "Moneda",
-                    value: selected.currencyCode || "—",
-                  },
-                ].map((stat) => (
-                  <div
-                    key={stat.label}
-                    className="bg-gray-50 rounded-xl p-3 text-center"
-                  >
-                    <p className="text-sm font-bold text-gray-900">
-                      {stat.value}
-                    </p>
-                    <p className="text-xs text-gray-500">{stat.label}</p>
-                  </div>
-                ))}
+                {[{ label: "Productos", value: selected.productCount }].map(
+                  (stat) => (
+                    <div
+                      key={stat.label}
+                      className="bg-gray-50 rounded-xl p-3 text-center"
+                    >
+                      <p className="text-sm font-bold text-gray-900">
+                        {stat.value}
+                      </p>
+                      <p className="text-xs text-gray-500">{stat.label}</p>
+                    </div>
+                  ),
+                )}
               </div>
               {selected.notes && (
                 <div className="bg-amber-50 rounded-xl p-4">
@@ -1141,6 +1124,86 @@ export default function Suppliers() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* ── Assign Supplier Modal ── */}
+      {assignProductId !== null && (
+        <>
+          <div
+            className="fixed inset-0 bg-black/40 z-[60]"
+            onClick={() => setAssignProductId(null)}
+          />
+          <div className="fixed inset-0 z-[70] flex items-center justify-center">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm mx-4 p-5">
+              <h4 className="font-bold text-sm text-gray-900 mb-4">
+                Asignar proveedor
+              </h4>
+              <div className="relative mb-4">
+                <Search
+                  size={14}
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"
+                />
+                <input
+                  value={assignSearch}
+                  onChange={(e) => {
+                    setAssignSearch(e.target.value);
+                    setAssignDropdownOpen(true);
+                  }}
+                  onFocus={() => setAssignDropdownOpen(true)}
+                  placeholder="Buscar proveedor..."
+                  className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-300"
+                  autoFocus
+                />
+                {assignDropdownOpen && (
+                  <div
+                    className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-xl z-10 max-h-48 overflow-y-auto"
+                    onMouseDown={(e) => e.preventDefault()}
+                  >
+                    {suppliers
+                      .filter((s) =>
+                        s.legalName
+                          .toLowerCase()
+                          .includes(assignSearch.toLowerCase()),
+                      )
+                      .map((s) => (
+                        <button
+                          key={s.id}
+                          onClick={() => {
+                            setAssignSupplierId(String(s.id));
+                            setAssignSearch(s.legalName);
+                            setAssignDropdownOpen(false);
+                          }}
+                          className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-50 transition-colors ${
+                            String(s.id) === assignSupplierId
+                              ? "bg-amber-50 font-semibold"
+                              : ""
+                          }`}
+                        >
+                          {s.legalName}
+                        </button>
+                      ))}
+                    {suppliers.filter((s) =>
+                      s.legalName
+                        .toLowerCase()
+                        .includes(assignSearch.toLowerCase()),
+                    ).length === 0 && (
+                      <p className="px-3 py-4 text-xs text-gray-400 text-center">
+                        No se encontraron proveedores
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+              <button
+                onClick={assignSupplierToProduct}
+                disabled={!assignSupplierId}
+                className="w-full py-2 rounded-xl text-sm font-bold bg-amber-400 text-amber-900 hover:bg-amber-500 transition-colors disabled:opacity-50"
+              >
+                Asignar proveedor
+              </button>
+            </div>
+          </div>
+        </>
       )}
 
       {/* ── Delete Confirmation ── */}
