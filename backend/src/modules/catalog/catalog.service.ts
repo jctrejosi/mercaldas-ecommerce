@@ -734,6 +734,71 @@ export class CatalogService {
       .where(eq(brands.id, BigInt(id)));
   }
 
+  // ── Brand-Product relations ──
+
+  async getBrandProducts(brandId: number) {
+    const rows = await this.drizzleService.db
+      .select({
+        id: products.id,
+        name: products.name,
+        slug: products.slug,
+        price: productVariants.currentPrice,
+        image: media.path,
+        productTypeCode: productTypes.code,
+      })
+      .from(products)
+      .innerJoin(productVariants, eq(productVariants.productId, products.id))
+      .leftJoin(
+        productImages,
+        and(
+          eq(productImages.productId, products.id),
+          eq(productImages.isCover, true),
+        ),
+      )
+      .leftJoin(media, eq(media.id, productImages.mediaId))
+      .leftJoin(
+        productTypeAssignments,
+        eq(productTypeAssignments.productId, products.id),
+      )
+      .leftJoin(
+        productTypes,
+        eq(productTypes.id, productTypeAssignments.productTypeId),
+      )
+      .where(
+        and(
+          eq(products.brandId, brandId),
+          eq(products.isActive, true),
+          isNull(products.deletedAt),
+          eq(productVariants.isActive, true),
+          isNull(productVariants.deletedAt),
+        ),
+      )
+      .orderBy(asc(products.name));
+
+    return rows.map((row) => ({
+      id: Number(row.id),
+      name: row.name,
+      slug: row.slug,
+      price: Number(row.price ?? 0),
+      image: row.image,
+      productTypeCode: row.productTypeCode,
+    }));
+  }
+
+  async addProductToBrand(brandId: number, productId: number) {
+    await this.drizzleService.db
+      .update(products)
+      .set({ brandId })
+      .where(eq(products.id, BigInt(productId)));
+  }
+
+  async removeProductFromBrand(productId: number) {
+    await this.drizzleService.db
+      .update(products)
+      .set({ brandId: null })
+      .where(eq(products.id, BigInt(productId)));
+  }
+
   async getProductTypes() {
     const rows = await this.drizzleService.db
       .select({
@@ -777,21 +842,25 @@ export class CatalogService {
     }));
   }
 
-  async getProductsCount(): Promise<{ total: number }> {
+  async getProductsCount(unbranded?: boolean): Promise<{ total: number }> {
+    const conditions: any[] = [
+      eq(products.isActive, true),
+      isNull(products.deletedAt),
+      eq(productVariants.isActive, true),
+      isNull(productVariants.deletedAt),
+    ];
+
+    if (unbranded) {
+      conditions.push(sql`${products.brandId} IS NULL`);
+    }
+
     const rows = await this.drizzleService.db
       .select({
         count: sql<number>`count(DISTINCT ${products.id})`.as('count'),
       })
       .from(products)
       .innerJoin(productVariants, eq(productVariants.productId, products.id))
-      .where(
-        and(
-          eq(products.isActive, true),
-          isNull(products.deletedAt),
-          eq(productVariants.isActive, true),
-          isNull(productVariants.deletedAt),
-        ),
-      );
+      .where(and(...conditions));
     return { total: Number(rows[0]?.count ?? 0) };
   }
 
@@ -1108,6 +1177,7 @@ export class CatalogService {
           query.uncategorized
             ? sql`NOT EXISTS (SELECT 1 FROM product_categories pc WHERE pc.product_id = ${products.id})`
             : undefined,
+          query.unbranded ? sql`${products.brandId} IS NULL` : undefined,
         ),
       )
       .orderBy(...this.buildSort(sort))

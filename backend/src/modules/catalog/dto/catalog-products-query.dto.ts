@@ -135,4 +135,9 @@ export class CatalogProductsQueryDto {
   @Transform(({ value }) => value === 'true' || value === true)
   @IsBoolean()
   uncategorized?: boolean;
+
+  @IsOptional()
+  @Transform(({ value }) => value === 'true' || value === true)
+  @IsBoolean()
+  unbranded?: boolean;
 }

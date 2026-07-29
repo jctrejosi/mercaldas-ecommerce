@@ -291,6 +291,41 @@ export const catalogService = {
     });
   },
 
+  // ── Brand Products ──
+
+  async getBrandProducts(brandId: number): Promise<
+    Array<{
+      id: number;
+      name: string;
+      slug: string;
+      price: number;
+      image: string | null;
+      productTypeCode: string | null;
+    }>
+  > {
+    return fetchJson(
+      `${API_BASE_URL}/admin/catalog/brands/${brandId}/products`,
+    );
+  },
+
+  async addProductToBrand(brandId: number, productId: number): Promise<void> {
+    await fetch(`${API_BASE_URL}/admin/catalog/brands/${brandId}/products`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ productId }),
+    });
+  },
+
+  async removeProductFromBrand(
+    brandId: number,
+    productId: number,
+  ): Promise<void> {
+    await fetch(
+      `${API_BASE_URL}/admin/catalog/brands/${brandId}/products/${productId}`,
+      { method: "DELETE" },
+    );
+  },
+
   async replaceProductCategory(
     productId: number,
     categoryId: number,

@@ -92,8 +92,8 @@ export class CatalogController {
   @Get('products/count')
   @ApiOperation({ summary: 'Obtener cantidad total de productos activos' })
   @ApiResponse({ status: 200, description: 'Total de productos' })
-  getProductsCount() {
-    return this.catalogService.getProductsCount();
+  getProductsCount(@Query('unbranded') unbranded?: string) {
+    return this.catalogService.getProductsCount(unbranded === 'true');
   }
 
   @Public()

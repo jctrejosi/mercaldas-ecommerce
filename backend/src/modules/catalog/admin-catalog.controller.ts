@@ -167,4 +167,35 @@ export class AdminCatalogController {
     await this.catalogService.deleteBrand(Number(id));
     return { success: true };
   }
+
+  // ── Brand Products ──
+
+  @Public()
+  @Get('brands/:id/products')
+  @ApiOperation({ summary: 'Obtener productos de una marca' })
+  async getBrandProducts(@Param('id') id: string) {
+    return this.catalogService.getBrandProducts(Number(id));
+  }
+
+  @Public()
+  @Post('brands/:id/products')
+  @ApiOperation({ summary: 'Asignar producto a marca' })
+  async addProductToBrand(
+    @Param('id') id: string,
+    @Body() body: { productId: number },
+  ) {
+    await this.catalogService.addProductToBrand(Number(id), body.productId);
+    return { success: true };
+  }
+
+  @Public()
+  @Delete('brands/:id/products/:productId')
+  @ApiOperation({ summary: 'Quitar producto de marca' })
+  async removeProductFromBrand(
+    @Param('id') id: string,
+    @Param('productId') productId: string,
+  ) {
+    await this.catalogService.removeProductFromBrand(Number(productId));
+    return { success: true };
+  }
 }
