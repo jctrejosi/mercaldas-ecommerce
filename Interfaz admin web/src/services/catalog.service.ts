@@ -37,6 +37,7 @@ export type Brand = {
   id: number;
   name: string;
   slug: string;
+  code?: string | null;
   description: string | null;
   image: string | null;
   website: string | null;
@@ -227,6 +228,67 @@ export const catalogService = {
         method: "DELETE",
       },
     );
+  },
+
+  // ── Admin Brand CRUD ──
+
+  async getBrandsAdmin(): Promise<
+    Array<{
+      id: number;
+      name: string;
+      slug: string;
+      code: string | null;
+      description: string | null;
+      image: string | null;
+      website: string | null;
+      country: string | null;
+      isFeatured: boolean;
+      isActive: boolean;
+      createdAt: string;
+      productCount: number;
+    }>
+  > {
+    return fetchJson(`${API_BASE_URL}/admin/catalog/brands`);
+  },
+
+  async createBrand(data: {
+    name: string;
+    code?: string;
+    website?: string;
+    description?: string;
+    country?: string;
+    isFeatured?: boolean;
+    imageUrl?: string;
+  }): Promise<{ id: number }> {
+    return fetchJson(`${API_BASE_URL}/admin/catalog/brands`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+
+  async updateBrand(
+    id: number,
+    data: {
+      name?: string;
+      code?: string;
+      website?: string;
+      description?: string;
+      country?: string;
+      isFeatured?: boolean;
+      isActive?: boolean;
+      imageUrl?: string;
+    },
+  ): Promise<{ id: number }> {
+    return fetchJson(`${API_BASE_URL}/admin/catalog/brands/${id}`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+
+  async deleteBrand(id: number): Promise<void> {
+    await fetch(`${API_BASE_URL}/admin/catalog/brands/${id}`, {
+      method: "DELETE",
+    });
   },
 
   async replaceProductCategory(

@@ -21,7 +21,10 @@ import type { CartItem, CatalogCategory, Product } from "../types";
 import { catalogService } from "../../services/catalog.service";
 import { NotificationsDropdown } from "./NotificationsDropdown";
 import { AddressModal, getAddressDisplay } from "./AddressModal";
-import { type CustomerAddress, customerAddressService } from "../../services/customer-auth.service";
+import {
+  type CustomerAddress,
+  customerAddressService,
+} from "../../services/customer-auth.service";
 import type { AppNotification } from "../../hooks/useNotifications";
 
 interface HeaderProps {
@@ -72,7 +75,8 @@ export function Header({
   onOpenCatalog,
   onAddToCart,
   onRemoveFromCart,
-  currentView, onHome,
+  currentView,
+  onHome,
   onAccount,
   notifications = [],
   unreadNotifCount = 0,
@@ -85,7 +89,9 @@ export function Header({
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchResults, setSearchResults] = useState<Product[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
-  const [searchCategories, setSearchCategories] = useState<CatalogCategory[]>([]);
+  const [searchCategories, setSearchCategories] = useState<CatalogCategory[]>(
+    [],
+  );
   const searchRef = useRef<HTMLDivElement>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [categoriesOpen, setCategoriesOpen] = useState(false);
@@ -93,30 +99,35 @@ export function Header({
   const [notifOpen, setNotifOpen] = useState(false);
   const notifRef = useRef<HTMLDivElement>(null);
   const [addressModalOpen, setAddressModalOpen] = useState(false);
-  const [defaultAddress, setDefaultAddress] = useState<CustomerAddress | null>(null);
+  const [defaultAddress, setDefaultAddress] = useState<CustomerAddress | null>(
+    null,
+  );
 
   // Load default address when customer changes
   useEffect(() => {
     if (customer) {
-      customerAddressService.getAddresses().then(addrs => {
-        setDefaultAddress(addrs.find(a => a.isDefault) ?? null);
-      }).catch(() => {});
+      customerAddressService
+        .getAddresses()
+        .then((addrs) => {
+          setDefaultAddress(addrs.find((a) => a.isDefault) ?? null);
+        })
+        .catch(() => {});
     } else {
       setDefaultAddress(null);
     }
   }, [customer]);
   useEffect(() => {
-    const handler = (e: MouseEvent) => { if (notifRef.current && !notifRef.current.contains(e.target as Node)) setNotifOpen(false); };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
+    const handler = (e: MouseEvent) => {
+      if (notifRef.current && !notifRef.current.contains(e.target as Node))
+        setNotifOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
   }, []);
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
-      if (
-        searchRef.current &&
-        !searchRef.current.contains(e.target as Node)
-      ) {
+      if (searchRef.current && !searchRef.current.contains(e.target as Node)) {
         setSearchOpen(false);
       }
     };
@@ -221,98 +232,84 @@ export function Header({
 
   const rootCategories = categories.filter((cat) => !cat.parentId);
 
-  // Track which parent categories are expanded
-  const [expandedCategories, setExpandedCategories] = useState<Set<number>>(
-    new Set(),
-  );
+  // Track which root category is hovered to show its flyout
+  const [hoveredRootId, setHoveredRootId] = useState<number | null>(null);
+  const flyoutTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Track sub-flyout chain for nested hover
+  const [hoveredSubPath, setHoveredSubPath] = useState<number[]>([]);
+  const subTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const toggleExpand = (categoryId: number) => {
-    setExpandedCategories((prev) => {
-      const next = new Set(prev);
-      if (next.has(categoryId)) {
-        next.delete(categoryId);
-      } else {
-        next.add(categoryId);
-      }
-      return next;
-    });
-  };
-
-  // Recursive component for rendering category tree with accordion behavior
-  function CategoryTreeItem({
-    category,
-    depth = 0,
+  // Recursive flyout column — renders one column of items
+  function FlyoutColumn({
+    categoryIds,
+    path,
   }: {
-    category: CatalogCategory;
-    depth?: number;
+    categoryIds: number[];
+    path: number[];
   }) {
-    const Icon = category.icon;
-    const children = categoriesByParentId.get(category.id) ?? [];
-    const hasChildren = children.length > 0;
-    const isExpanded = expandedCategories.has(category.id);
-
-    const handleClick = () => {
-      if (hasChildren) {
-        toggleExpand(category.id);
-      } else {
-        onOpenCatalog(category.id);
-        setCategoriesOpen(false);
-      }
-    };
-
+    const activeId = path.length > 0 ? path[path.length - 1] : null;
     return (
-      <div>
-        <button
-          onClick={handleClick}
-          className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-muted transition-colors text-left"
-          style={{ paddingLeft: `${12 + depth * 16}px` }}
-        >
-          {hasChildren ? (
-            <ChevronRight
-              className={`w-3 h-3 text-muted-foreground flex-shrink-0 transition-transform ${isExpanded ? "rotate-90" : ""}`}
-            />
-          ) : (
-            <div className="w-3 h-3 flex-shrink-0" />
-          )}
-          <div
-            className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
-            style={{
-              background: category.bg || "#F4F4F6",
-              color: category.color || "#6B7280",
-            }}
-          >
-            {Icon ? (
-              <Icon className="w-3.5 h-3.5" />
-            ) : (
-              <span className="font-bold text-[10px]">
-                {category.name.charAt(0)}
-              </span>
-            )}
-          </div>
-          <div className="flex-1 min-w-0">
-            <p
-              className={`text-foreground ${depth === 0 ? "text-sm font-medium" : "text-xs font-medium"}`}
+      <div
+        className="py-2 min-w-[220px]"
+        onMouseEnter={() => {
+          if (subTimerRef.current) clearTimeout(subTimerRef.current);
+        }}
+      >
+        {categoryIds.map((id) => {
+          const cat = categories.find((c) => c.id === id);
+          if (!cat) return null;
+          const Icon = cat.icon;
+          const children = categoriesByParentId.get(id) ?? [];
+          const hasChildren = children.length > 0;
+          const isActive = activeId === id;
+          return (
+            <button
+              key={id}
+              onClick={() => {
+                onOpenCatalog(id);
+                setCategoriesOpen(false);
+              }}
+              className={`w-full flex items-center gap-3 px-4 py-2.5 hover:bg-muted transition-colors text-left ${isActive ? "bg-muted" : ""}`}
+              onMouseEnter={() => {
+                if (subTimerRef.current) clearTimeout(subTimerRef.current);
+                if (hasChildren) {
+                  setHoveredSubPath([...path, id]);
+                } else {
+                  setHoveredSubPath(path);
+                }
+              }}
             >
-              {category.name}
-            </p>
-            {category.count !== undefined && depth === 0 && (
-              <p className="text-xs text-muted-foreground">
-                {category.count} producto{category.count !== 1 ? "s" : ""}
-              </p>
-            )}
-          </div>
-        </button>
-        {hasChildren && isExpanded && (
-          <div className="border-l border-border ml-5">
-            {children.map((child) => (
-              <CategoryTreeItem
-                key={child.id}
-                category={child}
-                depth={depth + 1}
-              />
-            ))}
-          </div>
-        )}
+              <div
+                className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
+                style={{
+                  background: cat.bg || "#F4F4F6",
+                  color: cat.color || "#6B7280",
+                }}
+              >
+                {Icon ? (
+                  <Icon className="w-3.5 h-3.5" />
+                ) : (
+                  <span className="font-bold text-[10px]">
+                    {cat.name.charAt(0)}
+                  </span>
+                )}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-foreground">
+                  {cat.name}
+                </p>
+                {cat.count !== undefined && (
+                  <p className="text-xs text-muted-foreground">
+                    {cat.count} producto{cat.count !== 1 ? "s" : ""}
+                  </p>
+                )}
+              </div>
+              {hasChildren && (
+                <ChevronRight className="w-3 h-3 text-muted-foreground flex-shrink-0" />
+              )}
+            </button>
+          );
+        })}
       </div>
     );
   }
@@ -326,7 +323,11 @@ export function Header({
             className="flex items-center gap-1.5 text-xs"
             style={{ color: "rgba(255,255,255,0.65)" }}
           >
-            <button onClick={() => setAddressModalOpen(true)} className="flex items-center gap-1.5 text-xs cursor-pointer hover:brightness-110 transition-all" style={{ color: "rgba(255,255,255,0.65)" }}>
+            <button
+              onClick={() => setAddressModalOpen(true)}
+              className="flex items-center gap-1.5 text-xs cursor-pointer hover:brightness-110 transition-all"
+              style={{ color: "rgba(255,255,255,0.65)" }}
+            >
               <MapPin className="w-3 h-3" />
               <span>
                 Entregar en ·{" "}
@@ -357,7 +358,14 @@ export function Header({
           <Menu className="w-5 h-5" />
         </button>
 
-        <a href="#" className="flex-shrink-0" onClick={(e) => { e.preventDefault(); onHome(); }}>
+        <a
+          href="#"
+          className="flex-shrink-0"
+          onClick={(e) => {
+            e.preventDefault();
+            onHome();
+          }}
+        >
           <Logo dark={true} />
         </a>
 
@@ -491,9 +499,7 @@ export function Header({
                         </p>
                         <ul>
                           {searchResults.map((p) => {
-                            const inCart = cartItems.find(
-                              (c) => c.id === p.id,
-                            );
+                            const inCart = cartItems.find((c) => c.id === p.id);
                             return (
                               <li
                                 key={p.id}
@@ -543,9 +549,7 @@ export function Header({
                                   <div className="flex items-center border border-border rounded-lg overflow-hidden">
                                     <button
                                       onClick={() => onRemoveFromCart(p.id)}
-                                      disabled={
-                                        (inCart?.quantity ?? 0) === 0
-                                      }
+                                      disabled={(inCart?.quantity ?? 0) === 0}
                                       className="px-2 py-1.5 hover:bg-muted transition-colors disabled:opacity-25"
                                     >
                                       <Minus className="w-3 h-3" />
@@ -621,7 +625,10 @@ export function Header({
           <button
             onClick={() => {
               if (customer) {
-                if (onAccount) { onAccount(); return; }
+                if (onAccount) {
+                  onAccount();
+                  return;
+                }
                 onOrdersOpen();
                 return;
               }
@@ -633,38 +640,38 @@ export function Header({
             <span className="hidden lg:inline">
               {customerLoading
                 ? "Cargando..."
-                : customer?.firstName ||
-                  customer?.fullName ||
-                  "Iniciar sesión"}
+                : customer?.firstName || customer?.fullName || "Iniciar sesión"}
             </span>
           </button>
-            {customer && (
-              <div className="relative" ref={notifRef}>
-                <button
-                  onClick={() => setNotifOpen(!notifOpen)}
-                  className="hidden md:flex items-center gap-1.5 px-3 py-2 rounded-lg hover:bg-muted transition-colors text-sm font-medium whitespace-nowrap relative"
-                >
-                  <Bell className="w-4 h-4" />
-                  {unreadNotifCount > 0 && (
-                    <span
-                      className="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full text-[10px] font-bold flex items-center justify-center"
-                      style={{ background: "#FF4444", color: "#fff" }}
-                    >
-                      {unreadNotifCount}
-                    </span>
-                  )}
-                </button>
-                {notifOpen && (
-                  <NotificationsDropdown
-                    notifications={notifications}
-                    unreadCount={unreadNotifCount}
-                    onMarkAsRead={(id) => { onMarkNotifRead?.(id); }}
-                    onNavigate={() => onNavigateNotifs?.()}
-                    onClose={() => setNotifOpen(false)}
-                  />
+          {customer && (
+            <div className="relative" ref={notifRef}>
+              <button
+                onClick={() => setNotifOpen(!notifOpen)}
+                className="hidden md:flex items-center gap-1.5 px-3 py-2 rounded-lg hover:bg-muted transition-colors text-sm font-medium whitespace-nowrap relative"
+              >
+                <Bell className="w-4 h-4" />
+                {unreadNotifCount > 0 && (
+                  <span
+                    className="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full text-[10px] font-bold flex items-center justify-center"
+                    style={{ background: "#FF4444", color: "#fff" }}
+                  >
+                    {unreadNotifCount}
+                  </span>
                 )}
-              </div>
-            )}
+              </button>
+              {notifOpen && (
+                <NotificationsDropdown
+                  notifications={notifications}
+                  unreadCount={unreadNotifCount}
+                  onMarkAsRead={(id) => {
+                    onMarkNotifRead?.(id);
+                  }}
+                  onNavigate={() => onNavigateNotifs?.()}
+                  onClose={() => setNotifOpen(false)}
+                />
+              )}
+            </div>
+          )}
           <button
             onClick={onOrdersOpen}
             className="hidden md:flex items-center gap-1.5 px-3 py-2 rounded-lg hover:bg-muted transition-colors text-sm font-medium whitespace-nowrap relative"
@@ -746,30 +753,61 @@ export function Header({
             {/* Dropdown mega menu */}
             {categoriesOpen && (
               <div
-                className="absolute top-full left-0 bg-white border border-border rounded-b-xl shadow-xl z-50 overflow-hidden"
-                style={{ minWidth: "280px" }}
+                className="absolute top-full left-0 bg-white border border-border rounded-b-xl shadow-xl z-50 flex"
+                onMouseEnter={() => {
+                  if (flyoutTimerRef.current)
+                    clearTimeout(flyoutTimerRef.current);
+                }}
+                onMouseLeave={() => {
+                  flyoutTimerRef.current = setTimeout(() => {
+                    setHoveredRootId(null);
+                    setHoveredSubPath([]);
+                  }, 100);
+                }}
               >
-                <div className="py-2 max-h-[70vh] overflow-y-auto">
-                  {rootCategories.length > 0 ? (
-                    rootCategories.map((cat) => (
-                      <CategoryTreeItem
-                        key={cat.id}
-                        category={cat}
-                        depth={0}
-                      />
-                    ))
-                  ) : (
-                    <div className="px-4 py-6 text-center text-sm text-muted-foreground">
-                      Cargando categorías...
-                    </div>
-                  )}
+                {/* Root column */}
+                <div className="max-h-[70vh] overflow-y-auto">
+                  <FlyoutColumn
+                    categoryIds={rootCategories.map((c) => c.id)}
+                    path={[]}
+                  />
                 </div>
+
+                {/* Flyout columns — rendered as siblings, not nested */}
+                {hoveredSubPath.length > 0 &&
+                  hoveredSubPath.map((id, colIdx) => {
+                    const children = categoriesByParentId.get(id) ?? [];
+                    if (children.length === 0) return null;
+                    return (
+                      <div
+                        key={`${id}-${colIdx}`}
+                        className="border-l border-border max-h-[70vh] overflow-y-auto"
+                        onMouseEnter={() => {
+                          if (subTimerRef.current)
+                            clearTimeout(subTimerRef.current);
+                        }}
+                        onMouseLeave={() => {
+                          subTimerRef.current = setTimeout(() => {
+                            setHoveredSubPath((prev) =>
+                              prev.slice(0, colIdx + 1),
+                            );
+                          }, 100);
+                        }}
+                      >
+                        <FlyoutColumn
+                          categoryIds={children.map((c) => c.id)}
+                          path={hoveredSubPath.slice(0, colIdx + 1)}
+                        />
+                      </div>
+                    );
+                  })}
               </div>
             )}
           </div>
 
           {(customer
-            ? ["Inicio", "Catálogo", "Mi cuenta"]           : ["Inicio", "Catálogo"]
+            ? ["Inicio", "Catálogo", "Mi cuenta"]
+            : ["Inicio", "Catálogo"]
           ).map((item) => (
             <button
               key={item}
@@ -784,18 +822,29 @@ export function Header({
             </button>
           ))}
 
-          <button onClick={() => setAddressModalOpen(true)} className="ml-auto flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer hover:text-foreground transition-colors">
+          <button
+            onClick={() => setAddressModalOpen(true)}
+            className="ml-auto flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer hover:text-foreground transition-colors"
+          >
             <MapPin className="w-3.5 h-3.5" />
             <span>
               Entregar en{" "}
-              <strong className="text-foreground">{getAddressDisplay(defaultAddress)}</strong>
+              <strong className="text-foreground">
+                {getAddressDisplay(defaultAddress)}
+              </strong>
             </span>
             <ChevronDown className="w-3 h-3" />
           </button>
         </div>
       </nav>
 
-      <AddressModal open={addressModalOpen} onClose={() => setAddressModalOpen(false)} customer={customer} onLoginModal={onLoginModal} onAddressesChange={(addr) => setDefaultAddress(addr)} />
+      <AddressModal
+        open={addressModalOpen}
+        onClose={() => setAddressModalOpen(false)}
+        customer={customer}
+        onLoginModal={onLoginModal}
+        onAddressesChange={(addr) => setDefaultAddress(addr)}
+      />
     </header>
   );
 }

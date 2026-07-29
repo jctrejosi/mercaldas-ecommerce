@@ -112,4 +112,59 @@ export class AdminCatalogController {
   async getProducts(@Body() query: CatalogProductsQueryDto) {
     return this.catalogService.getProducts(query);
   }
+
+  // ── Brands ──
+
+  @Public()
+  @Get('brands')
+  @ApiOperation({ summary: 'Obtener todas las marcas (admin)' })
+  async getAllBrands() {
+    return this.catalogService.getAllBrandsAdmin();
+  }
+
+  @Public()
+  @Post('brands')
+  @ApiOperation({ summary: 'Crear marca' })
+  async createBrand(
+    @Body()
+    body: {
+      name: string;
+      code?: string;
+      website?: string;
+      description?: string;
+      country?: string;
+      isFeatured?: boolean;
+      imageUrl?: string;
+    },
+  ) {
+    return this.catalogService.createBrand(body);
+  }
+
+  @Public()
+  @Post('brands/:id')
+  @ApiOperation({ summary: 'Actualizar marca' })
+  async updateBrand(
+    @Param('id') id: string,
+    @Body()
+    body: {
+      name?: string;
+      code?: string;
+      website?: string;
+      description?: string;
+      country?: string;
+      isFeatured?: boolean;
+      isActive?: boolean;
+      imageUrl?: string;
+    },
+  ) {
+    return this.catalogService.updateBrand(Number(id), body);
+  }
+
+  @Public()
+  @Delete('brands/:id')
+  @ApiOperation({ summary: 'Eliminar marca (soft delete)' })
+  async deleteBrand(@Param('id') id: string) {
+    await this.catalogService.deleteBrand(Number(id));
+    return { success: true };
+  }
 }

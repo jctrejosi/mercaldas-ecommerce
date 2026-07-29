@@ -647,6 +647,7 @@ export const brands = pgTable(
     country: varchar({ length: 100 }).notNull(),
     name: varchar({ length: 100 }).notNull(),
     slug: varchar({ length: 100 }).notNull(),
+    code: varchar({ length: 50 }),
     // You can use { mode: "bigint" } if numbers are exceeding js number limitations
     logoMediaId: bigint('logo_media_id', { mode: 'number' }),
     isFeatured: boolean('is_featured').default(false).notNull(),

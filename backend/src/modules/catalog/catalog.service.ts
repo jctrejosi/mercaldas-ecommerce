@@ -571,6 +571,169 @@ export class CatalogService {
     }));
   }
 
+  // ── Admin Brands ──
+
+  async getAllBrandsAdmin() {
+    const rows = await this.drizzleService.db
+      .select({
+        id: brands.id,
+        name: brands.name,
+        slug: brands.slug,
+        code: brands.code,
+        description: brands.description,
+        image: media.path,
+        website: brands.website,
+        country: brands.country,
+        isFeatured: brands.isFeatured,
+        isActive: brands.isActive,
+        createdAt: brands.createdAt,
+        productCount: sql<number>`count(DISTINCT ${products.id})`,
+      })
+      .from(brands)
+      .leftJoin(media, eq(brands.logoMediaId, media.id))
+      .leftJoin(products, eq(products.brandId, brands.id))
+      .where(isNull(brands.deletedAt))
+      .groupBy(
+        brands.id,
+        brands.name,
+        brands.slug,
+        brands.code,
+        brands.description,
+        media.path,
+        brands.website,
+        brands.country,
+        brands.isFeatured,
+        brands.isActive,
+        brands.createdAt,
+      )
+      .orderBy(asc(brands.name));
+
+    return rows.map((row) => ({
+      id: Number(row.id),
+      name: row.name,
+      slug: row.slug,
+      code: row.code,
+      description: row.description,
+      image: row.image,
+      website: row.website,
+      country: row.country,
+      isFeatured: row.isFeatured,
+      isActive: row.isActive,
+      createdAt: row.createdAt,
+      productCount: Number(row.productCount),
+    }));
+  }
+
+  async createBrand(body: {
+    name: string;
+    code?: string;
+    website?: string;
+    description?: string;
+    country?: string;
+    isFeatured?: boolean;
+    imageUrl?: string;
+  }) {
+    const slug = slugify(body.name, { lower: true, strict: true });
+
+    let logoMediaId: number | null = null;
+    if (body.imageUrl) {
+      const [mediaRow] = await this.drizzleService.db
+        .insert(media)
+        .values({
+          path: body.imageUrl,
+          fileName:
+            body.imageUrl.split('/').pop()?.substring(0, 50) ?? 'brand_logo',
+          mimeType: 'image/jpeg',
+          mediaType: 'image',
+          provider: 'cloudinary',
+          sizeBytes: 0,
+          checksum: body.imageUrl.substring(0, 64),
+          status: 'active',
+        })
+        .returning({ id: media.id });
+      logoMediaId = Number(mediaRow.id);
+    }
+
+    const [result] = await this.drizzleService.db
+      .insert(brands)
+      .values({
+        name: body.name,
+        slug,
+        code: body.code ?? null,
+        website: body.website ?? '',
+        description: body.description ?? '',
+        country: body.country ?? '',
+        logoMediaId,
+        isFeatured: body.isFeatured ?? false,
+        isActive: true,
+      })
+      .returning({ id: brands.id });
+
+    return { id: Number(result.id) };
+  }
+
+  async updateBrand(
+    id: number,
+    body: {
+      name?: string;
+      code?: string;
+      website?: string;
+      description?: string;
+      country?: string;
+      isFeatured?: boolean;
+      isActive?: boolean;
+      imageUrl?: string;
+    },
+  ) {
+    const updateData: Record<string, any> = {};
+
+    if (body.name !== undefined) {
+      updateData.name = body.name;
+      updateData.slug = slugify(body.name, { lower: true, strict: true });
+    }
+    if (body.code !== undefined) updateData.code = body.code;
+    if (body.website !== undefined) updateData.website = body.website;
+    if (body.description !== undefined)
+      updateData.description = body.description;
+    if (body.country !== undefined) updateData.country = body.country;
+    if (body.isFeatured !== undefined) updateData.isFeatured = body.isFeatured;
+    if (body.isActive !== undefined) updateData.isActive = body.isActive;
+
+    if (body.imageUrl) {
+      const [mediaRow] = await this.drizzleService.db
+        .insert(media)
+        .values({
+          path: body.imageUrl,
+          fileName:
+            body.imageUrl.split('/').pop()?.substring(0, 50) ?? 'brand_logo',
+          mimeType: 'image/jpeg',
+          mediaType: 'image',
+          provider: 'cloudinary',
+          sizeBytes: 0,
+          checksum: body.imageUrl.substring(0, 64),
+          status: 'active',
+        })
+        .returning({ id: media.id });
+      updateData.logoMediaId = Number(mediaRow.id);
+    }
+
+    updateData.updatedAt = new Date().toISOString();
+
+    await this.drizzleService.db
+      .update(brands)
+      .set(updateData)
+      .where(eq(brands.id, BigInt(id)));
+
+    return { id };
+  }
+
+  async deleteBrand(id: number) {
+    await this.drizzleService.db
+      .update(brands)
+      .set({ deletedAt: new Date().toISOString() })
+      .where(eq(brands.id, BigInt(id)));
+  }
+
   async getProductTypes() {
     const rows = await this.drizzleService.db
       .select({
