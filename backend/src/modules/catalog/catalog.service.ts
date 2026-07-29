@@ -36,6 +36,8 @@ import {
   productVariants,
   shoppingLists,
   shoppingListItems,
+  suppliers,
+  supplierProducts,
 } from '../../../drizzle/schema';
 import { CatalogProductsQueryDto } from './dto/catalog-products-query.dto';
 import { CreateProductDto } from './dto/create-product.dto';
@@ -69,6 +71,8 @@ type CatalogProductResponse = {
   images: string[];
   category: string;
   categoryId: number;
+  brandId: number | null;
+  brandName: string | null;
   productTypeCode: string | null;
   productTypeName: string | null;
   isActive: boolean;
@@ -799,6 +803,166 @@ export class CatalogService {
       .where(eq(products.id, BigInt(productId)));
   }
 
+  // ── Admin Suppliers ──
+
+  async getAllSuppliersAdmin() {
+    const rows = await this.drizzleService.db
+      .select({
+        id: suppliers.id,
+        code: suppliers.code,
+        legalName: suppliers.legalName,
+        taxId: suppliers.taxId,
+        contactName: suppliers.contactName,
+        email: suppliers.email,
+        phone: suppliers.phone,
+        address: suppliers.address,
+        city: suppliers.city,
+        country: suppliers.country,
+        website: suppliers.website,
+        paymentTermsDays: suppliers.paymentTermsDays,
+        currencyCode: suppliers.currencyCode,
+        notes: suppliers.notes,
+        isActive: suppliers.isActive,
+        createdAt: suppliers.createdAt,
+        productCount: sql<number>`count(DISTINCT ${supplierProducts.productVariantId})`,
+      })
+      .from(suppliers)
+      .leftJoin(supplierProducts, eq(supplierProducts.supplierId, suppliers.id))
+      .where(isNull(suppliers.deletedAt))
+      .groupBy(
+        suppliers.id,
+        suppliers.code,
+        suppliers.legalName,
+        suppliers.taxId,
+        suppliers.contactName,
+        suppliers.email,
+        suppliers.phone,
+        suppliers.address,
+        suppliers.city,
+        suppliers.country,
+        suppliers.website,
+        suppliers.paymentTermsDays,
+        suppliers.currencyCode,
+        suppliers.notes,
+        suppliers.isActive,
+        suppliers.createdAt,
+      )
+      .orderBy(asc(suppliers.legalName));
+
+    return rows.map((row) => ({
+      id: Number(row.id),
+      code: row.code,
+      legalName: row.legalName,
+      taxId: row.taxId,
+      contactName: row.contactName,
+      email: row.email,
+      phone: row.phone,
+      address: row.address,
+      city: row.city,
+      country: row.country,
+      website: row.website,
+      paymentTermsDays: row.paymentTermsDays,
+      currencyCode: row.currencyCode,
+      notes: row.notes,
+      isActive: row.isActive,
+      createdAt: row.createdAt,
+      productCount: Number(row.productCount),
+    }));
+  }
+
+  async createSupplier(body: {
+    legalName: string;
+    code?: string;
+    taxId?: string;
+    contactName?: string;
+    email?: string;
+    phone?: string;
+    address?: string;
+    city?: string;
+    country?: string;
+    website?: string;
+    paymentTermsDays?: number;
+    currencyCode?: string;
+    notes?: string;
+  }) {
+    const [result] = await this.drizzleService.db
+      .insert(suppliers)
+      .values({
+        legalName: body.legalName,
+        code: body.code ?? null,
+        taxId: body.taxId ?? null,
+        contactName: body.contactName ?? null,
+        email: body.email ?? null,
+        phone: body.phone ?? null,
+        address: body.address ?? null,
+        city: body.city ?? null,
+        country: body.country ?? null,
+        website: body.website ?? null,
+        paymentTermsDays: body.paymentTermsDays ?? null,
+        currencyCode: body.currencyCode ?? null,
+        notes: body.notes ?? null,
+        isActive: true,
+      })
+      .returning({ id: suppliers.id });
+
+    return { id: Number(result.id) };
+  }
+
+  async updateSupplier(
+    id: number,
+    body: {
+      legalName?: string;
+      code?: string | null;
+      taxId?: string | null;
+      contactName?: string | null;
+      email?: string | null;
+      phone?: string | null;
+      address?: string | null;
+      city?: string | null;
+      country?: string | null;
+      website?: string | null;
+      paymentTermsDays?: number | null;
+      currencyCode?: string | null;
+      notes?: string | null;
+      isActive?: boolean;
+    },
+  ) {
+    const updateData: Record<string, any> = {};
+    if (body.legalName !== undefined) updateData.legalName = body.legalName;
+    if (body.code !== undefined) updateData.code = body.code;
+    if (body.taxId !== undefined) updateData.taxId = body.taxId;
+    if (body.contactName !== undefined)
+      updateData.contactName = body.contactName;
+    if (body.email !== undefined) updateData.email = body.email;
+    if (body.phone !== undefined) updateData.phone = body.phone;
+    if (body.address !== undefined) updateData.address = body.address;
+    if (body.city !== undefined) updateData.city = body.city;
+    if (body.country !== undefined) updateData.country = body.country;
+    if (body.website !== undefined) updateData.website = body.website;
+    if (body.paymentTermsDays !== undefined)
+      updateData.paymentTermsDays = body.paymentTermsDays;
+    if (body.currencyCode !== undefined)
+      updateData.currencyCode = body.currencyCode;
+    if (body.notes !== undefined) updateData.notes = body.notes;
+    if (body.isActive !== undefined) updateData.isActive = body.isActive;
+
+    updateData.updatedAt = new Date().toISOString();
+
+    await this.drizzleService.db
+      .update(suppliers)
+      .set(updateData)
+      .where(eq(suppliers.id, BigInt(id)));
+
+    return { id };
+  }
+
+  async deleteSupplier(id: number) {
+    await this.drizzleService.db
+      .update(suppliers)
+      .set({ deletedAt: new Date().toISOString() })
+      .where(eq(suppliers.id, BigInt(id)));
+  }
+
   async getProductTypes() {
     const rows = await this.drizzleService.db
       .select({
@@ -1112,6 +1276,8 @@ export class CatalogService {
         isFeatured: products.featured,
         categoryId: categories.id,
         categoryName: categories.name,
+        brandId: products.brandId,
+        brandName: brands.name,
         price: productVariants.currentPrice,
         originalPrice: productVariants.currentComparePrice,
         image: media.path,
@@ -1122,6 +1288,7 @@ export class CatalogService {
       .innerJoin(productVariants, eq(productVariants.productId, products.id))
       .leftJoin(productCategories, eq(productCategories.productId, products.id))
       .leftJoin(categories, eq(categories.id, productCategories.categoryId))
+      .leftJoin(brands, eq(brands.id, products.brandId))
       .leftJoin(
         productTypeAssignments,
         eq(productTypeAssignments.productId, products.id),
@@ -1209,6 +1376,8 @@ export class CatalogService {
         images: row.image ? [row.image] : [],
         category: row.categoryName ?? '',
         categoryId: row.categoryId ? Number(row.categoryId) : 0,
+        brandId: row.brandId ? Number(row.brandId) : null,
+        brandName: row.brandName ?? null,
         productTypeCode: row.productTypeCode,
         productTypeName: row.productTypeName,
         isActive: row.isActive,
@@ -1556,6 +1725,8 @@ export class CatalogService {
         image: media.path,
         categoryName: sql<string>`COALESCE(LEAF_CAT.cat_name, ROOT_CAT.name, 'Sin categoría')`,
         categoryId: sql<number>`COALESCE(LEAF_CAT.cat_id, ROOT_CAT.id, 0)`,
+        brandId: products.brandId,
+        brandName: brands.name,
         productTypeCode: productTypes.code,
         productTypeName: productTypes.name,
         isActive: products.isActive,
@@ -1596,6 +1767,7 @@ export class CatalogService {
         ),
       )
       .leftJoin(media, eq(media.id, productImages.mediaId))
+      .leftJoin(brands, eq(brands.id, products.brandId))
       .leftJoin(inventory, eq(inventory.productVariantId, productVariants.id))
       .where(
         and(
@@ -1618,6 +1790,8 @@ export class CatalogService {
       images: row.image ? [row.image] : [],
       category: row.categoryName,
       categoryId: Number(row.categoryId ?? 0),
+      brandId: row.brandId ? Number(row.brandId) : null,
+      brandName: row.brandName ?? null,
       productTypeCode: row.productTypeCode,
       productTypeName: row.productTypeName,
       isActive: row.isActive,

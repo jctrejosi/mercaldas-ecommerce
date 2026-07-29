@@ -198,4 +198,71 @@ export class AdminCatalogController {
     await this.catalogService.removeProductFromBrand(Number(productId));
     return { success: true };
   }
+
+  // ── Suppliers ──
+
+  @Public()
+  @Get('suppliers')
+  @ApiOperation({ summary: 'Obtener todos los proveedores (admin)' })
+  async getAllSuppliers() {
+    return this.catalogService.getAllSuppliersAdmin();
+  }
+
+  @Public()
+  @Post('suppliers')
+  @ApiOperation({ summary: 'Crear proveedor' })
+  async createSupplier(
+    @Body()
+    body: {
+      legalName: string;
+      code?: string;
+      taxId?: string;
+      contactName?: string;
+      email?: string;
+      phone?: string;
+      address?: string;
+      city?: string;
+      country?: string;
+      website?: string;
+      paymentTermsDays?: number;
+      currencyCode?: string;
+      notes?: string;
+    },
+  ) {
+    return this.catalogService.createSupplier(body);
+  }
+
+  @Public()
+  @Post('suppliers/:id')
+  @ApiOperation({ summary: 'Actualizar proveedor' })
+  async updateSupplier(
+    @Param('id') id: string,
+    @Body()
+    body: {
+      legalName?: string;
+      code?: string | null;
+      taxId?: string | null;
+      contactName?: string | null;
+      email?: string | null;
+      phone?: string | null;
+      address?: string | null;
+      city?: string | null;
+      country?: string | null;
+      website?: string | null;
+      paymentTermsDays?: number | null;
+      currencyCode?: string | null;
+      notes?: string | null;
+      isActive?: boolean;
+    },
+  ) {
+    return this.catalogService.updateSupplier(Number(id), body);
+  }
+
+  @Public()
+  @Delete('suppliers/:id')
+  @ApiOperation({ summary: 'Eliminar proveedor (soft delete)' })
+  async deleteSupplier(@Param('id') id: string) {
+    await this.catalogService.deleteSupplier(Number(id));
+    return { success: true };
+  }
 }

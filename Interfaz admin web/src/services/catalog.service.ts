@@ -12,6 +12,8 @@ export type CatalogProduct = {
   images?: string[];
   category: string;
   categoryId?: number | null;
+  brandId?: number | null;
+  brandName?: string | null;
   productTypeCode?: string | null;
   productTypeName?: string | null;
   badge?: string | null;
@@ -344,6 +346,84 @@ export const catalogService = {
         body: JSON.stringify({ unbranded: true, limit, offset, search }),
       },
     );
+  },
+
+  // ── Admin Supplier CRUD ──
+
+  async getSuppliersAdmin(): Promise<
+    Array<{
+      id: number;
+      code: string | null;
+      legalName: string;
+      taxId: string | null;
+      contactName: string | null;
+      email: string | null;
+      phone: string | null;
+      address: string | null;
+      city: string | null;
+      country: string | null;
+      website: string | null;
+      paymentTermsDays: number | null;
+      currencyCode: string | null;
+      notes: string | null;
+      isActive: boolean;
+      createdAt: string;
+      productCount: number;
+    }>
+  > {
+    return fetchJson(`${API_BASE_URL}/admin/catalog/suppliers`);
+  },
+
+  async createSupplier(data: {
+    legalName: string;
+    code?: string;
+    taxId?: string;
+    contactName?: string;
+    email?: string;
+    phone?: string;
+    address?: string;
+    city?: string;
+    country?: string;
+    website?: string;
+    paymentTermsDays?: number;
+    currencyCode?: string;
+    notes?: string;
+  }): Promise<{ id: number }> {
+    return fetchJson(`${API_BASE_URL}/admin/catalog/suppliers`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+
+  async updateSupplier(
+    id: number,
+    data: {
+      legalName?: string;
+      code?: string;
+      taxId?: string;
+      contactName?: string;
+      email?: string;
+      phone?: string;
+      address?: string;
+      city?: string;
+      country?: string;
+      website?: string;
+      paymentTermsDays?: number | null;
+      currencyCode?: string;
+      notes?: string;
+      isActive?: boolean;
+    },
+  ): Promise<{ id: number }> {
+    return fetchJson(`${API_BASE_URL}/admin/catalog/suppliers/${id}`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+
+  async deleteSupplier(id: number): Promise<void> {
+    await fetch(`${API_BASE_URL}/admin/catalog/suppliers/${id}`, {
+      method: "DELETE",
+    });
   },
 
   async replaceProductCategory(

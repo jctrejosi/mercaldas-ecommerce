@@ -885,6 +885,24 @@ function ProductDrawer({
   });
   const [catSearch, setCatSearch] = useState("");
   const [catDropdownOpen, setCatDropdownOpen] = useState(false);
+  const [showNewBrand, setShowNewBrand] = useState(false);
+  const [newBrand, setNewBrand] = useState({
+    name: "",
+    code: "",
+    website: "",
+    country: "",
+    description: "",
+  });
+  const [newBrandSaving, setNewBrandSaving] = useState(false);
+  const [showNewCategory, setShowNewCategory] = useState(false);
+  const [newCategory, setNewCategory] = useState({
+    name: "",
+    code: "",
+    description: "",
+    parentId: "",
+    parentSearch: "",
+  });
+  const [newCategorySaving, setNewCategorySaving] = useState(false);
 
   const update = (field: string, value: string | boolean) =>
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -1082,99 +1100,139 @@ function ProductDrawer({
                   <label className="block text-xs font-semibold text-gray-600 mb-1.5">
                     Marca
                   </label>
-                  <select
-                    value={form.brandId}
-                    onChange={(e) => update("brandId", e.target.value)}
-                    className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-300 bg-white"
-                  >
-                    <option value="">Sin marca</option>
-                    {brands.map((b) => (
-                      <option key={b.id} value={b.id}>
-                        {b.name}
-                      </option>
-                    ))}
-                  </select>
+                  <div className="flex gap-1">
+                    <select
+                      value={form.brandId}
+                      onChange={(e) => update("brandId", e.target.value)}
+                      className="flex-1 px-3 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-300 bg-white"
+                    >
+                      <option value="">--</option>
+                      {brands.map((b) => (
+                        <option key={b.id} value={b.id}>
+                          {b.name}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      onClick={() => {
+                        setNewBrand((f) => ({
+                          ...f,
+                          name: "",
+                          code: "",
+                          website: "",
+                          country: "",
+                          description: "",
+                        }));
+                        setShowNewBrand(true);
+                      }}
+                      className="px-3 py-2.5 rounded-xl text-xs font-bold bg-amber-400 text-amber-900 hover:bg-amber-500 transition-colors shrink-0"
+                      title="Crear nueva marca"
+                    >
+                      <Plus size={15} />
+                    </button>
+                  </div>
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-gray-600 mb-1.5">
                     Categoría
                   </label>
-                  <div className="relative">
-                    <input
-                      value={
-                        form.categoryId
-                          ? (categories || []).find(
-                              (c: any) => c.id === Number(form.categoryId),
-                            )?.name || ""
-                          : catSearch
-                      }
-                      onChange={(e) => {
-                        if (form.categoryId) {
-                          update("categoryId", "");
-                          setCatSearch(e.target.value);
-                        } else {
-                          setCatSearch(e.target.value);
+                  <div className="flex gap-1">
+                    <div className="relative flex-1">
+                      <input
+                        value={
+                          form.categoryId
+                            ? (categories || []).find(
+                                (c: any) => c.id === Number(form.categoryId),
+                              )?.name || ""
+                            : catSearch
                         }
-                        setCatDropdownOpen(true);
-                      }}
-                      onFocus={() => setCatDropdownOpen(true)}
-                      onBlur={() =>
-                        setTimeout(() => setCatDropdownOpen(false), 200)
-                      }
-                      placeholder="Buscar o elegir categoría..."
-                      className={`w-full text-sm border rounded-xl pl-4 pr-9 py-2.5 focus:outline-none focus:ring-2 ${!form.categoryId && catSearch.trim() ? "border-red-300 focus:ring-red-300" : "border-gray-200 focus:ring-amber-400"}`}
-                    />
-                    {form.categoryId && (
-                      <button
-                        onClick={() => update("categoryId", "")}
-                        className="absolute right-2 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full bg-gray-200 hover:bg-gray-300 flex items-center justify-center transition-colors"
-                      >
-                        <X size={12} className="text-gray-500" />
-                      </button>
-                    )}
-                    {catDropdownOpen && (
-                      <div className="absolute z-10 mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-lg max-h-52 overflow-y-auto">
-                        {(() => {
-                          const filtered = (categories || []).filter(
-                            (c: any) =>
-                              c.isActive &&
-                              (!catSearch ||
-                                c.name
-                                  .toLowerCase()
-                                  .includes(catSearch.toLowerCase())),
-                          );
-                          if (filtered.length === 0 && catSearch.trim()) {
-                            return (
-                              <div className="px-4 py-3 text-xs text-red-500">
-                                No se encontró "{catSearch}"
-                              </div>
-                            );
+                        onChange={(e) => {
+                          if (form.categoryId) {
+                            update("categoryId", "");
+                            setCatSearch(e.target.value);
+                          } else {
+                            setCatSearch(e.target.value);
                           }
-                          return filtered.map((c: any) => (
-                            <button
-                              key={c.id}
-                              onMouseDown={(e) => e.preventDefault()}
-                              onClick={() => {
-                                update("categoryId", String(c.id));
-                                setCatSearch("");
-                                setCatDropdownOpen(false);
-                              }}
-                              className={`w-full text-left px-4 py-2 text-sm hover:bg-amber-50 transition-colors flex items-center gap-2 ${Number(form.categoryId) === c.id ? "bg-amber-50 font-semibold text-amber-900" : "text-gray-700"}`}
-                              style={{ paddingLeft: 16 + (c.level || 0) * 16 }}
-                            >
-                              {c.level === 0 ? (
-                                <span className="text-xs opacity-50">📁</span>
-                              ) : (
-                                <span className="text-xs opacity-50 ml-1">
-                                  ↳
-                                </span>
-                              )}
-                              {c.name}
-                            </button>
-                          ));
-                        })()}
-                      </div>
-                    )}
+                          setCatDropdownOpen(true);
+                        }}
+                        onFocus={() => setCatDropdownOpen(true)}
+                        onBlur={() =>
+                          setTimeout(() => setCatDropdownOpen(false), 200)
+                        }
+                        placeholder="Buscar o elegir categoría..."
+                        className={`w-full text-sm border rounded-xl pl-4 pr-9 py-2.5 focus:outline-none focus:ring-2 ${!form.categoryId && catSearch.trim() ? "border-red-300 focus:ring-red-300" : "border-gray-200 focus:ring-amber-400"}`}
+                      />
+                      {form.categoryId && (
+                        <button
+                          onClick={() => update("categoryId", "")}
+                          className="absolute right-2 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full bg-gray-200 hover:bg-gray-300 flex items-center justify-center transition-colors"
+                        >
+                          <X size={12} className="text-gray-500" />
+                        </button>
+                      )}
+                      {catDropdownOpen && (
+                        <div className="absolute z-10 mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-lg max-h-52 overflow-y-auto">
+                          {(() => {
+                            const filtered = (categories || []).filter(
+                              (c: any) =>
+                                c.isActive &&
+                                (!catSearch ||
+                                  c.name
+                                    .toLowerCase()
+                                    .includes(catSearch.toLowerCase())),
+                            );
+                            if (filtered.length === 0 && catSearch.trim()) {
+                              return (
+                                <div className="px-4 py-3 text-xs text-red-500">
+                                  No se encontró "{catSearch}"
+                                </div>
+                              );
+                            }
+                            return filtered.map((c: any) => (
+                              <button
+                                key={c.id}
+                                onMouseDown={(e) => e.preventDefault()}
+                                onClick={() => {
+                                  update("categoryId", String(c.id));
+                                  setCatSearch("");
+                                  setCatDropdownOpen(false);
+                                }}
+                                className={`w-full text-left px-4 py-2 text-sm hover:bg-amber-50 transition-colors flex items-center gap-2 ${Number(form.categoryId) === c.id ? "bg-amber-50 font-semibold text-amber-900" : "text-gray-700"}`}
+                                style={{
+                                  paddingLeft: 16 + (c.level || 0) * 16,
+                                }}
+                              >
+                                {c.level === 0 ? (
+                                  <span className="text-xs opacity-50">📁</span>
+                                ) : (
+                                  <span className="text-xs opacity-50 ml-1">
+                                    ↳
+                                  </span>
+                                )}
+                                {c.name}
+                              </button>
+                            ));
+                          })()}
+                        </div>
+                      )}
+                    </div>
+                    <button
+                      onClick={() => {
+                        setNewCategory((f) => ({
+                          ...f,
+                          name: "",
+                          code: "",
+                          description: "",
+                          parentId: "",
+                          parentSearch: "",
+                        }));
+                        setShowNewCategory(true);
+                      }}
+                      className="px-3 py-2.5 rounded-xl text-xs font-bold bg-amber-400 text-amber-900 hover:bg-amber-500 transition-colors shrink-0"
+                      title="Crear nueva categoría"
+                    >
+                      <Plus size={15} />
+                    </button>
                   </div>
                 </div>
                 <div>
@@ -1421,6 +1479,301 @@ function ProductDrawer({
           </button>
         </div>
       </div>
+
+      {/* ── New Brand Modal ── */}
+      {showNewBrand && (
+        <>
+          <div
+            className="fixed inset-0 bg-black/40 z-50"
+            onClick={() => setShowNewBrand(false)}
+          />
+          <div className="fixed inset-0 z-50 flex items-center justify-center">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm mx-4 p-5">
+              <h4 className="font-bold text-sm text-gray-900 mb-4">
+                Nueva marca
+              </h4>
+              <div className="space-y-3 mb-4">
+                <input
+                  value={newBrand.name}
+                  onChange={(e) =>
+                    setNewBrand((f) => ({ ...f, name: e.target.value }))
+                  }
+                  placeholder="Nombre *"
+                  autoFocus
+                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-300"
+                />
+                <input
+                  value={newBrand.code}
+                  onChange={(e) =>
+                    setNewBrand((f) => ({ ...f, code: e.target.value }))
+                  }
+                  placeholder="Código (ej: ALQ001)"
+                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-300"
+                />
+                <input
+                  value={newBrand.website}
+                  onChange={(e) =>
+                    setNewBrand((f) => ({ ...f, website: e.target.value }))
+                  }
+                  placeholder="Sitio web"
+                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-300"
+                />
+                <input
+                  value={newBrand.country}
+                  onChange={(e) =>
+                    setNewBrand((f) => ({ ...f, country: e.target.value }))
+                  }
+                  placeholder="País"
+                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-300"
+                />
+                <textarea
+                  value={newBrand.description}
+                  onChange={(e) =>
+                    setNewBrand((f) => ({ ...f, description: e.target.value }))
+                  }
+                  placeholder="Descripción"
+                  rows={2}
+                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-300 resize-none"
+                />
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setShowNewBrand(false)}
+                  className="flex-1 py-2 rounded-xl text-sm font-semibold border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={async () => {
+                    const name = newBrand.name.trim();
+                    if (!name) return;
+                    setNewBrandSaving(true);
+                    try {
+                      const result = await catalogService.createBrand({
+                        name,
+                        code: newBrand.code || undefined,
+                        website: newBrand.website || undefined,
+                        country: newBrand.country || undefined,
+                        description: newBrand.description || undefined,
+                      });
+                      update("brandId", String(result.id));
+                      setShowNewBrand(false);
+                      (brands as Brand[]).push({
+                        id: result.id,
+                        name,
+                        slug: "",
+                        description: null,
+                        image: null,
+                        website: null,
+                      });
+                    } catch {}
+                    setNewBrandSaving(false);
+                  }}
+                  disabled={!newBrand.name.trim() || newBrandSaving}
+                  className="flex-1 py-2 rounded-xl text-sm font-bold bg-amber-400 text-amber-900 hover:bg-amber-500 transition-colors disabled:opacity-50"
+                >
+                  {newBrandSaving ? "Creando..." : "Crear"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* ── New Category Modal ── */}
+      {showNewCategory && (
+        <>
+          <div
+            className="fixed inset-0 bg-black/40 z-50"
+            onClick={() => setShowNewCategory(false)}
+          />
+          <div className="fixed inset-0 z-50 flex items-center justify-center">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm mx-4 p-5">
+              <h4 className="font-bold text-sm text-gray-900 mb-4">
+                Nueva categoría
+              </h4>
+              <div className="space-y-3 mb-4">
+                <input
+                  value={newCategory.name}
+                  onChange={(e) =>
+                    setNewCategory((f) => ({ ...f, name: e.target.value }))
+                  }
+                  placeholder="Nombre *"
+                  autoFocus
+                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-300"
+                />
+                <input
+                  value={newCategory.code}
+                  onChange={(e) =>
+                    setNewCategory((f) => ({ ...f, code: e.target.value }))
+                  }
+                  placeholder="Código"
+                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-300"
+                />
+                <div className="relative">
+                  <input
+                    value={
+                      newCategory.parentId
+                        ? (categories || []).find(
+                            (c: any) => c.id === Number(newCategory.parentId),
+                          )?.name || ""
+                        : (newCategory.parentSearch ?? "")
+                    }
+                    onChange={(e) => {
+                      if (newCategory.parentId) {
+                        setNewCategory((f) => ({
+                          ...f,
+                          parentId: "",
+                          parentSearch: e.target.value,
+                        }));
+                      } else {
+                        setNewCategory((f) => ({
+                          ...f,
+                          parentSearch: e.target.value,
+                        }));
+                      }
+                      const input = e.target as HTMLInputElement;
+                      const dropdown = input.parentElement?.querySelector(
+                        ".cat-parent-dropdown",
+                      );
+                      if (dropdown)
+                        (dropdown as HTMLElement).style.display = "block";
+                    }}
+                    onFocus={(e) => {
+                      const dropdown =
+                        e.currentTarget.parentElement?.querySelector(
+                          ".cat-parent-dropdown",
+                        );
+                      if (dropdown)
+                        (dropdown as HTMLElement).style.display = "block";
+                    }}
+                    onBlur={() =>
+                      setTimeout(() => {
+                        document
+                          .querySelectorAll(".cat-parent-dropdown")
+                          .forEach(
+                            (el) =>
+                              ((el as HTMLElement).style.display = "none"),
+                          );
+                      }, 200)
+                    }
+                    placeholder="Categoría padre (opcional)"
+                    className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-300"
+                  />
+                  <div
+                    className="cat-parent-dropdown absolute z-10 mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-lg max-h-48 overflow-y-auto"
+                    style={{ display: "none" }}
+                  >
+                    {(categories || [])
+                      .filter(
+                        (c: any) =>
+                          c.isActive &&
+                          (!(newCategory.parentSearch ?? "") ||
+                            c.name
+                              .toLowerCase()
+                              .includes(
+                                (newCategory.parentSearch ?? "").toLowerCase(),
+                              )),
+                      )
+                      .map((c: any) => (
+                        <button
+                          key={c.id}
+                          onMouseDown={(e) => e.preventDefault()}
+                          onClick={() => {
+                            setNewCategory((f) => ({
+                              ...f,
+                              parentId: String(c.id),
+                              parentSearch: c.name,
+                            }));
+                          }}
+                          className={`w-full text-left px-3 py-2 text-sm hover:bg-amber-50 transition-colors ${
+                            String(c.id) === newCategory.parentId
+                              ? "bg-amber-50 font-semibold"
+                              : ""
+                          }`}
+                        >
+                          {c.name}
+                        </button>
+                      ))}
+                    {(categories || []).filter(
+                      (c: any) =>
+                        c.isActive &&
+                        (!(newCategory.parentSearch ?? "") ||
+                          c.name
+                            .toLowerCase()
+                            .includes(
+                              (newCategory.parentSearch ?? "").toLowerCase(),
+                            )),
+                    ).length === 0 && (
+                      <p className="px-3 py-4 text-xs text-gray-400 text-center">
+                        Sin resultados
+                      </p>
+                    )}
+                  </div>
+                </div>
+                <textarea
+                  value={newCategory.description}
+                  onChange={(e) =>
+                    setNewCategory((f) => ({
+                      ...f,
+                      description: e.target.value,
+                    }))
+                  }
+                  placeholder="Descripción"
+                  rows={2}
+                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-300 resize-none"
+                />
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setShowNewCategory(false)}
+                  className="flex-1 py-2 rounded-xl text-sm font-semibold border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={async () => {
+                    const name = newCategory.name.trim();
+                    if (!name) return;
+                    setNewCategorySaving(true);
+                    try {
+                      const result = await catalogService.createCategory({
+                        name,
+                        code: newCategory.code || undefined,
+                        parentId: newCategory.parentId
+                          ? Number(newCategory.parentId)
+                          : undefined,
+                      });
+                      await catalogService.updateCategory(result.id, {
+                        description: newCategory.description || null,
+                      });
+                      update("categoryId", String(result.id));
+                      setShowNewCategory(false);
+                      (categories as CatalogCategory[]).push({
+                        id: result.id,
+                        parentId: newCategory.parentId
+                          ? Number(newCategory.parentId)
+                          : null,
+                        name,
+                        slug: "",
+                        description: newCategory.description || null,
+                        image: null,
+                        isActive: true,
+                        count: 0,
+                      });
+                    } catch {}
+                    setNewCategorySaving(false);
+                  }}
+                  disabled={!newCategory.name.trim() || newCategorySaving}
+                  className="flex-1 py-2 rounded-xl text-sm font-bold bg-amber-400 text-amber-900 hover:bg-amber-500 transition-colors disabled:opacity-50"
+                >
+                  {newCategorySaving ? "Creando..." : "Crear"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }
