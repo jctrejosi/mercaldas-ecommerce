@@ -242,7 +242,11 @@ export class CatalogService {
     }));
   }
 
-  async createCategory(data: { name: string; parentId?: number }) {
+  async createCategory(data: {
+    name: string;
+    code?: string;
+    parentId?: number;
+  }) {
     let slug = slugify(data.name, { lower: true, strict: true });
     let level = 0;
 

@@ -66,7 +66,7 @@ function CategoryRow({
             <img
               src={cat.imagePath}
               alt={cat.name}
-              className="w-full h-full object-cover"
+              className="w-full h-full object-contain"
             />
           ) : (
             <FolderTree size={14} className="text-gray-400" />
@@ -139,6 +139,9 @@ export default function Categories() {
   const [editing, setEditing] = useState<AdminCategory | null>(null);
   const [editForm, setEditForm] = useState<Record<string, any>>({});
   const [uploading, setUploading] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const [pendingPreview, setPendingPreview] = useState<string>("");
   const [editTab, setEditTab] = useState<"attrs" | "products">("attrs");
   const [catProducts, setCatProducts] = useState<
     Array<{
@@ -254,6 +257,9 @@ export default function Categories() {
 
   const openNewCategory = () => {
     setCreating(true);
+    setSaveError(null);
+    setPendingFile(null);
+    setPendingPreview("");
     setCodeEditing(false);
     setEditTab("attrs");
     setEditForm({
@@ -309,6 +315,8 @@ export default function Categories() {
   const openEdit = (cat: AdminCategory) => {
     setCreating(false);
     setEditing(cat);
+    setPendingFile(null);
+    setPendingPreview("");
     setEditTab("attrs");
     setEditForm({
       name: cat.name,
@@ -336,25 +344,42 @@ export default function Categories() {
     setCatProductsLoading(false);
   };
 
-  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    setUploading(true);
+    setPendingFile(file);
+    setPendingPreview(URL.createObjectURL(file));
+    setEditForm((f) => ({ ...f, imageUrl: "__pending__" }));
+  };
+
+  const uploadPendingImage = async (
+    name: string,
+    code: string,
+  ): Promise<string | null> => {
+    if (!pendingFile)
+      return editForm.imageUrl === "__pending__"
+        ? null
+        : editForm.imageUrl || null;
     try {
       const formData = new FormData();
-      formData.append("file", file);
-      formData.append("code", `cat_${editing?.id ?? "new"}`);
+      formData.append("file", pendingFile);
+      formData.append("code", `category_${code || name.replace(/\s+/g, "_")}`);
       const res = await fetch(
         `${import.meta.env.VITE_API_URL || "http://localhost:3000"}/upload/image`,
-        {
-          method: "POST",
-          body: formData,
-        },
+        { method: "POST", body: formData },
       );
       const data = await res.json();
-      setEditForm((f) => ({ ...f, imageUrl: data.url }));
-    } catch {}
-    setUploading(false);
+      return data.url;
+    } catch {
+      return null;
+    }
+  };
+
+  const clearPendingImage = () => {
+    setPendingFile(null);
+    if (pendingPreview) URL.revokeObjectURL(pendingPreview);
+    setPendingPreview("");
+    setEditForm((f) => ({ ...f, imageUrl: "" }));
   };
 
   const handleProductSearch = useCallback(
@@ -451,7 +476,24 @@ export default function Categories() {
   };
 
   const saveEdit = async () => {
-    if (!editForm.name?.trim()) return;
+    if (!editForm.name?.trim()) {
+      setSaveError("El nombre es obligatorio");
+      return;
+    }
+    if (!editForm.code?.trim()) {
+      setSaveError("El código es obligatorio");
+      return;
+    }
+    setSaveError(null);
+    setUploading(true);
+    const imageUrl = await uploadPendingImage(
+      editForm.name.trim(),
+      editForm.code.trim(),
+    );
+    if (pendingFile && !imageUrl) {
+      setUploading(false);
+      return;
+    }
     if (creating) {
       try {
         const { id } = await catalogService.createCategory({
@@ -466,15 +508,23 @@ export default function Categories() {
           metaTitle: editForm.metaTitle || null,
           metaDescription: editForm.metaDescription || null,
           isActive: editForm.isActive,
-          imageUrl: editForm.imageUrl || undefined,
+          imageUrl: imageUrl || undefined,
         });
         setCreating(false);
         setEditing(null);
+        setPendingFile(null);
+        setPendingPreview("");
         await loadCategories();
-      } catch {}
+      } catch {
+        setUploading(false);
+      }
+      setUploading(false);
       return;
     }
-    if (!editing) return;
+    if (!editing) {
+      setUploading(false);
+      return;
+    }
     try {
       await catalogService.updateCategory(editing.id, {
         name: editForm.name.trim(),
@@ -485,11 +535,16 @@ export default function Categories() {
         metaTitle: editForm.metaTitle || null,
         metaDescription: editForm.metaDescription || null,
         isActive: editForm.isActive,
-        imageUrl: editForm.imageUrl || undefined,
+        imageUrl: imageUrl || undefined,
       });
       setEditing(null);
+      setPendingFile(null);
+      setPendingPreview("");
       await loadCategories();
-    } catch {}
+    } catch {
+      setUploading(false);
+    }
+    setUploading(false);
   };
 
   const parents = categories.filter((c) => !c.parentId);
@@ -641,6 +696,16 @@ export default function Categories() {
             }}
           />
           <div className="fixed right-0 top-0 bottom-0 w-96 bg-white shadow-2xl z-50 overflow-y-auto">
+            {uploading && (
+              <div className="absolute inset-0 bg-white/75 z-10 flex items-center justify-center">
+                <div className="flex flex-col items-center gap-3">
+                  <div className="w-8 h-8 border-3 border-gray-300 border-t-amber-400 rounded-full animate-spin" />
+                  <span className="text-sm font-semibold text-gray-600">
+                    Guardando...
+                  </span>
+                </div>
+              </div>
+            )}
             <div className="sticky top-0 bg-white border-b border-gray-100 px-5 py-4 flex items-center justify-between">
               <h3 className="font-bold text-sm text-gray-900">
                 {creating ? "Nueva categoría" : "Editar categoría"}
@@ -693,8 +758,11 @@ export default function Categories() {
                   <div key={key}>
                     <label className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider block mb-1">
                       {label}
+                      {(key === "name" || key === "code") && (
+                        <span className="text-red-400 ml-0.5">*</span>
+                      )}
                     </label>
-                    {key === "code" ? (
+                    {key === "code" && !creating ? (
                       <div className="relative">
                         <input
                           type={type}
@@ -737,17 +805,15 @@ export default function Categories() {
                   <label className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider block mb-1">
                     Imagen
                   </label>
-                  {editForm.imageUrl ? (
+                  {editForm.imageUrl || pendingFile ? (
                     <div className="relative mb-2">
                       <img
-                        src={editForm.imageUrl}
+                        src={pendingPreview || editForm.imageUrl}
                         alt="Preview"
-                        className="w-full h-24 object-cover rounded-lg border border-gray-200"
+                        className="w-full h-24 object-contain rounded-lg border border-gray-200"
                       />
                       <button
-                        onClick={() =>
-                          setEditForm((f) => ({ ...f, imageUrl: "" }))
-                        }
+                        onClick={clearPendingImage}
                         className="absolute top-1 right-1 w-5 h-5 rounded-full bg-red-500 text-white flex items-center justify-center text-xs hover:bg-red-600"
                       >
                         <X size={10} />
@@ -759,7 +825,7 @@ export default function Categories() {
                         <img
                           src={editing.imagePath}
                           alt={editing.name}
-                          className="w-full h-full object-cover rounded-lg"
+                          className="w-full h-full object-contain rounded-lg"
                         />
                       ) : (
                         "Sin imagen"
@@ -855,11 +921,20 @@ export default function Categories() {
                   <span className="text-sm text-gray-700">Visible</span>
                 </label>
 
+                {saveError && (
+                  <p className="text-xs text-red-500">{saveError}</p>
+                )}
+
                 <button
                   onClick={saveEdit}
-                  className="w-full py-2.5 rounded-xl text-sm font-bold bg-amber-400 text-amber-900 hover:bg-amber-500 transition-colors"
+                  disabled={uploading}
+                  className="w-full py-2.5 rounded-xl text-sm font-bold bg-amber-400 text-amber-900 hover:bg-amber-500 transition-colors disabled:opacity-50"
                 >
-                  {creating ? "Crear categoría" : "Guardar cambios"}
+                  {uploading
+                    ? "Guardando..."
+                    : creating
+                      ? "Crear categoría"
+                      : "Guardar cambios"}
                 </button>
               </div>
             )}
