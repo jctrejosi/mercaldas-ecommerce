@@ -686,6 +686,7 @@ export const products = pgTable(
       .default('SIMPLE')
       .notNull(),
     skuPrefix: varchar('sku_prefix', { length: 50 }),
+    plu: varchar({ length: 20 }),
     featured: boolean().default(false).notNull(),
     manufacturer: varchar({ length: 255 }),
     visibility: varchar({ length: 20 }).default('PUBLIC').notNull(),

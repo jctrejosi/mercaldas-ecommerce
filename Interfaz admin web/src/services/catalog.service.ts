@@ -171,12 +171,16 @@ export const catalogService = {
     });
   },
 
-  async getUncategorizedProducts(): Promise<CatalogProduct[]> {
+  async getUncategorizedProducts(
+    offset = 0,
+    limit = 20,
+    search?: string,
+  ): Promise<CatalogProduct[]> {
     return fetchJson<CatalogProduct[]>(
       `${API_BASE_URL}/admin/catalog/products`,
       {
         method: "POST",
-        body: JSON.stringify({ uncategorized: true, limit: 50 }),
+        body: JSON.stringify({ uncategorized: true, limit, offset, search }),
       },
     );
   },

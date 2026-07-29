@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   ChevronRight,
   ChevronDown,
@@ -114,6 +114,11 @@ export default function Categories() {
   const [creating, setCreating] = useState(false);
   const [uncategorized, setUncategorized] = useState<CatalogProduct[]>([]);
   const [uncatLoading, setUncatLoading] = useState(false);
+  const [uncatOffset, setUncatOffset] = useState(0);
+  const [uncatHasMore, setUncatHasMore] = useState(true);
+  const [uncatTotal, setUncatTotal] = useState(0);
+  const [uncatSearch, setUncatSearch] = useState("");
+  const sentinelRef = useRef<HTMLDivElement>(null);
   const [editing, setEditing] = useState<AdminCategory | null>(null);
   const [editForm, setEditForm] = useState<Record<string, any>>({});
   const [uploading, setUploading] = useState(false);
@@ -154,6 +159,14 @@ export default function Categories() {
   } | null>(null);
   const [catSearch, setCatSearch] = useState("");
   const [catDropdownOpen, setCatDropdownOpen] = useState(false);
+  const [catTreeSearch, setCatTreeSearch] = useState("");
+  const [catTreeDebounced, setCatTreeDebounced] = useState("");
+
+  // Debounce tree search
+  useEffect(() => {
+    const t = setTimeout(() => setCatTreeDebounced(catTreeSearch), 300);
+    return () => clearTimeout(t);
+  }, [catTreeSearch]);
 
   const loadCategories = async () => {
     try {
@@ -164,20 +177,62 @@ export default function Categories() {
     setLoading(false);
   };
 
-  const loadUncategorized = async () => {
+  const loadUncategorized = async (reset = false) => {
     setUncatLoading(true);
+    const offset = reset ? 0 : uncatOffset;
     try {
-      setUncategorized(await catalogService.getUncategorizedProducts());
+      const [products, countData] = await Promise.all([
+        catalogService.getUncategorizedProducts(
+          offset,
+          20,
+          uncatSearch || undefined,
+        ),
+        catalogService.getProductsCount(),
+      ]);
+      if (reset) {
+        setUncategorized(products);
+        setUncatOffset(20);
+      } else {
+        setUncategorized((prev) => [...prev, ...products]);
+        setUncatOffset(offset + 20);
+      }
+      setUncatHasMore(products.length === 20);
+      setUncatTotal(countData.total);
     } catch {
-      setUncategorized([]);
+      if (reset) setUncategorized([]);
     }
     setUncatLoading(false);
   };
 
   useEffect(() => {
     loadCategories();
-    loadUncategorized();
+    loadUncategorized(true);
   }, []);
+
+  // IntersectionObserver for infinite scroll
+  useEffect(() => {
+    if (!uncatHasMore || uncatLoading) return;
+    const el = sentinelRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) loadUncategorized(false);
+      },
+      { rootMargin: "200px" },
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [uncatHasMore, uncatLoading, uncategorized.length]);
+
+  // Debounce search
+  useEffect(() => {
+    if (!uncatSearch) {
+      loadUncategorized(true);
+      return;
+    }
+    const timer = setTimeout(() => loadUncategorized(true), 400);
+    return () => clearTimeout(timer);
+  }, [uncatSearch]);
 
   const openNewCategory = () => {
     setCreating(true);
@@ -227,7 +282,7 @@ export default function Categories() {
       );
       setAssignProductId(null);
       setAssignCategoryId("");
-      await Promise.all([loadCategories(), loadUncategorized()]);
+      await Promise.all([loadCategories(), loadUncategorized(true)]);
     } catch {}
   };
 
@@ -360,7 +415,7 @@ export default function Categories() {
       await loadCategoryProducts(editing.id);
       setSearchResults((prev) => prev.filter((p) => p.id !== productId));
       setShowAddProduct(false);
-      await Promise.all([loadCategories(), loadUncategorized()]);
+      await Promise.all([loadCategories(), loadUncategorized(true)]);
     } catch {}
     setReplaceProduct(null);
   };
@@ -370,7 +425,7 @@ export default function Categories() {
     try {
       await catalogService.removeProductFromCategory(editing.id, productId);
       setCatProducts((prev) => prev.filter((p) => p.id !== productId));
-      await Promise.all([loadCategories(), loadUncategorized()]);
+      await Promise.all([loadCategories(), loadUncategorized(true)]);
     } catch {}
   };
 
@@ -451,7 +506,7 @@ export default function Categories() {
           },
           {
             label: "Productos sin clasificar",
-            value: String(uncategorized.length),
+            value: String(uncatTotal),
           },
         ].map((s) => (
           <div
@@ -476,36 +531,77 @@ export default function Categories() {
               <span>Acciones</span>
             </div>
           </div>
+          <div className="px-4 py-3 border-b border-gray-100">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
+              <input
+                value={catTreeSearch}
+                onChange={(e) => setCatTreeSearch(e.target.value)}
+                placeholder="Buscar categoría..."
+                className="w-full pl-9 pr-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-400"
+              />
+            </div>
+          </div>
           <div className="divide-y divide-gray-50">
-            {parents.length === 0 ? (
-              <div className="py-16 text-center">
-                <p className="text-sm text-gray-400">Sin categorías aún</p>
-                <p className="text-xs text-gray-400 mt-1">
-                  Crea tu primera categoría
-                </p>
-              </div>
-            ) : (
-              parents.map((parent) => (
-                <div key={parent.id}>
+            {(() => {
+              const filtered = catTreeDebounced
+                ? categories.filter((c) =>
+                    c.name
+                      .toLowerCase()
+                      .includes(catTreeDebounced.toLowerCase()),
+                  )
+                : categories;
+              if (filtered.length === 0) {
+                return (
+                  <div className="py-16 text-center">
+                    <p className="text-sm text-gray-400">
+                      {catTreeDebounced
+                        ? `Sin resultados para "${catTreeDebounced}"`
+                        : "Sin categorías aún"}
+                    </p>
+                    <p className="text-xs text-gray-400 mt-1">
+                      {catTreeDebounced
+                        ? "Prueba con otros términos"
+                        : "Crea tu primera categoría"}
+                    </p>
+                  </div>
+                );
+              }
+              if (catTreeDebounced) {
+                return filtered.map((cat) => (
                   <CategoryRow
-                    cat={parent}
+                    key={cat.id}
+                    cat={cat}
                     onEdit={openEdit}
                     onDelete={deleteCategory}
                     onToggleActive={toggleActive}
                   />
-                  {childrenOf(parent.id).map((child) => (
+                ));
+              }
+              const renderTree = (
+                parentId: number | null,
+                depth: number,
+              ): any => {
+                const items = categories
+                  .filter((c) => c.parentId === parentId)
+                  .sort((a: AdminCategory, b: AdminCategory) =>
+                    a.name.localeCompare(b.name),
+                  );
+                return items.flatMap((cat) => (
+                  <div key={cat.id}>
                     <CategoryRow
-                      key={child.id}
-                      cat={child}
-                      depth={1}
+                      cat={cat}
+                      depth={depth}
                       onEdit={openEdit}
                       onDelete={deleteCategory}
                       onToggleActive={toggleActive}
                     />
-                  ))}
-                </div>
-              ))
-            )}
+                    {renderTree(cat.id, depth + 1)}
+                  </div>
+                ));
+              };
+              return renderTree(null, 0);
+            })()}
           </div>
         </div>
       </div>
@@ -640,16 +736,41 @@ export default function Categories() {
                     onChange={(e) =>
                       setEditForm((f) => ({ ...f, parentId: e.target.value }))
                     }
-                    className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none"
+                    className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-amber-400 appearance-none bg-white"
+                    style={{
+                      backgroundImage:
+                        "url(\"data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%239CA3AF' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M2 5l6 6 6-6'/%3e%3c/svg%3e\")",
+                      backgroundRepeat: "no-repeat",
+                      backgroundPosition: "right 0.75rem center",
+                      backgroundSize: "16px 12px",
+                    }}
                   >
-                    <option value="">Principal (sin padre)</option>
-                    {parents
-                      .filter((p) => (editing ? p.id !== editing.id : true))
-                      .map((p) => (
-                        <option key={p.id} value={p.id}>
-                          {p.name}
-                        </option>
-                      ))}
+                    <option value="" className="font-medium text-gray-500">
+                      Principal (sin padre)
+                    </option>
+                    {(() => {
+                      const renderTree = (
+                        parentId: number | null,
+                        indent: number,
+                      ): any[] => {
+                        return categories
+                          .filter(
+                            (c) =>
+                              c.parentId === parentId &&
+                              (editing ? c.id !== editing.id : true),
+                          )
+                          .sort((a, b) => a.name.localeCompare(b.name))
+                          .flatMap((c) => [
+                            <option key={c.id} value={c.id}>
+                              {"\u00A0\u00A0".repeat(indent)}
+                              {indent > 0 ? "└ " : ""}
+                              {c.name}
+                            </option>,
+                            ...renderTree(c.id, indent + 1),
+                          ]);
+                      };
+                      return renderTree(null, 0);
+                    })()}
                   </select>
                 </div>
 
@@ -759,21 +880,32 @@ export default function Categories() {
             </p>
           </div>
           <span className="text-xs bg-amber-50 text-amber-700 px-2 py-0.5 rounded-full font-semibold">
-            {uncategorized.length}
+            {uncatTotal}
           </span>
         </div>
-        {uncatLoading ? (
+        <div className="px-4 py-3 border-b border-gray-100">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
+            <input
+              value={uncatSearch}
+              onChange={(e) => setUncatSearch(e.target.value)}
+              placeholder="Buscar productos sin categoría..."
+              className="w-full pl-9 pr-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-400"
+            />
+          </div>
+        </div>
+        {uncatLoading && uncategorized.length === 0 ? (
           <div className="flex items-center justify-center py-12">
             <div className="w-6 h-6 border-2 border-gray-300 border-t-amber-400 rounded-full animate-spin" />
           </div>
-        ) : uncategorized.length === 0 ? (
+        ) : uncatTotal === 0 ? (
           <div className="py-12 text-center">
             <p className="text-sm text-gray-400">
               Todos los productos están clasificados
             </p>
           </div>
         ) : (
-          <div className="divide-y divide-gray-50 max-h-80 overflow-y-auto">
+          <div className="divide-y divide-gray-50 max-h-96 overflow-y-auto">
             {uncategorized.map((p) => (
               <div
                 key={p.id}
@@ -807,6 +939,16 @@ export default function Categories() {
                 </div>
               </div>
             ))}
+            <div
+              ref={sentinelRef}
+              className="py-2 flex items-center justify-center text-xs text-gray-400"
+            >
+              {uncatLoading
+                ? "Cargando..."
+                : uncatHasMore
+                  ? "Desplázate para cargar más"
+                  : "Todos los productos cargados"}
+            </div>
           </div>
         )}
       </div>

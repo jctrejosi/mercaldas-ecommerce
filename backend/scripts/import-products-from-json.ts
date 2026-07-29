@@ -322,7 +322,9 @@ async function ensureBrands(): Promise<Map<string, number>> {
     }
   }
 
-  console.log(`🏷️ ${brandMap.size} marcas aseguradas (${featuredSet.size} destacadas)`);
+  console.log(
+    `🏷️ ${brandMap.size} marcas aseguradas (${featuredSet.size} destacadas)`,
+  );
   return brandMap;
 }
 
@@ -360,7 +362,11 @@ async function ensureAdminUserId(): Promise<number> {
 
 async function ensureProductTypes(products: CatalogProductRow[]) {
   const productTypeCodes = Array.from(
-    new Set(products.map((product) => normalizeText(product.CATEGORIA)).filter(Boolean)),
+    new Set(
+      products
+        .map((product) => normalizeText(product.CATEGORIA))
+        .filter(Boolean),
+    ),
   );
 
   for (const code of productTypeCodes) {
@@ -695,9 +701,10 @@ async function importProducts() {
     const comparePrice =
       comparePriceNumber > 0 ? comparePriceNumber.toFixed(2) : null;
     const manufacturer = normalizeText(row.MARCA) || null;
-    const brandId = manufacturer && brandMap.has(manufacturer)
-      ? brandMap.get(manufacturer)!
-      : brandMap.get('Sin marca')!;
+    const brandId =
+      manufacturer && brandMap.has(manufacturer)
+        ? brandMap.get(manufacturer)!
+        : brandMap.get('Sin marca')!;
     const productSlug = buildSlug([nombre, codigo.slice(-6)]);
     const productTypeCode = normalizeText(row.CATEGORIA) || null;
     const productTypeId = productTypeCode
@@ -743,6 +750,7 @@ async function importProducts() {
           slug: productSlug,
           brandId,
           externalId: codigo,
+          plu: normalizeText(row.PLU) || null,
           manufacturer,
           isActive: true,
         })
@@ -765,6 +773,7 @@ async function importProducts() {
         .values({
           brandId,
           externalId: codigo,
+          plu: normalizeText(row.PLU) || null,
           name: nombre,
           slug: productSlug,
           description: `Producto importado desde catálogo JSON. Código: ${codigo}`,
