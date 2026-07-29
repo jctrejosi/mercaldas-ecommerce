@@ -74,7 +74,7 @@ function splitSQL(sql) {
   return statements;
 }
 
-async function checkNeedsApply(client, consolidatedContent) {
+async function checkAllColumnsExist(client) {
   try {
     const { rows } = await client.query(`
       SELECT column_name FROM information_schema.columns
@@ -120,9 +120,16 @@ async function applyMigrations(client) {
     const content = fs.readFileSync(filePath, 'utf8');
     const hash = crypto.createHash('sha256').update(content).digest('hex');
 
-    if (appliedHashes.has(hash)) {
-      console.log(`⏭️ ${file} (ya aplicado)`);
-      continue;
+    const alreadyApplied = appliedHashes.has(hash);
+
+    if (alreadyApplied) {
+      // Even if the hash matches, verify the migration actually took effect
+      const needsReapply = await checkAllColumnsExist(client);
+      if (!needsReapply) {
+        console.log(`⏭️ ${file} (ya aplicado)`);
+        continue;
+      }
+      console.log(`📄 ${file} (columnas faltantes, re-aplicando...)`);
     }
 
     // Detect consolidated migration: if the hash doesn't match but
@@ -132,7 +139,7 @@ async function applyMigrations(client) {
         `📄 ${file} parece ser una migración consolidada, verificando...`,
       );
       // Check if a previous file with the same index pattern was applied
-      const needsApply = await checkNeedsApply(client, content);
+      const needsApply = await checkAllColumnsExist(client);
       if (!needsApply) {
         console.log(`   ✅ ${file} ya aplicado (consolidado)`);
         await client.query(
@@ -168,20 +175,6 @@ async function applyMigrations(client) {
       [hash],
     );
     console.log(`✅ ${file} aplicado`);
-  }
-}
-
-async function checkNeedsApply(client, consolidatedContent) {
-  try {
-    // Check if the 'code' column exists in categories
-    const { rows } = await client.query(`
-      SELECT column_name FROM information_schema.columns
-      WHERE table_name='categories' AND column_name='code'
-    `);
-    // If the column already exists, the consolidated migration has been applied
-    return rows.length === 0;
-  } catch {
-    return true;
   }
 }
 
