@@ -1,11 +1,39 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import {
-  LayoutDashboard, Package, FolderTree, Tag, Truck, Users,
-  ShoppingCart, Megaphone, Image, Layers, Percent, Store,
-  Warehouse, BarChart2, Shield, Settings, Search, Bell,
-  ChevronRight, Plus, X, LogOut, User, HelpCircle, Command,
-  Zap, Hash, FileText, Globe, ChevronDown, Menu,
-  Building2, AlertTriangle, LayoutTemplate,
+  LayoutDashboard,
+  Package,
+  FolderTree,
+  Tag,
+  Truck,
+  Users,
+  ShoppingCart,
+  Megaphone,
+  Image,
+  Layers,
+  Percent,
+  Store,
+  Warehouse,
+  BarChart2,
+  Shield,
+  Settings,
+  Search,
+  Bell,
+  ChevronRight,
+  Plus,
+  X,
+  LogOut,
+  User,
+  HelpCircle,
+  Command,
+  Zap,
+  Hash,
+  FileText,
+  Globe,
+  ChevronDown,
+  Menu,
+  Building2,
+  AlertTriangle,
+  LayoutTemplate,
 } from "lucide-react";
 import Dashboard from "./views/Dashboard";
 import Products from "./views/Products";
@@ -25,11 +53,22 @@ import UsersView from "./views/Users";
 import SettingsView from "./views/Settings";
 
 export type ViewId =
-  | "dashboard" | "products" | "categories" | "brands" | "suppliers"
-  | "orders" | "customers" | "promotions"
-  | "homepage" | "banners" | "marketplace"
-  | "inventory" | "delivery"
-  | "reports" | "users" | "settings";
+  | "dashboard"
+  | "products"
+  | "categories"
+  | "brands"
+  | "suppliers"
+  | "orders"
+  | "customers"
+  | "promotions"
+  | "homepage"
+  | "banners"
+  | "marketplace"
+  | "inventory"
+  | "delivery"
+  | "reports"
+  | "users"
+  | "settings";
 
 interface NavItem {
   id: ViewId;
@@ -93,6 +132,72 @@ const NAV: NavSection[] = [
   },
 ];
 
+const VIEW_PATHS: Record<string, ViewId> = {
+  "": "dashboard",
+  dashboard: "dashboard",
+  products: "products",
+  categories: "categories",
+  brands: "brands",
+  suppliers: "suppliers",
+  orders: "orders",
+  customers: "customers",
+  promotions: "promotions",
+  "homepage-editor": "homepage",
+  banners: "banners",
+  marketplace: "marketplace",
+  inventory: "inventory",
+  delivery: "delivery",
+  reports: "reports",
+  users: "users",
+  settings: "settings",
+};
+
+const VIEW_SLUGS: Record<ViewId, string> = {
+  dashboard: "dashboard",
+  products: "products",
+  categories: "categories",
+  brands: "brands",
+  suppliers: "suppliers",
+  orders: "orders",
+  customers: "customers",
+  promotions: "promotions",
+  homepage: "homepage-editor",
+  banners: "banners",
+  marketplace: "marketplace",
+  inventory: "inventory",
+  delivery: "delivery",
+  reports: "reports",
+  users: "users",
+  settings: "settings",
+};
+
+function useViewFromUrl(): [ViewId, (v: ViewId) => void] {
+  const path = location.pathname.replace(/^\/+/g, "");
+  const [view, setView] = useState<ViewId>(VIEW_PATHS[path] || "dashboard");
+
+  // Sync from URL on popstate (back/forward)
+  useEffect(() => {
+    const onPop = () => {
+      const p = location.pathname.replace(/^\/+/g, "");
+      setView(VIEW_PATHS[p] || "dashboard");
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
+
+  const navigate = useCallback((v: ViewId) => {
+    setView(v);
+    const slug = VIEW_SLUGS[v];
+    if (slug === "dashboard") {
+      history.pushState(null, "", "/");
+    } else {
+      history.pushState(null, "", `/${slug}`);
+    }
+  }, []);
+
+  return [view, navigate];
+}
+
 const LABELS: Record<ViewId, string> = {
   dashboard: "Dashboard",
   products: "Productos",
@@ -113,30 +218,61 @@ const LABELS: Record<ViewId, string> = {
 };
 
 const QUICK_COMMANDS = [
-  { icon: LayoutDashboard, label: "Ir al Dashboard", view: "dashboard" as ViewId },
+  {
+    icon: LayoutDashboard,
+    label: "Ir al Dashboard",
+    view: "dashboard" as ViewId,
+  },
   { icon: Plus, label: "Crear nuevo producto", view: "products" as ViewId },
-  { icon: ShoppingCart, label: "Ver pedidos pendientes", view: "orders" as ViewId },
-  { icon: LayoutTemplate, label: "Editar página de inicio", view: "homepage" as ViewId },
+  {
+    icon: ShoppingCart,
+    label: "Ver pedidos pendientes",
+    view: "orders" as ViewId,
+  },
+  {
+    icon: LayoutTemplate,
+    label: "Editar página de inicio",
+    view: "homepage" as ViewId,
+  },
   { icon: Image, label: "Gestionar banners", view: "banners" as ViewId },
-  { icon: Megaphone, label: "Campañas publicitarias", view: "marketplace" as ViewId },
+  {
+    icon: Megaphone,
+    label: "Campañas publicitarias",
+    view: "marketplace" as ViewId,
+  },
   { icon: BarChart2, label: "Ver reportes", view: "reports" as ViewId },
   { icon: Users, label: "Gestionar clientes", view: "customers" as ViewId },
   { icon: Percent, label: "Crear promoción", view: "promotions" as ViewId },
-  { icon: Warehouse, label: "Control de inventario", view: "inventory" as ViewId },
+  {
+    icon: Warehouse,
+    label: "Control de inventario",
+    view: "inventory" as ViewId,
+  },
 ];
 
-function CommandPalette({ onNavigate, onClose }: { onNavigate: (v: ViewId) => void; onClose: () => void }) {
+function CommandPalette({
+  onNavigate,
+  onClose,
+}: {
+  onNavigate: (v: ViewId) => void;
+  onClose: () => void;
+}) {
   const [query, setQuery] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => { inputRef.current?.focus(); }, []);
+  useEffect(() => {
+    inputRef.current?.focus();
+  }, []);
 
   const filtered = QUICK_COMMANDS.filter((c) =>
-    c.label.toLowerCase().includes(query.toLowerCase())
+    c.label.toLowerCase().includes(query.toLowerCase()),
   );
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center pt-24 px-4" onClick={onClose}>
+    <div
+      className="fixed inset-0 z-50 flex items-start justify-center pt-24 px-4"
+      onClick={onClose}
+    >
       <div
         className="w-full max-w-lg bg-white rounded-2xl shadow-2xl border border-gray-200 overflow-hidden"
         onClick={(e) => e.stopPropagation()}
@@ -150,36 +286,56 @@ function CommandPalette({ onNavigate, onClose }: { onNavigate: (v: ViewId) => vo
             placeholder="Buscar o ejecutar comando..."
             className="flex-1 outline-none text-sm text-gray-800 placeholder-gray-400"
           />
-          <kbd className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded font-mono">ESC</kbd>
+          <kbd className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded font-mono">
+            ESC
+          </kbd>
         </div>
         <div className="py-2 max-h-80 overflow-y-auto">
           {filtered.length === 0 ? (
-            <div className="px-4 py-8 text-center text-sm text-gray-400">Sin resultados</div>
+            <div className="px-4 py-8 text-center text-sm text-gray-400">
+              Sin resultados
+            </div>
           ) : (
             filtered.map((cmd) => (
               <button
                 key={cmd.label}
-                onClick={() => { onNavigate(cmd.view); onClose(); }}
+                onClick={() => {
+                  onNavigate(cmd.view);
+                  onClose();
+                }}
                 className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-amber-50 text-left transition-colors group"
               >
                 <div className="w-8 h-8 rounded-lg bg-gray-100 group-hover:bg-amber-100 flex items-center justify-center shrink-0 transition-colors">
-                  <cmd.icon size={15} className="text-gray-500 group-hover:text-amber-600" />
+                  <cmd.icon
+                    size={15}
+                    className="text-gray-500 group-hover:text-amber-600"
+                  />
                 </div>
                 <span className="text-sm text-gray-700">{cmd.label}</span>
-                <ChevronRight size={14} className="ml-auto text-gray-300 group-hover:text-amber-400" />
+                <ChevronRight
+                  size={14}
+                  className="ml-auto text-gray-300 group-hover:text-amber-400"
+                />
               </button>
             ))
           )}
         </div>
         <div className="px-4 py-2.5 border-t border-gray-100 flex items-center gap-4">
           <span className="flex items-center gap-1 text-xs text-gray-400">
-            <kbd className="bg-gray-100 px-1.5 py-0.5 rounded font-mono">↑↓</kbd> navegar
+            <kbd className="bg-gray-100 px-1.5 py-0.5 rounded font-mono">
+              ↑↓
+            </kbd>{" "}
+            navegar
           </span>
           <span className="flex items-center gap-1 text-xs text-gray-400">
-            <kbd className="bg-gray-100 px-1.5 py-0.5 rounded font-mono">↵</kbd> abrir
+            <kbd className="bg-gray-100 px-1.5 py-0.5 rounded font-mono">↵</kbd>{" "}
+            abrir
           </span>
           <span className="flex items-center gap-1 text-xs text-gray-400">
-            <kbd className="bg-gray-100 px-1.5 py-0.5 rounded font-mono">ESC</kbd> cerrar
+            <kbd className="bg-gray-100 px-1.5 py-0.5 rounded font-mono">
+              ESC
+            </kbd>{" "}
+            cerrar
           </span>
         </div>
       </div>
@@ -189,26 +345,67 @@ function CommandPalette({ onNavigate, onClose }: { onNavigate: (v: ViewId) => vo
 
 function Notifications({ onClose }: { onClose: () => void }) {
   const items = [
-    { icon: AlertTriangle, color: "text-amber-500 bg-amber-50", title: "Stock bajo detectado", sub: "Leche Alquería — quedan 12 unidades", time: "hace 5m" },
-    { icon: ShoppingCart, color: "text-blue-500 bg-blue-50", title: "Nuevo pedido #MC-3821", sub: "Total: $124.900 — Pago confirmado", time: "hace 12m" },
-    { icon: Zap, color: "text-green-500 bg-green-50", title: "Campaña activada", sub: "Flash Sale Viernes — 47 productos", time: "hace 1h" },
-    { icon: Users, color: "text-purple-500 bg-purple-50", title: "100 nuevos clientes hoy", sub: "+18% comparado con ayer", time: "hace 2h" },
+    {
+      icon: AlertTriangle,
+      color: "text-amber-500 bg-amber-50",
+      title: "Stock bajo detectado",
+      sub: "Leche Alquería — quedan 12 unidades",
+      time: "hace 5m",
+    },
+    {
+      icon: ShoppingCart,
+      color: "text-blue-500 bg-blue-50",
+      title: "Nuevo pedido #MC-3821",
+      sub: "Total: $124.900 — Pago confirmado",
+      time: "hace 12m",
+    },
+    {
+      icon: Zap,
+      color: "text-green-500 bg-green-50",
+      title: "Campaña activada",
+      sub: "Flash Sale Viernes — 47 productos",
+      time: "hace 1h",
+    },
+    {
+      icon: Users,
+      color: "text-purple-500 bg-purple-50",
+      title: "100 nuevos clientes hoy",
+      sub: "+18% comparado con ayer",
+      time: "hace 2h",
+    },
   ];
 
   return (
-    <div className="absolute right-0 top-full mt-2 w-80 bg-white rounded-xl shadow-xl border border-gray-200 z-40" onClick={(e) => e.stopPropagation()}>
+    <div
+      className="absolute right-0 top-full mt-2 w-80 bg-white rounded-xl shadow-xl border border-gray-200 z-40"
+      onClick={(e) => e.stopPropagation()}
+    >
       <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
-        <span className="font-semibold text-sm text-gray-900">Notificaciones</span>
-        <button onClick={onClose} className="text-xs text-amber-600 hover:text-amber-700 font-medium">Marcar todo como leído</button>
+        <span className="font-semibold text-sm text-gray-900">
+          Notificaciones
+        </span>
+        <button
+          onClick={onClose}
+          className="text-xs text-amber-600 hover:text-amber-700 font-medium"
+        >
+          Marcar todo como leído
+        </button>
       </div>
       <div className="divide-y divide-gray-50">
         {items.map((n) => (
-          <div key={n.title} className="flex gap-3 px-4 py-3 hover:bg-gray-50 cursor-pointer transition-colors">
-            <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${n.color}`}>
+          <div
+            key={n.title}
+            className="flex gap-3 px-4 py-3 hover:bg-gray-50 cursor-pointer transition-colors"
+          >
+            <div
+              className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${n.color}`}
+            >
               <n.icon size={14} />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-gray-800 truncate">{n.title}</p>
+              <p className="text-sm font-medium text-gray-800 truncate">
+                {n.title}
+              </p>
               <p className="text-xs text-gray-500 truncate mt-0.5">{n.sub}</p>
             </div>
             <span className="text-xs text-gray-400 shrink-0">{n.time}</span>
@@ -216,7 +413,9 @@ function Notifications({ onClose }: { onClose: () => void }) {
         ))}
       </div>
       <div className="px-4 py-2.5 border-t border-gray-100">
-        <button className="text-xs text-gray-500 hover:text-gray-700 w-full text-center">Ver todas las notificaciones</button>
+        <button className="text-xs text-gray-500 hover:text-gray-700 w-full text-center">
+          Ver todas las notificaciones
+        </button>
       </div>
     </div>
   );
@@ -243,7 +442,9 @@ function Sidebar({
         </div>
         {!collapsed && (
           <div>
-            <p className="text-white font-bold text-sm leading-tight">Mercaldas</p>
+            <p className="text-white font-bold text-sm leading-tight">
+              Mercaldas
+            </p>
             <p className="text-white/40 text-xs">Admin Panel</p>
           </div>
         )}
@@ -290,14 +491,20 @@ function Sidebar({
 
       {/* User */}
       <div className="shrink-0 border-t border-white/[0.06] p-3">
-        <div className={`flex items-center gap-2.5 rounded-lg p-2 hover:bg-white/[0.06] cursor-pointer transition-colors ${collapsed ? "justify-center" : ""}`}>
+        <div
+          className={`flex items-center gap-2.5 rounded-lg p-2 hover:bg-white/[0.06] cursor-pointer transition-colors ${collapsed ? "justify-center" : ""}`}
+        >
           <div className="w-7 h-7 rounded-full bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center shrink-0">
             <span className="text-xs font-bold text-white">JR</span>
           </div>
           {!collapsed && (
             <div className="flex-1 min-w-0">
-              <p className="text-white/80 text-xs font-semibold truncate">Jorge Ramírez</p>
-              <p className="text-white/30 text-[10px] truncate">Administrador</p>
+              <p className="text-white/80 text-xs font-semibold truncate">
+                Jorge Ramírez
+              </p>
+              <p className="text-white/30 text-[10px] truncate">
+                Administrador
+              </p>
             </div>
           )}
         </div>
@@ -321,7 +528,10 @@ function TopBar({
   const [userOpen, setUserOpen] = useState(false);
 
   useEffect(() => {
-    const handler = () => { setNotifOpen(false); setUserOpen(false); };
+    const handler = () => {
+      setNotifOpen(false);
+      setUserOpen(false);
+    };
     document.addEventListener("click", handler);
     return () => document.removeEventListener("click", handler);
   }, []);
@@ -350,13 +560,18 @@ function TopBar({
         >
           <Search size={14} />
           <span className="hidden sm:inline">Buscar...</span>
-          <kbd className="hidden sm:inline text-xs bg-gray-200 text-gray-500 px-1.5 py-0.5 rounded font-mono">⌘K</kbd>
+          <kbd className="hidden sm:inline text-xs bg-gray-200 text-gray-500 px-1.5 py-0.5 rounded font-mono">
+            ⌘K
+          </kbd>
         </button>
 
         {/* Notifications */}
         <div className="relative" onClick={(e) => e.stopPropagation()}>
           <button
-            onClick={() => { setNotifOpen(!notifOpen); setUserOpen(false); }}
+            onClick={() => {
+              setNotifOpen(!notifOpen);
+              setUserOpen(false);
+            }}
             className="relative w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-500 transition-colors"
           >
             <Bell size={16} />
@@ -368,7 +583,10 @@ function TopBar({
         {/* User */}
         <div className="relative" onClick={(e) => e.stopPropagation()}>
           <button
-            onClick={() => { setUserOpen(!userOpen); setNotifOpen(false); }}
+            onClick={() => {
+              setUserOpen(!userOpen);
+              setNotifOpen(false);
+            }}
             className="flex items-center gap-2 pl-1 pr-2 py-1 rounded-lg hover:bg-gray-100 transition-colors"
           >
             <div className="w-7 h-7 rounded-full bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center">
@@ -379,7 +597,9 @@ function TopBar({
           {userOpen && (
             <div className="absolute right-0 top-full mt-2 w-52 bg-white rounded-xl shadow-xl border border-gray-200 py-1.5 z-40">
               <div className="px-4 py-2 border-b border-gray-100 mb-1">
-                <p className="text-sm font-semibold text-gray-800">Jorge Ramírez</p>
+                <p className="text-sm font-semibold text-gray-800">
+                  Jorge Ramírez
+                </p>
                 <p className="text-xs text-gray-500">jorge@mercaldas.com</p>
               </div>
               {[
@@ -387,7 +607,10 @@ function TopBar({
                 { icon: HelpCircle, label: "Ayuda y soporte" },
                 { icon: Command, label: "Atajos de teclado" },
               ].map((item) => (
-                <button key={item.label} className="w-full flex items-center gap-2.5 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors">
+                <button
+                  key={item.label}
+                  className="w-full flex items-center gap-2.5 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                >
                   <item.icon size={14} className="text-gray-400" />
                   {item.label}
                 </button>
@@ -408,28 +631,45 @@ function TopBar({
 
 function ViewRenderer({ view }: { view: ViewId }) {
   switch (view) {
-    case "dashboard": return <Dashboard />;
-    case "products": return <Products />;
-    case "orders": return <Orders />;
-    case "customers": return <Customers />;
-    case "categories": return <Categories />;
-    case "brands": return <Brands />;
-    case "suppliers": return <Suppliers />;
-    case "promotions": return <Promotions />;
-    case "homepage": return <HomepageEditor />;
-    case "banners": return <Banners />;
-    case "marketplace": return <Marketplace />;
-    case "inventory": return <Inventory />;
-    case "delivery": return <Delivery />;
-    case "reports": return <Reports />;
-    case "users": return <UsersView />;
-    case "settings": return <SettingsView />;
-    default: return <Dashboard />;
+    case "dashboard":
+      return <Dashboard />;
+    case "products":
+      return <Products />;
+    case "orders":
+      return <Orders />;
+    case "customers":
+      return <Customers />;
+    case "categories":
+      return <Categories />;
+    case "brands":
+      return <Brands />;
+    case "suppliers":
+      return <Suppliers />;
+    case "promotions":
+      return <Promotions />;
+    case "homepage":
+      return <HomepageEditor />;
+    case "banners":
+      return <Banners />;
+    case "marketplace":
+      return <Marketplace />;
+    case "inventory":
+      return <Inventory />;
+    case "delivery":
+      return <Delivery />;
+    case "reports":
+      return <Reports />;
+    case "users":
+      return <UsersView />;
+    case "settings":
+      return <SettingsView />;
+    default:
+      return <Dashboard />;
   }
 }
 
 export default function App() {
-  const [view, setView] = useState<ViewId>("dashboard");
+  const [view, navigate] = useViewFromUrl();
   const [cmdOpen, setCmdOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
 
@@ -447,7 +687,7 @@ export default function App() {
 
   return (
     <div className="flex h-screen overflow-hidden bg-gray-50">
-      <Sidebar current={view} onNavigate={setView} collapsed={collapsed} />
+      <Sidebar current={view} onNavigate={navigate} collapsed={collapsed} />
 
       <div className="flex flex-col flex-1 min-w-0">
         <TopBar
@@ -462,7 +702,10 @@ export default function App() {
       </div>
 
       {cmdOpen && (
-        <CommandPalette onNavigate={setView} onClose={() => setCmdOpen(false)} />
+        <CommandPalette
+          onNavigate={navigate}
+          onClose={() => setCmdOpen(false)}
+        />
       )}
     </div>
   );
