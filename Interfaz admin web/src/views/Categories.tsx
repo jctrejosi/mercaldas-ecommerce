@@ -11,6 +11,7 @@ import {
   AlertTriangle,
   X,
   Search,
+  FolderTree,
 } from "lucide-react";
 import {
   catalogService,
@@ -21,6 +22,7 @@ interface AdminCategory {
   id: number;
   name: string;
   slug: string;
+  code: string | null;
   parentId: number | null;
   displayOrder: number;
   description: string | null;
@@ -59,10 +61,25 @@ function CategoryRow({
         >
           <GripVertical size={14} />
         </div>
-        <div className="w-5" />
-        <span className="flex-1 text-sm font-medium text-gray-700">
+        <div className="w-7 h-7 rounded-lg bg-gray-100 overflow-hidden shrink-0 flex items-center justify-center">
+          {cat.imagePath ? (
+            <img
+              src={cat.imagePath}
+              alt={cat.name}
+              className="w-full h-full object-cover"
+            />
+          ) : (
+            <FolderTree size={14} className="text-gray-400" />
+          )}
+        </div>
+        <span className="flex-1 text-sm font-medium text-gray-700 truncate">
           {cat.name}
         </span>
+        {cat.code && (
+          <span className="text-[10px] text-gray-400 font-mono">
+            {cat.code}
+          </span>
+        )}
         {!cat.isActive && (
           <span className="text-[10px] bg-red-50 text-red-500 px-2 py-0.5 rounded-full font-semibold">
             Oculta
@@ -159,6 +176,7 @@ export default function Categories() {
   } | null>(null);
   const [catSearch, setCatSearch] = useState("");
   const [catDropdownOpen, setCatDropdownOpen] = useState(false);
+  const [codeEditing, setCodeEditing] = useState(false);
   const [catTreeSearch, setCatTreeSearch] = useState("");
   const [catTreeDebounced, setCatTreeDebounced] = useState("");
 
@@ -236,9 +254,11 @@ export default function Categories() {
 
   const openNewCategory = () => {
     setCreating(true);
+    setCodeEditing(false);
     setEditTab("attrs");
     setEditForm({
       name: "",
+      code: "",
       description: "",
       parentId: "",
       displayOrder: 0,
@@ -292,6 +312,7 @@ export default function Categories() {
     setEditTab("attrs");
     setEditForm({
       name: cat.name,
+      code: cat.code || "",
       description: cat.description || "",
       parentId: cat.parentId ?? "",
       displayOrder: cat.displayOrder,
@@ -435,10 +456,12 @@ export default function Categories() {
       try {
         const { id } = await catalogService.createCategory({
           name: editForm.name.trim(),
+          code: editForm.code || undefined,
           parentId: editForm.parentId ? Number(editForm.parentId) : undefined,
         });
         await catalogService.updateCategory(id, {
           description: editForm.description || null,
+          code: editForm.code || null,
           displayOrder: Number(editForm.displayOrder) || 0,
           metaTitle: editForm.metaTitle || null,
           metaDescription: editForm.metaDescription || null,
@@ -455,6 +478,7 @@ export default function Categories() {
     try {
       await catalogService.updateCategory(editing.id, {
         name: editForm.name.trim(),
+        code: editForm.code || null,
         description: editForm.description || null,
         parentId: editForm.parentId ? Number(editForm.parentId) : null,
         displayOrder: Number(editForm.displayOrder) || 0,
@@ -654,7 +678,7 @@ export default function Categories() {
               <div className="px-5 py-4 space-y-4">
                 {[
                   { key: "name", label: "Nombre", type: "text" },
-                  { key: "description", label: "Descripción", type: "text" },
+                  { key: "code", label: "Código", type: "text" },
                   {
                     key: "metaTitle",
                     label: "Meta título (SEO)",
@@ -670,14 +694,41 @@ export default function Categories() {
                     <label className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider block mb-1">
                       {label}
                     </label>
-                    <input
-                      type={type}
-                      value={editForm[key] ?? ""}
-                      onChange={(e) =>
-                        setEditForm((f) => ({ ...f, [key]: e.target.value }))
-                      }
-                      className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-amber-400"
-                    />
+                    {key === "code" ? (
+                      <div className="relative">
+                        <input
+                          type={type}
+                          value={editForm[key] ?? ""}
+                          readOnly={!codeEditing}
+                          onChange={(e) =>
+                            setEditForm((f) => ({
+                              ...f,
+                              [key]: e.target.value,
+                            }))
+                          }
+                          className={`w-full text-sm border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 ${codeEditing ? "border-amber-300 focus:ring-amber-400" : "border-gray-200 bg-gray-50 text-gray-500"}`}
+                        />
+                        <button
+                          onClick={() => setCodeEditing(!codeEditing)}
+                          className="absolute right-2 top-1/2 -translate-y-1/2 w-6 h-6 rounded flex items-center justify-center hover:bg-gray-200 transition-colors"
+                        >
+                          {codeEditing ? (
+                            <span className="text-xs">✓</span>
+                          ) : (
+                            <Edit size={12} className="text-gray-400" />
+                          )}
+                        </button>
+                      </div>
+                    ) : (
+                      <input
+                        type={type}
+                        value={editForm[key] ?? ""}
+                        onChange={(e) =>
+                          setEditForm((f) => ({ ...f, [key]: e.target.value }))
+                        }
+                        className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-amber-400"
+                      />
+                    )}
                   </div>
                 ))}
 

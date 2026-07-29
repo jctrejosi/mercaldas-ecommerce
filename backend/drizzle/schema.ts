@@ -600,6 +600,7 @@ export const categories = pgTable(
     name: varchar({ length: 100 }).notNull(),
     displayOrder: integer('display_order').default(0).notNull(),
     slug: varchar({ length: 100 }).notNull(),
+    code: varchar({ length: 50 }),
     description: text(),
     // You can use { mode: "bigint" } if numbers are exceeding js number limitations
     imageMediaId: bigint('image_media_id', { mode: 'number' }),

@@ -121,6 +121,7 @@ export const catalogService = {
       id: number;
       name: string;
       slug: string;
+      code: string | null;
       parentId: number | null;
       displayOrder: number;
       description: string | null;
@@ -138,6 +139,7 @@ export const catalogService = {
 
   async createCategory(data: {
     name: string;
+    code?: string;
     parentId?: number;
   }): Promise<{ id: number }> {
     return fetchJson(`${API_BASE_URL}/admin/catalog/categories`, {
@@ -150,6 +152,7 @@ export const catalogService = {
     id: number,
     data: {
       name?: string;
+      code?: string | null;
       parentId?: number | null;
       description?: string | null;
       displayOrder?: number;

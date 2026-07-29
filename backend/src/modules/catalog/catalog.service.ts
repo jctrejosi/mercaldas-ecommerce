@@ -171,6 +171,7 @@ export class CatalogService {
         parentId: categories.parentId,
         name: categories.name,
         slug: categories.slug,
+        code: categories.code,
         displayOrder: categories.displayOrder,
         description: categories.description,
         isActive: categories.isActive,
@@ -201,6 +202,7 @@ export class CatalogService {
       parentId: row.parentId ? Number(row.parentId) : null,
       name: row.name,
       slug: row.slug,
+      code: row.code,
       displayOrder: row.displayOrder ?? 0,
       description: row.description,
       metaTitle: row.metaTitle,
@@ -265,6 +267,7 @@ export class CatalogService {
       .values({
         name: data.name,
         slug,
+        code: data.code ?? null,
         parentId: data.parentId ?? null,
         level,
         displayOrder: 0,
@@ -279,6 +282,7 @@ export class CatalogService {
     id: number,
     data: {
       name?: string;
+      code?: string;
       parentId?: number | null;
       description?: string | null;
       displayOrder?: number;
@@ -314,6 +318,7 @@ export class CatalogService {
       updates.level = level;
     }
 
+    if (data.code !== undefined) updates.code = data.code;
     if (data.description !== undefined) updates.description = data.description;
     if (data.displayOrder !== undefined)
       updates.displayOrder = data.displayOrder;

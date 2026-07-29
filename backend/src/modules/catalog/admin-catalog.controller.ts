@@ -21,7 +21,9 @@ export class AdminCatalogController {
   @Public()
   @Post('categories')
   @ApiOperation({ summary: 'Crear categoría' })
-  async createCategory(@Body() body: { name: string; parentId?: number }) {
+  async createCategory(
+    @Body() body: { name: string; code?: string; parentId?: number },
+  ) {
     return this.catalogService.createCategory(body);
   }
 
@@ -33,6 +35,7 @@ export class AdminCatalogController {
     @Body()
     body: {
       name?: string;
+      code?: string;
       parentId?: number | null;
       description?: string | null;
       displayOrder?: number;
