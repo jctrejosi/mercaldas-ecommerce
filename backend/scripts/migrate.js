@@ -23,8 +23,13 @@ function runCommand(command, label) {
     child.stdout.on('data', (d) => process.stdout.write(d));
     child.stderr.on('data', (d) => process.stderr.write(d));
     child.on('close', (code) => {
-      if (code === 0) { console.log(`✅ ${label}`); resolve(); }
-      else { console.error(`❌ ${label} (código ${code})`); reject(new Error(`${label} salió con ${code}`)); }
+      if (code === 0) {
+        console.log(`✅ ${label}`);
+        resolve();
+      } else {
+        console.error(`❌ ${label} (código ${code})`);
+        reject(new Error(`${label} salió con ${code}`));
+      }
     });
   });
 }
@@ -69,6 +74,18 @@ function splitSQL(sql) {
   return statements;
 }
 
+async function checkNeedsApply(client, consolidatedContent) {
+  try {
+    const { rows } = await client.query(`
+      SELECT column_name FROM information_schema.columns
+      WHERE table_name='categories' AND column_name='code'
+    `);
+    return rows.length === 0;
+  } catch {
+    return true;
+  }
+}
+
 async function applyMigrations(client) {
   const migrateDir = path.join(__dirname, '..', 'drizzle', 'migrate');
   if (!fs.existsSync(migrateDir)) {
@@ -76,8 +93,9 @@ async function applyMigrations(client) {
     return;
   }
 
-  const files = fs.readdirSync(migrateDir)
-    .filter(f => f.endsWith('.sql'))
+  const files = fs
+    .readdirSync(migrateDir)
+    .filter((f) => f.endsWith('.sql'))
     .sort();
 
   if (files.length === 0) {
@@ -92,8 +110,10 @@ async function applyMigrations(client) {
     )
   `);
 
-  const { rows: applied } = await client.query('SELECT hash FROM drizzle.__drizzle_migrations');
-  const appliedHashes = new Set(applied.map(r => r.hash));
+  const { rows: applied } = await client.query(
+    'SELECT hash FROM drizzle.__drizzle_migrations',
+  );
+  const appliedHashes = new Set(applied.map((r) => r.hash));
 
   for (const file of files) {
     const filePath = path.join(migrateDir, file);
@@ -105,6 +125,24 @@ async function applyMigrations(client) {
       continue;
     }
 
+    // Detect consolidated migration: if the hash doesn't match but
+    // ALL migration files were consolidated into a new 0000, mark old ones as applied
+    if (file === files[0] && applied.length > 0 && !appliedHashes.has(hash)) {
+      console.log(
+        `📄 ${file} parece ser una migración consolidada, verificando...`,
+      );
+      // Check if a previous file with the same index pattern was applied
+      const needsApply = await checkNeedsApply(client, content);
+      if (!needsApply) {
+        console.log(`   ✅ ${file} ya aplicado (consolidado)`);
+        await client.query(
+          'INSERT INTO drizzle.__drizzle_migrations (hash) VALUES ($1)',
+          [hash],
+        );
+        continue;
+      }
+    }
+
     console.log(`📄 Aplicando ${file}...`);
     const statements = splitSQL(content);
 
@@ -112,7 +150,12 @@ async function applyMigrations(client) {
       try {
         await client.query(stmt);
       } catch (err) {
-        if (err.code === '42P07' || err.code === '42P16' || err.code === '42710') {
+        if (
+          err.code === '42P07' ||
+          err.code === '42P16' ||
+          err.code === '42710' ||
+          err.code === '42P17'
+        ) {
           console.log(`   ⚠️ Ya existe: ${stmt.substring(0, 60)}...`);
           continue;
         }
@@ -120,8 +163,25 @@ async function applyMigrations(client) {
       }
     }
 
-    await client.query('INSERT INTO drizzle.__drizzle_migrations (hash) VALUES ($1)', [hash]);
+    await client.query(
+      'INSERT INTO drizzle.__drizzle_migrations (hash) VALUES ($1)',
+      [hash],
+    );
     console.log(`✅ ${file} aplicado`);
+  }
+}
+
+async function checkNeedsApply(client, consolidatedContent) {
+  try {
+    // Check if the 'code' column exists in categories
+    const { rows } = await client.query(`
+      SELECT column_name FROM information_schema.columns
+      WHERE table_name='categories' AND column_name='code'
+    `);
+    // If the column already exists, the consolidated migration has been applied
+    return rows.length === 0;
+  } catch {
+    return true;
   }
 }
 
@@ -143,7 +203,8 @@ async function migrate() {
       const ok = await tableExists(client, 'store');
       if (!ok) throw new Error('Las tablas no se crearon.');
 
-      client.release(); client = null;
+      client.release();
+      client = null;
 
       await runCommand('yarn seed:run', 'seed:run');
       await runCommand('yarn import:run', 'import:run');
@@ -158,7 +219,9 @@ async function migrate() {
     console.error('❌ Error fatal en migración:', error.message);
     process.exit(1);
   } finally {
-    try { if (client) client.release(); } catch {}
+    try {
+      if (client) client.release();
+    } catch {}
     await pool.end();
   }
 }
