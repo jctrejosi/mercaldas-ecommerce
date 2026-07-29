@@ -165,6 +165,7 @@ export class CatalogService {
   // ── Admin Category CRUD ──
 
   async getAllCategoriesAdmin() {
+    // Get all categories with their direct product counts via a simpler LEFT JOIN approach
     const rows = await this.drizzleService.db
       .select({
         id: categories.id,
@@ -180,17 +181,6 @@ export class CatalogService {
         metaDescription: categories.metaDescription,
         createdAt: categories.createdAt,
         imagePath: media.path,
-        productCount: sql<number>`(
-          SELECT COUNT(DISTINCT pc2.product_id)
-          FROM product_categories pc2
-          INNER JOIN products p2 ON p2.id = pc2.product_id
-          INNER JOIN product_variants pv2 ON pv2.product_id = p2.id
-          WHERE pc2.category_id = ${categories.id}
-            AND p2.is_active = true
-            AND p2.deleted_at IS NULL
-            AND pv2.is_active = true
-            AND pv2.deleted_at IS NULL
-        )`,
       })
       .from(categories)
       .leftJoin(media, eq(categories.imageMediaId, media.id))
@@ -211,8 +201,36 @@ export class CatalogService {
       level: row.level ?? 0,
       createdAt: row.createdAt,
       imagePath: row.imagePath,
-      productCount: Number(row.productCount ?? 0),
+      productCount: 0,
     }));
+
+    // Get product counts per category
+    const counts = await this.drizzleService.db
+      .select({
+        categoryId: productCategories.categoryId,
+        count: sql<number>`count(DISTINCT ${products.id})`,
+      })
+      .from(productCategories)
+      .innerJoin(products, eq(products.id, productCategories.productId))
+      .innerJoin(productVariants, eq(productVariants.productId, products.id))
+      .where(
+        and(
+          eq(products.isActive, true),
+          isNull(products.deletedAt),
+          eq(productVariants.isActive, true),
+          isNull(productVariants.deletedAt),
+        ),
+      )
+      .groupBy(productCategories.categoryId);
+
+    const countMap = new Map<number, number>();
+    for (const c of counts) {
+      countMap.set(Number(c.categoryId), Number(c.count));
+    }
+
+    for (const cat of list) {
+      cat.productCount = countMap.get(cat.id) ?? 0;
+    }
 
     // Propagate counts upward: a parent's count = its own + all descendants
     const childrenByParent = new Map<number, number[]>();
