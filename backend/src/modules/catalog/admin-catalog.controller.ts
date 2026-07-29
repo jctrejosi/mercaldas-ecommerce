@@ -265,4 +265,49 @@ export class AdminCatalogController {
     await this.catalogService.deleteSupplier(Number(id));
     return { success: true };
   }
+
+  // ── Supplier Products ──
+
+  @Public()
+  @Get('suppliers/:id/products')
+  @ApiOperation({ summary: 'Obtener productos de un proveedor' })
+  async getSupplierProducts(@Param('id') id: string) {
+    return this.catalogService.getSupplierProducts(Number(id));
+  }
+
+  // ── Product Suppliers ──
+
+  @Public()
+  @Get('products/:id/suppliers')
+  @ApiOperation({ summary: 'Obtener proveedores de un producto' })
+  async getProductSuppliers(@Param('id') id: string) {
+    return this.catalogService.getProductSuppliers(Number(id));
+  }
+
+  @Public()
+  @Post('products/:id/suppliers')
+  @ApiOperation({ summary: 'Asignar proveedor a producto' })
+  async addSupplierToProduct(
+    @Param('id') id: string,
+    @Body() body: { supplierId: number },
+  ) {
+    return this.catalogService.addSupplierToProduct(
+      Number(id),
+      body.supplierId,
+    );
+  }
+
+  @Public()
+  @Delete('products/:id/suppliers/:supplierId')
+  @ApiOperation({ summary: 'Quitar proveedor de producto' })
+  async removeSupplierFromProduct(
+    @Param('id') id: string,
+    @Param('supplierId') supplierId: string,
+  ) {
+    await this.catalogService.removeSupplierFromProduct(
+      Number(id),
+      Number(supplierId),
+    );
+    return { success: true };
+  }
 }

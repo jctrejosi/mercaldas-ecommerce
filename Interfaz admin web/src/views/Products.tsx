@@ -12,6 +12,7 @@ import {
   ChevronDown,
   Package,
   RefreshCw,
+  Building2,
 } from "lucide-react";
 import {
   catalogService,
@@ -903,9 +904,106 @@ function ProductDrawer({
     parentSearch: "",
   });
   const [newCategorySaving, setNewCategorySaving] = useState(false);
+  const [productSuppliers, setProductSuppliers] = useState<
+    Array<{
+      supplierId: number;
+      supplierName: string;
+      supplierCode: string | null;
+      supplierSku: string | null;
+      purchasePrice: string | null;
+      leadTimeDays: number | null;
+      isPreferred: boolean;
+    }>
+  >([]);
+  const [productSuppliersLoading, setProductSuppliersLoading] = useState(false);
+  const [showAddSupplier, setShowAddSupplier] = useState(false);
+  const [supplierSearch, setSupplierSearch] = useState("");
+  const [supplierSearchResults, setSupplierSearchResults] = useState<
+    Array<{ id: number; legalName: string; code: string | null }>
+  >([]);
+  const [supplierSearching, setSupplierSearching] = useState(false);
+
+  const loadProductSuppliers = async () => {
+    if (!product?.id && mode !== "edit") return;
+    const pid = product?.id;
+    if (!pid) return;
+    setProductSuppliersLoading(true);
+    try {
+      setProductSuppliers(await catalogService.getProductSuppliers(pid));
+    } catch {
+      setProductSuppliers([]);
+    }
+    setProductSuppliersLoading(false);
+  };
+
+  useEffect(() => {
+    if (mode === "edit" && product?.id) {
+      loadProductSuppliers();
+    }
+  }, [mode, product?.id]);
 
   const update = (field: string, value: string | boolean) =>
     setForm((prev) => ({ ...prev, [field]: value }));
+
+  const handleSupplierSearch = useCallback(
+    async (query: string) => {
+      setSupplierSearching(true);
+      try {
+        const allSuppliers = await catalogService.getSuppliersAdmin();
+        const existingIds = new Set(productSuppliers.map((s) => s.supplierId));
+        setSupplierSearchResults(
+          allSuppliers
+            .filter(
+              (s: any) =>
+                !existingIds.has(s.id) &&
+                s.legalName.toLowerCase().includes(query.toLowerCase()),
+            )
+            .slice(0, 10)
+            .map((s: any) => ({
+              id: s.id,
+              legalName: s.legalName,
+              code: s.code,
+            })),
+        );
+      } catch {
+        setSupplierSearchResults([]);
+      }
+      setSupplierSearching(false);
+    },
+    [productSuppliers],
+  );
+
+  useEffect(() => {
+    if (showAddSupplier) {
+      setSupplierSearch("");
+      handleSupplierSearch("");
+    }
+  }, [showAddSupplier, handleSupplierSearch]);
+
+  useEffect(() => {
+    if (!showAddSupplier) return;
+    const timer = setTimeout(() => handleSupplierSearch(supplierSearch), 300);
+    return () => clearTimeout(timer);
+  }, [supplierSearch, showAddSupplier, handleSupplierSearch]);
+
+  const addSupplier = async (supplierId: number) => {
+    if (!product?.id) return;
+    try {
+      await catalogService.addSupplierToProduct(product.id, supplierId);
+      await loadProductSuppliers();
+      setShowAddSupplier(false);
+    } catch {}
+  };
+
+  const removeSupplier = async (supplierId: number) => {
+    if (!product?.id) return;
+    try {
+      await catalogService.removeSupplierFromProduct(product.id, supplierId);
+      setProductSuppliers((prev) =>
+        prev.filter((s) => s.supplierId !== supplierId),
+      );
+    } catch {}
+  };
 
   const handleSave = async () => {
     if (!form.name || !form.price) {
@@ -1455,6 +1553,58 @@ function ProductDrawer({
                   <span className="text-sm text-gray-700">Producto activo</span>
                 </label>
               </div>
+
+              {/* Suppliers */}
+              <div className="border-t border-gray-100 pt-4">
+                <div className="flex items-center justify-between mb-3">
+                  <label className="text-xs font-semibold text-gray-600">
+                    Proveedores
+                  </label>
+                  {mode === "edit" && product?.id && (
+                    <button
+                      onClick={() => setShowAddSupplier(true)}
+                      className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold bg-amber-400 text-amber-900 hover:bg-amber-500 transition-colors"
+                    >
+                      <Plus size={12} /> Añadir
+                    </button>
+                  )}
+                </div>
+                {productSuppliersLoading ? (
+                  <div className="flex justify-center py-3">
+                    <div className="w-5 h-5 border-2 border-gray-300 border-t-amber-400 rounded-full animate-spin" />
+                  </div>
+                ) : productSuppliers.length === 0 ? (
+                  <p className="text-xs text-gray-400 py-3 text-center">
+                    Sin proveedores asignados
+                  </p>
+                ) : (
+                  <div className="space-y-2">
+                    {productSuppliers.map((s) => (
+                      <div
+                        key={s.supplierId}
+                        className="flex items-center gap-2 p-2.5 bg-gray-50 rounded-lg"
+                      >
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-semibold text-gray-900">
+                            {s.supplierName}
+                          </p>
+                          <p className="text-[10px] text-gray-400">
+                            {s.supplierCode && `#${s.supplierCode}`}
+                            {s.purchasePrice && ` · $${s.purchasePrice}`}
+                            {s.leadTimeDays && ` · ${s.leadTimeDays} días`}
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => removeSupplier(s.supplierId)}
+                          className="w-6 h-6 flex items-center justify-center rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500 transition-colors shrink-0"
+                        >
+                          <X size={11} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </div>
@@ -1479,6 +1629,65 @@ function ProductDrawer({
           </button>
         </div>
       </div>
+
+      {/* ── Add Supplier Modal ── */}
+      {showAddSupplier && (
+        <>
+          <div
+            className="fixed inset-0 bg-black/40 z-50"
+            onClick={() => setShowAddSupplier(false)}
+          />
+          <div className="fixed inset-0 z-50 flex items-center justify-center">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm mx-4 p-5">
+              <h4 className="font-bold text-sm text-gray-900 mb-4">
+                Añadir proveedor
+              </h4>
+              <div className="relative mb-4">
+                <Search
+                  size={14}
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"
+                />
+                <input
+                  value={supplierSearch}
+                  onChange={(e) => setSupplierSearch(e.target.value)}
+                  placeholder="Buscar proveedor..."
+                  className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-300"
+                  autoFocus
+                />
+              </div>
+              <div className="space-y-1 max-h-60 overflow-y-auto">
+                {supplierSearching ? (
+                  <div className="flex justify-center py-6">
+                    <div className="w-5 h-5 border-2 border-gray-300 border-t-amber-400 rounded-full animate-spin" />
+                  </div>
+                ) : supplierSearchResults.length === 0 ? (
+                  <p className="text-xs text-gray-400 text-center py-6">
+                    No se encontraron proveedores
+                  </p>
+                ) : (
+                  supplierSearchResults.map((s) => (
+                    <button
+                      key={s.id}
+                      onClick={() => addSupplier(s.id)}
+                      className="w-full text-left px-3 py-2.5 text-sm hover:bg-amber-50 rounded-lg transition-colors flex items-center gap-2"
+                    >
+                      <Building2 size={14} className="text-gray-400 shrink-0" />
+                      <div>
+                        <p className="font-medium text-gray-900">
+                          {s.legalName}
+                        </p>
+                        {s.code && (
+                          <p className="text-[10px] text-gray-400">#{s.code}</p>
+                        )}
+                      </div>
+                    </button>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+        </>
+      )}
 
       {/* ── New Brand Modal ── */}
       {showNewBrand && (

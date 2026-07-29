@@ -293,6 +293,69 @@ export const catalogService = {
     });
   },
 
+  async getUnsuppliedCount(): Promise<{ total: number }> {
+    return fetchJson<{ total: number }>(
+      `${API_BASE_URL}/catalog/products/count?unsupplied=true`,
+    );
+  },
+
+  async getUnsuppliedProducts(
+    offset = 0,
+    limit = 20,
+    search?: string,
+  ): Promise<CatalogProduct[]> {
+    return fetchJson<CatalogProduct[]>(
+      `${API_BASE_URL}/admin/catalog/products`,
+      {
+        method: "POST",
+        body: JSON.stringify({ unsupplied: true, limit, offset, search }),
+      },
+    );
+  },
+
+  // ── Brand Products ──
+  // ── Product Suppliers ──
+
+  async getProductSuppliers(productId: number): Promise<
+    Array<{
+      supplierId: number;
+      supplierName: string;
+      supplierCode: string | null;
+      supplierSku: string | null;
+      purchasePrice: string | null;
+      leadTimeDays: number | null;
+      isPreferred: boolean;
+    }>
+  > {
+    return fetchJson(
+      `${API_BASE_URL}/admin/catalog/products/${productId}/suppliers`,
+    );
+  },
+
+  async addSupplierToProduct(
+    productId: number,
+    supplierId: number,
+  ): Promise<void> {
+    await fetch(
+      `${API_BASE_URL}/admin/catalog/products/${productId}/suppliers`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ supplierId }),
+      },
+    );
+  },
+
+  async removeSupplierFromProduct(
+    productId: number,
+    supplierId: number,
+  ): Promise<void> {
+    await fetch(
+      `${API_BASE_URL}/admin/catalog/products/${productId}/suppliers/${supplierId}`,
+      { method: "DELETE" },
+    );
+  },
+
   // ── Brand Products ──
 
   async getBrandProducts(brandId: number): Promise<
@@ -426,6 +489,24 @@ export const catalogService = {
     });
   },
 
+  // ── Supplier Products ──
+
+  async getSupplierProducts(supplierId: number): Promise<
+    Array<{
+      id: number;
+      name: string;
+      slug: string;
+      price: number;
+      image: string | null;
+      productTypeCode: string | null;
+    }>
+  > {
+    return fetchJson(
+      `${API_BASE_URL}/admin/catalog/suppliers/${supplierId}/products`,
+    );
+  },
+
+  // ── Admin Supplier CRUD ──
   async replaceProductCategory(
     productId: number,
     categoryId: number,

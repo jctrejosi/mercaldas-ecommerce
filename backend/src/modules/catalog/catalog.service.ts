@@ -963,6 +963,149 @@ export class CatalogService {
       .where(eq(suppliers.id, BigInt(id)));
   }
 
+  // ── Product-Supplier relations ──
+
+  async getProductSuppliers(productId: number) {
+    const rows = await this.drizzleService.db
+      .select({
+        supplierId: suppliers.id,
+        supplierName: suppliers.legalName,
+        supplierCode: suppliers.code,
+        supplierSku: supplierProducts.supplierSku,
+        purchasePrice: supplierProducts.purchasePrice,
+        leadTimeDays: supplierProducts.leadTimeDays,
+        isPreferred: supplierProducts.isPreferred,
+      })
+      .from(supplierProducts)
+      .innerJoin(suppliers, eq(suppliers.id, supplierProducts.supplierId))
+      .innerJoin(
+        productVariants,
+        eq(productVariants.id, supplierProducts.productVariantId),
+      )
+      .where(
+        and(
+          eq(productVariants.productId, productId),
+          eq(suppliers.isActive, true),
+          isNull(suppliers.deletedAt),
+        ),
+      )
+      .orderBy(asc(suppliers.legalName));
+
+    return rows.map((row) => ({
+      supplierId: Number(row.supplierId),
+      supplierName: row.supplierName,
+      supplierCode: row.supplierCode,
+      supplierSku: row.supplierSku,
+      purchasePrice: row.purchasePrice,
+      leadTimeDays: row.leadTimeDays,
+      isPreferred: row.isPreferred,
+    }));
+  }
+
+  async addSupplierToProduct(productId: number, supplierId: number) {
+    const [variant] = await this.drizzleService.db
+      .select({ id: productVariants.id })
+      .from(productVariants)
+      .where(
+        and(
+          eq(productVariants.productId, productId),
+          eq(productVariants.isActive, true),
+          isNull(productVariants.deletedAt),
+        ),
+      )
+      .limit(1);
+
+    if (!variant) return { success: false };
+
+    await this.drizzleService.db
+      .insert(supplierProducts)
+      .values({
+        supplierId,
+        productVariantId: Number(variant.id),
+      })
+      .onConflictDoNothing();
+
+    return { success: true };
+  }
+
+  async removeSupplierFromProduct(productId: number, supplierId: number) {
+    const [variant] = await this.drizzleService.db
+      .select({ id: productVariants.id })
+      .from(productVariants)
+      .where(
+        and(
+          eq(productVariants.productId, productId),
+          eq(productVariants.isActive, true),
+          isNull(productVariants.deletedAt),
+        ),
+      )
+      .limit(1);
+
+    if (!variant) return;
+
+    await this.drizzleService.db
+      .delete(supplierProducts)
+      .where(
+        and(
+          eq(supplierProducts.supplierId, supplierId),
+          eq(supplierProducts.productVariantId, Number(variant.id)),
+        ),
+      );
+  }
+
+  async getSupplierProducts(supplierId: number) {
+    const rows = await this.drizzleService.db
+      .select({
+        id: products.id,
+        name: products.name,
+        slug: products.slug,
+        price: productVariants.currentPrice,
+        image: media.path,
+        productTypeCode: productTypes.code,
+      })
+      .from(supplierProducts)
+      .innerJoin(
+        productVariants,
+        eq(productVariants.id, supplierProducts.productVariantId),
+      )
+      .innerJoin(products, eq(products.id, productVariants.productId))
+      .leftJoin(
+        productImages,
+        and(
+          eq(productImages.productId, products.id),
+          eq(productImages.isCover, true),
+        ),
+      )
+      .leftJoin(media, eq(media.id, productImages.mediaId))
+      .leftJoin(
+        productTypeAssignments,
+        eq(productTypeAssignments.productId, products.id),
+      )
+      .leftJoin(
+        productTypes,
+        eq(productTypes.id, productTypeAssignments.productTypeId),
+      )
+      .where(
+        and(
+          eq(supplierProducts.supplierId, supplierId),
+          eq(products.isActive, true),
+          isNull(products.deletedAt),
+          eq(productVariants.isActive, true),
+          isNull(productVariants.deletedAt),
+        ),
+      )
+      .orderBy(asc(products.name));
+
+    return rows.map((row) => ({
+      id: Number(row.id),
+      name: row.name,
+      slug: row.slug,
+      price: Number(row.price ?? 0),
+      image: row.image,
+      productTypeCode: row.productTypeCode,
+    }));
+  }
+
   async getProductTypes() {
     const rows = await this.drizzleService.db
       .select({
@@ -1006,7 +1149,10 @@ export class CatalogService {
     }));
   }
 
-  async getProductsCount(unbranded?: boolean): Promise<{ total: number }> {
+  async getProductsCount(
+    unbranded?: boolean,
+    unsupplied?: boolean,
+  ): Promise<{ total: number }> {
     const conditions: any[] = [
       eq(products.isActive, true),
       isNull(products.deletedAt),
@@ -1016,6 +1162,12 @@ export class CatalogService {
 
     if (unbranded) {
       conditions.push(sql`${products.brandId} IS NULL`);
+    }
+
+    if (unsupplied) {
+      conditions.push(
+        sql`NOT EXISTS (SELECT 1 FROM supplier_products sp INNER JOIN product_variants pv ON pv.id = sp.product_variant_id WHERE pv.product_id = ${products.id})`,
+      );
     }
 
     const rows = await this.drizzleService.db
@@ -1078,7 +1230,7 @@ export class CatalogService {
               : 'image/jpeg',
             mediaType: 'image',
             sizeBytes: 0,
-            checksum: '',
+            checksum: dto.image.substring(0, 64),
           })
           .returning({ id: media.id });
 
@@ -1165,7 +1317,7 @@ export class CatalogService {
               : 'image/jpeg',
             mediaType: 'image',
             sizeBytes: 0,
-            checksum: '',
+            checksum: dto.image.substring(0, 64),
           })
           .returning({ id: media.id });
 
@@ -1345,6 +1497,9 @@ export class CatalogService {
             ? sql`NOT EXISTS (SELECT 1 FROM product_categories pc WHERE pc.product_id = ${products.id})`
             : undefined,
           query.unbranded ? sql`${products.brandId} IS NULL` : undefined,
+          query.unsupplied
+            ? sql`NOT EXISTS (SELECT 1 FROM supplier_products sp2 INNER JOIN product_variants pv2 ON pv2.id = sp2.product_variant_id WHERE pv2.product_id = ${products.id})`
+            : undefined,
         ),
       )
       .orderBy(...this.buildSort(sort))
