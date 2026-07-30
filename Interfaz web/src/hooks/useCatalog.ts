@@ -5,8 +5,19 @@ import {
   type CatalogProductsQuery,
 } from "../services/catalog.service";
 
-export function useCatalog(filters?: CatalogProductsQuery, initialCategories?: CatalogCategory[]) {
-  const [categories, setCategories] = useState<CatalogCategory[]>(initialCategories ?? []);
+export function useCatalog(
+  filters?: CatalogProductsQuery,
+  initialCategories?: CatalogCategory[],
+) {
+  const [categories, setCategories] = useState<CatalogCategory[]>(
+    initialCategories ?? [],
+  );
+
+  useEffect(() => {
+    if (initialCategories && initialCategories.length > 0) {
+      setCategories(initialCategories);
+    }
+  }, [initialCategories]);
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

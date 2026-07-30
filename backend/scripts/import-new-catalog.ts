@@ -323,7 +323,7 @@ async function main() {
 
       const productId = Number(insertedProduct.id);
 
-      // Insert variant
+      // Insert variant — VENTA1=precio original, VENTA2=precio con descuento
       const [insertedVariant] = await db
         .insert(schema.productVariants)
         .values(
@@ -332,8 +332,8 @@ async function main() {
                 productId,
                 sku: codigo,
                 barcode: ean || undefined,
-                currentPrice: String(venta1),
-                currentComparePrice: String(venta2),
+                currentPrice: String(venta2),
+                currentComparePrice: String(venta1),
                 isActive: true,
               }
             : {
@@ -379,13 +379,13 @@ async function main() {
         });
       }
 
-      // Create price history
+      // Create price history — VENTA1=precio original, VENTA2=precio descuento
       await db.insert(schema.prices).values(
         venta2 > 0
           ? {
               productVariantId: variantId,
-              price: String(venta1),
-              comparePrice: String(venta2),
+              price: String(venta2),
+              comparePrice: String(venta1),
               version: 1,
               changedBy: adminUserId,
               changeReason: 'Importación catálogo',

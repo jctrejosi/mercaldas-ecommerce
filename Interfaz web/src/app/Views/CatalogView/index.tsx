@@ -5,7 +5,12 @@ import { catalogService } from "../../../services/catalog.service";
 import { InfiniteScrollTrigger } from "./InfiniteScrollTrigger";
 import { ProductCard } from "./ProductCard";
 import { SkeletonCard } from "./SkeletonCard";
-import type { Brand, CatalogCategory, CatalogPageProps, Product } from "../../types";
+import type {
+  Brand,
+  CatalogCategory,
+  CatalogPageProps,
+  Product,
+} from "../../types";
 
 const PRICE_RANGES = [
   { id: "all", label: "Todos los precios" },
@@ -56,11 +61,20 @@ export function CatalogPage({
   const [loadingMore, setLoadingMore] = useState(false);
   const [searchInput, setSearchInput] = useState(catalogSearch);
   const [brands, setBrands] = useState<Brand[]>([]);
-  const [productTypes, setProductTypes] = useState<{ id: number; code: string; name: string; count: number }[]>([]);
+  const [productTypes, setProductTypes] = useState<
+    { id: number; code: string; name: string; count: number }[]
+  >([]);
+  const [brandSearch, setBrandSearch] = useState("");
 
   useEffect(() => {
-    catalogService.getFeaturedBrands().then(setBrands).catch(() => {});
-    catalogService.getProductTypes().then(setProductTypes).catch(() => {});
+    catalogService
+      .getCatalogBrands()
+      .then((b: any) => setBrands(b))
+      .catch(() => {});
+    catalogService
+      .getProductTypes()
+      .then(setProductTypes)
+      .catch(() => {});
   }, []);
   const PAGE_SIZE = 20;
 
@@ -68,15 +82,20 @@ export function CatalogPage({
     categories,
     products,
     loading: catalogLoading,
-  } = useCatalog({
-    categoryIds: catalogCategory,
-    onSale: catalogOnSale,
-    priceRange: catalogPriceRange,
-    sort: catalogSort,
-    search: catalogSearch,
-    brandId: catalogBrand ?? undefined,
-    productTypeCode: catalogProductType || undefined,
-  }, catalogCategories);
+  } = useCatalog(
+    {
+      categoryIds: catalogSearch ? [] : catalogCategory,
+      onSale: catalogSearch ? false : catalogOnSale,
+      priceRange: catalogSearch ? "all" : catalogPriceRange,
+      sort: catalogSort,
+      search: catalogSearch,
+      brandId: catalogSearch ? undefined : (catalogBrand ?? undefined),
+      productTypeCode: catalogSearch
+        ? undefined
+        : catalogProductType || undefined,
+    },
+    catalogCategories,
+  );
 
   const getCategoryName = (categoryId: number): string => {
     const category = categories.find((c) => c.id === categoryId);
@@ -173,9 +192,10 @@ export function CatalogPage({
   };
 
   const catalogProducts = products.length > 0 ? products : EMPTY_PRODUCTS;
-  const rootCategories = categories.length > 0
-    ? categories.filter((category) => !category.parentId)
-    : [];
+  const rootCategories =
+    categories.length > 0
+      ? categories.filter((category) => !category.parentId)
+      : [];
 
   const getChildCategories = (parentId: number) =>
     categoriesByParentId.get(parentId) ?? [];
@@ -419,50 +439,77 @@ export function CatalogPage({
       {brands.length > 0 && (
         <div className="border-t border-border pt-5">
           <h3 className="font-bold text-sm text-foreground mb-3">Marcas</h3>
-          <div className="space-y-1.5">
-            {brands.map((brand) => {
-              const checked = catalogBrand === brand.id;
-              return (
-                <label
-                  key={brand.id}
-                  className="flex items-center gap-2.5 py-1 px-2 rounded-lg cursor-pointer hover:bg-muted transition-colors group"
-                >
-                  <div
-                    className="w-5 h-5 rounded border-2 flex items-center justify-center flex-shrink-0 transition-all"
-                    style={{
-                      borderColor: checked ? "#1A1A2E" : "#D1D5DB",
-                      background: checked ? "#1A1A2E" : "white",
-                    }}
-                    onClick={() => setCatalogBrand(checked ? null : brand.id)}
+          <div className="relative mb-2">
+            <Search
+              size={13}
+              className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground"
+            />
+            <input
+              value={brandSearch}
+              onChange={(e) => setBrandSearch(e.target.value)}
+              placeholder="Buscar marca..."
+              className="w-full pl-8 pr-3 py-1.5 text-xs border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-200 bg-muted/40"
+            />
+          </div>
+          <div className="space-y-1.5 max-h-48 overflow-y-auto">
+            {brands
+              .filter((brand) =>
+                brand.name.toLowerCase().includes(brandSearch.toLowerCase()),
+              )
+              .map((brand) => {
+                const checked = catalogBrand === brand.id;
+                return (
+                  <label
+                    key={brand.id}
+                    className="flex items-center gap-2.5 py-1 px-2 rounded-lg cursor-pointer hover:bg-muted transition-colors group"
                   >
-                    {checked && (
-                      <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                      </svg>
-                    )}
-                  </div>
-                  <span
-                    className="text-sm flex-1 transition-colors"
-                    style={{
-                      color: checked ? "#1A1A2E" : "#6B7280",
-                      fontWeight: checked ? 600 : 400,
-                    }}
-                    onClick={() => setCatalogBrand(checked ? null : brand.id)}
-                  >
-                    {brand.name}
-                  </span>
-                </label>
-              );
-            })}
+                    <div
+                      className="w-5 h-5 rounded border-2 flex items-center justify-center flex-shrink-0 transition-all"
+                      style={{
+                        borderColor: checked ? "#1A1A2E" : "#D1D5DB",
+                        background: checked ? "#1A1A2E" : "white",
+                      }}
+                      onClick={() => setCatalogBrand(checked ? null : brand.id)}
+                    >
+                      {checked && (
+                        <svg
+                          className="w-3 h-3 text-white"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                          strokeWidth={3}
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            d="M5 13l4 4L19 7"
+                          />
+                        </svg>
+                      )}
+                    </div>
+                    <span
+                      className="text-sm flex-1 transition-colors"
+                      style={{
+                        color: checked ? "#1A1A2E" : "#6B7280",
+                        fontWeight: checked ? 600 : 400,
+                      }}
+                      onClick={() => setCatalogBrand(checked ? null : brand.id)}
+                    >
+                      {brand.name}
+                    </span>
+                  </label>
+                );
+              })}
           </div>
         </div>
       )}
 
-      
       {/* Product Types */}
       {productTypes.length > 0 && (
         <div className="border-t border-border pt-5">
-          <h3 className="font-bold text-sm text-foreground mb-3">Tipo de producto</h3>
+          <h3 className="font-bold text-sm text-foreground mb-3">
+            Tipo de producto
+          </h3>
           <div className="space-y-1.5">
             {productTypes.map((pt) => {
               const checked = catalogProductType === pt.code;
@@ -474,24 +521,38 @@ export function CatalogPage({
                   <div
                     className="w-5 h-5 rounded border-2 flex items-center justify-center flex-shrink-0 transition-all"
                     style={{
-                      borderColor: checked ? '#1A1A2E' : '#D1D5DB',
-                      background: checked ? '#1A1A2E' : 'white',
+                      borderColor: checked ? "#1A1A2E" : "#D1D5DB",
+                      background: checked ? "#1A1A2E" : "white",
                     }}
-                    onClick={() => setCatalogProductType(checked ? '' : pt.code)}
+                    onClick={() =>
+                      setCatalogProductType(checked ? "" : pt.code)
+                    }
                   >
                     {checked && (
-                      <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                      <svg
+                        className="w-3 h-3 text-white"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                        strokeWidth={3}
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          d="M5 13l4 4L19 7"
+                        />
                       </svg>
                     )}
                   </div>
                   <span
                     className="text-sm flex-1 transition-colors"
                     style={{
-                      color: checked ? '#1A1A2E' : '#6B7280',
+                      color: checked ? "#1A1A2E" : "#6B7280",
                       fontWeight: checked ? 600 : 400,
                     }}
-                    onClick={() => setCatalogProductType(checked ? '' : pt.code)}
+                    onClick={() =>
+                      setCatalogProductType(checked ? "" : pt.code)
+                    }
                   >
                     {pt.name}
                   </span>
@@ -505,7 +566,7 @@ export function CatalogPage({
         </div>
       )}
 
-{/* On sale */}
+      {/* On sale */}
       <div className="border-t border-border pt-5">
         <label className="flex items-center justify-between cursor-pointer group">
           <div>
@@ -629,39 +690,62 @@ export function CatalogPage({
                       className="flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold border-2 border-foreground text-foreground"
                     >
                       {getCategoryName(cat)}
-                      <button onClick={() => toggleCategory(cat)} className="hover:opacity-60 ml-0.5">
+                      <button
+                        onClick={() => toggleCategory(cat)}
+                        className="hover:opacity-60 ml-0.5"
+                      >
                         <X className="w-2.5 h-2.5" />
                       </button>
                     </span>
                   ))}
                   {catalogOnSale && (
-                    <span className="flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold text-white" style={{ background: "#FF4444" }}>
+                    <span
+                      className="flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold text-white"
+                      style={{ background: "#FF4444" }}
+                    >
                       Solo ofertas
-                      <button onClick={() => setCatalogOnSale(false)} className="hover:opacity-70 ml-0.5">
+                      <button
+                        onClick={() => setCatalogOnSale(false)}
+                        className="hover:opacity-70 ml-0.5"
+                      >
                         <X className="w-2.5 h-2.5" />
                       </button>
                     </span>
                   )}
                   {catalogPriceRange !== "all" && (
                     <span className="flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold border border-border text-muted-foreground">
-                      {PRICE_RANGES.find((r) => r.id === catalogPriceRange)?.label}
-                      <button onClick={() => setCatalogPriceRange("all")} className="hover:opacity-70 ml-0.5">
+                      {
+                        PRICE_RANGES.find((r) => r.id === catalogPriceRange)
+                          ?.label
+                      }
+                      <button
+                        onClick={() => setCatalogPriceRange("all")}
+                        className="hover:opacity-70 ml-0.5"
+                      >
                         <X className="w-2.5 h-2.5" />
                       </button>
                     </span>
                   )}
                   {catalogBrand && (
                     <span className="flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold border border-border text-muted-foreground">
-                      {brands.find(b => b.id === catalogBrand)?.name || `Marca #${catalogBrand}`}
-                      <button onClick={() => setCatalogBrand(null)} className="hover:opacity-70 ml-0.5">
+                      {brands.find((b) => b.id === catalogBrand)?.name ||
+                        `Marca #${catalogBrand}`}
+                      <button
+                        onClick={() => setCatalogBrand(null)}
+                        className="hover:opacity-70 ml-0.5"
+                      >
                         <X className="w-2.5 h-2.5" />
                       </button>
                     </span>
                   )}
                   {catalogProductType && (
                     <span className="flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold border border-border text-muted-foreground">
-                      {productTypes.find(pt => pt.code === catalogProductType)?.name || catalogProductType}
-                      <button onClick={() => setCatalogProductType("")} className="hover:opacity-70 ml-0.5">
+                      {productTypes.find((pt) => pt.code === catalogProductType)
+                        ?.name || catalogProductType}
+                      <button
+                        onClick={() => setCatalogProductType("")}
+                        className="hover:opacity-70 ml-0.5"
+                      >
                         <X className="w-2.5 h-2.5" />
                       </button>
                     </span>
@@ -669,12 +753,18 @@ export function CatalogPage({
                   {catalogSearch && (
                     <span className="flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold border border-border text-muted-foreground">
                       "{catalogSearch}"
-                      <button onClick={() => setCatalogSearch("")} className="hover:opacity-70 ml-0.5">
+                      <button
+                        onClick={() => setCatalogSearch("")}
+                        className="hover:opacity-70 ml-0.5"
+                      >
                         <X className="w-2.5 h-2.5" />
                       </button>
                     </span>
                   )}
-                  <button onClick={clearAll} className="text-xs text-muted-foreground underline hover:text-foreground transition-colors ml-1 whitespace-nowrap">
+                  <button
+                    onClick={clearAll}
+                    className="text-xs text-muted-foreground underline hover:text-foreground transition-colors ml-1 whitespace-nowrap"
+                  >
                     Limpiar todo
                   </button>
                 </div>

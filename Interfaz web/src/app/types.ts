@@ -41,6 +41,8 @@ export interface Product {
   id: number;
   externalId?: string | null;
   slug?: string;
+  plu?: string | null;
+  barcode?: string | null;
   name: string;
   description?: string;
   price: number;

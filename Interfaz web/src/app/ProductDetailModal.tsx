@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { CartItem, ProductDetailModalProps, Product } from "./types";
 import { Minus, Plus, ShoppingCart, TrendingUp, X } from "lucide-react";
 import { catalogService } from "../services/catalog.service";
@@ -54,6 +54,43 @@ const fmt = (n: number) =>
     currency: "COP",
     minimumFractionDigits: 0,
   }).format(n);
+
+function ZoomImage({ src, alt }: { src?: string; alt: string }) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState({ x: 50, y: 50 });
+  const [hover, setHover] = useState(false);
+
+  const handleMouse = useCallback((e: React.MouseEvent) => {
+    const rect = containerRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const x = ((e.clientX - rect.left) / rect.width) * 100;
+    const y = ((e.clientY - rect.top) / rect.height) * 100;
+    setPos({ x, y });
+  }, []);
+
+  const imgSrc = src || "";
+  return (
+    <div
+      ref={containerRef}
+      className="relative w-full h-full cursor-crosshair"
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      onMouseMove={handleMouse}
+    >
+      <img src={imgSrc} alt={alt} className="w-full h-full object-cover" />
+      {hover && imgSrc && (
+        <div
+          className="absolute inset-0 z-10 pointer-events-none"
+          style={{
+            backgroundImage: 'url("' + imgSrc + '")',
+            backgroundSize: "250%",
+            backgroundPosition: pos.x + "% " + pos.y + "%",
+          }}
+        />
+      )}
+    </div>
+  );
+}
 
 function getSpec(category: string) {
   return (
@@ -182,13 +219,9 @@ export function ProductDetailModal({
         <div className="overflow-y-auto flex-1">
           {/* Hero image + info */}
           <div className="grid sm:grid-cols-2">
-            {/* Image */}
-            <div className="relative bg-muted aspect-square">
-              <img
-                src={product.image}
-                alt={product.name}
-                className="w-full h-full object-cover"
-              />
+            {/* Image with magnifier */}
+            <div className="relative bg-muted aspect-square overflow-hidden">
+              <ZoomImage src={product.image} alt={product.name} />
               {product.badge && (
                 <span
                   className="absolute top-3 left-3 text-xs font-bold px-2.5 py-1 rounded-full text-white"
@@ -227,6 +260,21 @@ export function ProductDetailModal({
                   {product.unit}
                 </p>
               </div>
+
+              {/* PLU & EAN */}
+              {(product.plu || product.barcode || product.externalId) && (
+                <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                  {product.plu && (
+                    <span className="font-mono">PLU: {product.plu}</span>
+                  )}
+                  {product.barcode && (
+                    <span className="font-mono">EAN: {product.barcode}</span>
+                  )}
+                  {product.externalId && (
+                    <span className="font-mono">Ref: {product.externalId}</span>
+                  )}
+                </div>
+              )}
 
               {/* Pricing */}
               <div className="flex items-baseline gap-2">

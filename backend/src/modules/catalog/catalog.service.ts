@@ -73,6 +73,8 @@ type CatalogProductResponse = {
   categoryId: number;
   brandId: number | null;
   brandName: string | null;
+  plu: string | null;
+  barcode: string | null;
   productTypeCode: string | null;
   productTypeName: string | null;
   isActive: boolean;
@@ -1435,6 +1437,8 @@ export class CatalogService {
         image: media.path,
         productTypeCode: productTypes.code,
         productTypeName: productTypes.name,
+        plu: products.plu,
+        barcode: productVariants.barcode,
       })
       .from(products)
       .innerJoin(productVariants, eq(productVariants.productId, products.id))
@@ -1533,6 +1537,8 @@ export class CatalogService {
         categoryId: row.categoryId ? Number(row.categoryId) : 0,
         brandId: row.brandId ? Number(row.brandId) : null,
         brandName: row.brandName ?? null,
+        plu: row.plu ?? null,
+        barcode: row.barcode ?? null,
         productTypeCode: row.productTypeCode,
         productTypeName: row.productTypeName,
         isActive: row.isActive,
@@ -1947,6 +1953,8 @@ export class CatalogService {
       categoryId: Number(row.categoryId ?? 0),
       brandId: row.brandId ? Number(row.brandId) : null,
       brandName: row.brandName ?? null,
+      plu: row.plu ?? null,
+      barcode: row.barcode ?? null,
       productTypeCode: row.productTypeCode,
       productTypeName: row.productTypeName,
       isActive: row.isActive,
