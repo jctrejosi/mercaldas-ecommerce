@@ -1,0 +1,176 @@
+{"CATEGORIAS":[
+{"CODIGO":"01     ","NOMBRE":"Electrodomesticos"}
+,{"CODIGO":"0101   ","NOMBRE":"Lavadoras-Secadoras"}
+,{"CODIGO":"010101 ","NOMBRE":"Lavadora Secadora"}
+,{"CODIGO":"010102 ","NOMBRE":"Lavadoras"}
+,{"CODIGO":"010103 ","NOMBRE":"Secadoras"}
+,{"CODIGO":"0102   ","NOMBRE":"Refrigeracion"}
+,{"CODIGO":"010201 ","NOMBRE":"Minibares"}
+,{"CODIGO":"010202 ","NOMBRE":"Nevecones"}
+,{"CODIGO":"010203 ","NOMBRE":"Neveras"}
+,{"CODIGO":"010204 ","NOMBRE":"Congeladores"}
+,{"CODIGO":"010205 ","NOMBRE":"Dospensadores de Agua"}
+,{"CODIGO":"0103   ","NOMBRE":"Pequeños Electrodomesticos"}
+,{"CODIGO":"010301 ","NOMBRE":"Campanas"}
+,{"CODIGO":"010302 ","NOMBRE":"Cubiertas"}
+,{"CODIGO":"010303 ","NOMBRE":"Estufas"}
+,{"CODIGO":"010304 ","NOMBRE":"Cafeteras"}
+,{"CODIGO":"010305 ","NOMBRE":"Exprimidores - Picatodo"}
+,{"CODIGO":"010306 ","NOMBRE":"Hornos microondas - empotrables"}
+,{"CODIGO":"010307 ","NOMBRE":"Hornos tostadores"}
+,{"CODIGO":"010308 ","NOMBRE":"Licuadoras"}
+,{"CODIGO":"010309 ","NOMBRE":"ollas arroceras"}
+,{"CODIGO":"010310 ","NOMBRE":"Procesadores de Alimentos"}
+,{"CODIGO":"0104   ","NOMBRE":"Cuidado personal"}
+,{"CODIGO":"010401 ","NOMBRE":"Afeitadoras"}
+,{"CODIGO":"010402 ","NOMBRE":"Planchas para cabello"}
+,{"CODIGO":"010403 ","NOMBRE":"Rizadores"}
+,{"CODIGO":"010404 ","NOMBRE":"Secadores para cabello"}
+,{"CODIGO":"010405 ","NOMBRE":"Toallas para manos y cuerpo"}
+,{"CODIGO":"010406 ","NOMBRE":"Equipos de gimnasia"}
+,{"CODIGO":"0105   ","NOMBRE":"Climatizacion"}
+,{"CODIGO":"010501 ","NOMBRE":"Aires acondicionados"}
+,{"CODIGO":"010502 ","NOMBRE":"Calentadores"}
+,{"CODIGO":"010503 ","NOMBRE":"Ventiladores"}
+,{"CODIGO":"0106   ","NOMBRE":"Cuidado de Prendas"}
+,{"CODIGO":"010601 ","NOMBRE":"Maquinas de coser"}
+,{"CODIGO":"010602 ","NOMBRE":"Planchas para prendas"}
+,{"CODIGO":"010603 ","NOMBRE":"Maquinas fileteadoras"}
+,{"CODIGO":"02     ","NOMBRE":"Carnes, pollo y pescado"}
+,{"CODIGO":"0201   ","NOMBRE":"Carnes de res"}
+,{"CODIGO":"020101 ","NOMBRE":"Anca"}
+,{"CODIGO":"020102 ","NOMBRE":"Cadera"}
+,{"CODIGO":"020103 ","NOMBRE":"Carne Molida"}
+,{"CODIGO":"020104 ","NOMBRE":"Falda especial"}
+,{"CODIGO":"020105 ","NOMBRE":"Hamburguesa"}
+,{"CODIGO":"020106 ","NOMBRE":"Huevo de pierna"}
+,{"CODIGO":"020107 ","NOMBRE":"Lomo"}
+,{"CODIGO":"020108 ","NOMBRE":"Lomo gourmet"}
+,{"CODIGO":"020109 ","NOMBRE":"Pierna magra"}
+,{"CODIGO":"020110 ","NOMBRE":"Sobrebarriga especial"}
+,{"CODIGO":"0202   ","NOMBRE":"Carne de cerdo"}
+,{"CODIGO":"020201 ","NOMBRE":"Cordon de cerdo"}
+,{"CODIGO":"020202 ","NOMBRE":"Cordon gourmet"}
+,{"CODIGO":"020203 ","NOMBRE":"Costilla"}
+,{"CODIGO":"020204 ","NOMBRE":"Costilla con tocino especial"}
+,{"CODIGO":"020205 ","NOMBRE":"Espinazo"}
+,{"CODIGO":"020206 ","NOMBRE":"Osobuco"}
+,{"CODIGO":"020207 ","NOMBRE":"Pernil"}
+,{"CODIGO":"020208 ","NOMBRE":"Tocino especial"}
+,{"CODIGO":"0203   ","NOMBRE":"Pollo"}
+,{"CODIGO":"020301 ","NOMBRE":"Pollo entero"}
+,{"CODIGO":"020302 ","NOMBRE":"Preparados de pollo"}
+,{"CODIGO":"020303 ","NOMBRE":"Cortes de pollo - menudencias"}
+,{"CODIGO":"0204   ","NOMBRE":"Pescados - mariscos"}
+,{"CODIGO":"020401 ","NOMBRE":"Pescados enteros"}
+,{"CODIGO":"020402 ","NOMBRE":"Filetes de pescado"}
+,{"CODIGO":"020403 ","NOMBRE":"Mariscos"}
+,{"CODIGO":"03     ","NOMBRE":"Carnes frias, embutidos y delicatessen"}
+,{"CODIGO":"0301   ","NOMBRE":"Carnes frias - embutidos"}
+,{"CODIGO":"030101 ","NOMBRE":"Chorizos"}
+,{"CODIGO":"030102 ","NOMBRE":"Hamburguesas - Carnes adobadas"}
+,{"CODIGO":"030103 ","NOMBRE":"Jamones - jamonadas"}
+,{"CODIGO":"030104 ","NOMBRE":"Morcillas - rellenos"}
+,{"CODIGO":"030105 ","NOMBRE":"Mortadelas - tocinetas - productos ahumados"}
+,{"CODIGO":"030106 ","NOMBRE":"Salchichas - salchichones - cabanos"}
+,{"CODIGO":"0302   ","NOMBRE":"Antipastos - encutidos"}
+,{"CODIGO":"0303   ","NOMBRE":"Carnes especiales"}
+,{"CODIGO":"0304   ","NOMBRE":"Quesos maduros"}
+,{"CODIGO":"04     ","NOMBRE":"Frutas y verduras"}
+,{"CODIGO":"0401   ","NOMBRE":"Frutas"}
+,{"CODIGO":"040101 ","NOMBRE":"Guayabas - tomates de arbol"}
+,{"CODIGO":"040102 ","NOMBRE":"Bananos"}
+,{"CODIGO":"040103 ","NOMBRE":"Guanabana - coco"}
+,{"CODIGO":"040104 ","NOMBRE":"Mandarinas - naranjas"}
+,{"CODIGO":"040105 ","NOMBRE":"Lulos - kiwi - maracuyas"}
+,{"CODIGO":"040106 ","NOMBRE":"Melones - papayas - sandias"}
+,{"CODIGO":"040107 ","NOMBRE":"Manzanas - peras - mangos"}
+,{"CODIGO":"040108 ","NOMBRE":"Piñas - pitayas - granadillas"}
+,{"CODIGO":"040109 ","NOMBRE":"Uvas - uchuvas - moras - fresas"}
+,{"CODIGO":"0402   ","NOMBRE":"Verduras"}
+,{"CODIGO":"040201 ","NOMBRE":"Aguacates - mazorcas"}
+,{"CODIGO":"040202 ","NOMBRE":"Cebollas - ajos"}
+,{"CODIGO":"040203 ","NOMBRE":"Champiñones - raices"}
+,{"CODIGO":"040204 ","NOMBRE":"Cilantros - guascas - perejiles"}
+,{"CODIGO":"040205 ","NOMBRE":"Coliflor - apios - brocolis"}
+,{"CODIGO":"040206 ","NOMBRE":"Habichuelas - granos desgranados"}
+,{"CODIGO":"040207 ","NOMBRE":"Lechugas - repollos - espinacas"}
+,{"CODIGO":"040208 ","NOMBRE":"Limones"}
+,{"CODIGO":"040209 ","NOMBRE":"Platanos - guineos"}
+,{"CODIGO":"040210 ","NOMBRE":"Papas - yucas - arracachas"}
+,{"CODIGO":"05     ","NOMBRE":"Despensa"}
+,{"CODIGO":"0501   ","NOMBRE":"Arroz - granos"}
+,{"CODIGO":"050101 ","NOMBRE":"Arroz"}
+,{"CODIGO":"050102 ","NOMBRE":"Granos"}
+,{"CODIGO":"0502   ","NOMBRE":"Aceite"}
+,{"CODIGO":"050201 ","NOMBRE":"Aceites de oliva"}
+,{"CODIGO":"050202 ","NOMBRE":"Aceites de girasol - vegetal"}
+,{"CODIGO":"050203 ","NOMBRE":"Aceites especiales"}
+,{"CODIGO":"0503   ","NOMBRE":"Sal - caldos - condimentos"}
+,{"CODIGO":"050301 ","NOMBRE":"Sal"}
+,{"CODIGO":"050302 ","NOMBRE":"Caldos"}
+,{"CODIGO":"050303 ","NOMBRE":"Condimentos"}
+,{"CODIGO":"0504   ","NOMBRE":"Sopas - cremas - bases"}
+,{"CODIGO":"050401 ","NOMBRE":"Sopas - cremas"}
+,{"CODIGO":"050402 ","NOMBRE":"Bases"}
+,{"CODIGO":"050403 ","NOMBRE":"Preparaciones instantaneas"}
+,{"CODIGO":"0505   ","NOMBRE":"Pastas - fideos - pures"}
+,{"CODIGO":"050501 ","NOMBRE":"Spagueti"}
+,{"CODIGO":"050502 ","NOMBRE":"Pastas"}
+,{"CODIGO":"0506   ","NOMBRE":"Salsas - aderezos - vinagres"}
+,{"CODIGO":"050601 ","NOMBRE":"Salsas para cocina - mesa"}
+,{"CODIGO":"050602 ","NOMBRE":"Aderezos"}
+,{"CODIGO":"050603 ","NOMBRE":"Vinagres"}
+,{"CODIGO":"0507   ","NOMBRE":"Enlatados - conservas"}
+,{"CODIGO":"050701 ","NOMBRE":"Pescado en conserva"}
+,{"CODIGO":"050702 ","NOMBRE":"Vegetales en conserva"}
+,{"CODIGO":"050703 ","NOMBRE":"Frutas en conserva"}
+,{"CODIGO":"050704 ","NOMBRE":"Encurtidos en conservas"}
+,{"CODIGO":"050705 ","NOMBRE":"Carnes en conserva"}
+,{"CODIGO":"0508   ","NOMBRE":"Azucar - panelas - endulzantes"}
+,{"CODIGO":"050801 ","NOMBRE":"Azucar"}
+,{"CODIGO":"050802 ","NOMBRE":"Panales"}
+,{"CODIGO":"050803 ","NOMBRE":"Ebdulzantes - sustitutos"}
+,{"CODIGO":"0509   ","NOMBRE":"Cafe - chocolate - infusiones"}
+,{"CODIGO":"050901 ","NOMBRE":"Cafe instantaneo"}
+,{"CODIGO":"050902 ","NOMBRE":"Cafe molido"}
+,{"CODIGO":"050903 ","NOMBRE":"Cafe en grano"}
+,{"CODIGO":"050904 ","NOMBRE":"Cafes especiales - adiciones"}
+,{"CODIGO":"050905 ","NOMBRE":"Chocolates de mesa"}
+,{"CODIGO":"050906 ","NOMBRE":"Cocoas de mesa"}
+,{"CODIGO":"050907 ","NOMBRE":"Aromaticas"}
+,{"CODIGO":"050908 ","NOMBRE":"Te"}
+,{"CODIGO":"0510   ","NOMBRE":"Leches en polvo"}
+,{"CODIGO":"051001 ","NOMBRE":"Leches enteras"}
+,{"CODIGO":"051002 ","NOMBRE":"Leches descremadas - deslactosadas"}
+,{"CODIGO":"06     ","NOMBRE":"Lacteos y refrigerados"}
+,{"CODIGO":"0601   ","NOMBRE":"Leches liquidas"}
+,{"CODIGO":"060101 ","NOMBRE":"Leches enteras"}
+,{"CODIGO":"060102 ","NOMBRE":"Leches deslactosadas - descremadas"}
+,{"CODIGO":"060103 ","NOMBRE":"Leches larga vida"}
+,{"CODIGO":"060104 ","NOMBRE":"Leches saborizadas"}
+,{"CODIGO":"07     ","NOMBRE":"Vinos y licores"}
+,{"CODIGO":"0701   ","NOMBRE":"Vinos"}
+,{"CODIGO":"070101 ","NOMBRE":"Blanco"}
+,{"CODIGO":"070102 ","NOMBRE":"Tinto"}
+,{"CODIGO":"070103 ","NOMBRE":"Rosado"}
+,{"CODIGO":"070104 ","NOMBRE":"Vinos espumosos - champaña"}
+,{"CODIGO":"070105 ","NOMBRE":"Vinos de cocina"}
+,{"CODIGO":"08     ","NOMBRE":"Cuidado del bebe"}
+,{"CODIGO":"0801   ","NOMBRE":"Alimentacion"}
+,{"CODIGO":"080101 ","NOMBRE":"Leches infantiles"}
+,{"CODIGO":"080102 ","NOMBRE":"Cereales - coladas"}
+,{"CODIGO":"080103 ","NOMBRE":"Compotas"}
+,{"CODIGO":"080104 ","NOMBRE":"Yogures - postres"}
+,{"CODIGO":"09     ","NOMBRE":"Mascotas"}
+,{"CODIGO":"0901   ","NOMBRE":"Gatos"}
+,{"CODIGO":"090101 ","NOMBRE":"Alimentos para gatos"}
+,{"CODIGO":"090102 ","NOMBRE":"Higuiene para gatos"}
+,{"CODIGO":"090103 ","NOMBRE":"Accesorios para gatos"}
+,{"CODIGO":"10     ","NOMBRE":"Limpieza"}
+,{"CODIGO":"1001   ","NOMBRE":"Limpieza de cocina"}
+,{"CODIGO":"100101 ","NOMBRE":"Esponjas - fibras"}
+,{"CODIGO":"100102 ","NOMBRE":"Lavalozas - brilla ollas"}
+,{"CODIGO":"100103 ","NOMBRE":"Limpiadores - desengrasantes"}
+,{"CODIGO":"100104 ","NOMBRE":"Toallas de cocina"}
+],"TOTAL_CATEGORIAS":"174"}

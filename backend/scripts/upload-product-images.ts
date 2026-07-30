@@ -14,7 +14,7 @@ import * as schema from '../drizzle/schema';
 
 // __dirname is available at runtime in CommonJS output
 declare var __dirname: string;
-const JPG_DIR = path.resolve(__dirname, '../../../JPG');
+const JPG_DIR = path.resolve(process.cwd(), '..', 'JPG');
 const DATABASE_URL = process.env.DATABASE_URL;
 
 if (!DATABASE_URL) {
@@ -144,6 +144,24 @@ async function main() {
       continue;
     }
 
+    // Skip if product already has a cover image
+    const [existingCover] = await db
+      .select({ id: schema.productImages.id })
+      .from(schema.productImages)
+      .where(
+        and(
+          eq(schema.productImages.productId, productId),
+          eq(schema.productImages.isCover, true),
+        ),
+      )
+      .limit(1);
+
+    if (existingCover) {
+      console.log(`  ⏭️  ${product.name}: ya tiene imagen de portada`);
+      skipped++;
+      continue;
+    }
+
     // Buscar media existente o crear nueva
     const existingImages = await db
       .select({
@@ -186,7 +204,7 @@ async function main() {
           mediaType: 'image',
           provider: 'cloudinary',
           sizeBytes: 0,
-          checksum: url.substring(0, 64),
+          checksum: `${productId}_${plu}_${Date.now()}`.substring(0, 64),
           status: 'active',
           isPublic: true,
         })
