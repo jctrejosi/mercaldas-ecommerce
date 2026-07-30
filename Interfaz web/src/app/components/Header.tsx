@@ -166,17 +166,10 @@ export function Header({
     let cancelled = false;
 
     const timer = setTimeout(() => {
-      // Buscar también por nombre de categoría
-      const matchingCategories = searchCategories.filter((cat) =>
-        cat.name.toLowerCase().includes(query.toLowerCase()),
-      );
-      const categoryIds = matchingCategories.map((c) => c.id);
-
       void catalogService
         .getProducts({
           search: query,
-          categoryIds: categoryIds.length > 0 ? categoryIds : undefined,
-          limit: 8,
+          limit: 5,
         })
         .then((products) => {
           if (!cancelled) setSearchResults(products);
@@ -497,8 +490,8 @@ export function Header({
                         <p className="text-xs font-bold text-muted-foreground uppercase tracking-wide px-3 pt-3 pb-1.5">
                           Productos ({searchResults.length})
                         </p>
-                        <ul>
-                          {searchResults.map((p) => {
+                        <ul className="max-h-[260px] overflow-y-auto">
+                          {searchResults.slice(0, 5).map((p) => {
                             const inCart = cartItems.find((c) => c.id === p.id);
                             return (
                               <li
@@ -520,6 +513,17 @@ export function Header({
                                   <p className="text-sm font-semibold text-foreground truncate">
                                     {p.name}
                                   </p>
+                                  {(p.plu || p.barcode || p.externalId) && (
+                                    <p className="text-[10px] text-muted-foreground font-mono mt-0.5">
+                                      {[
+                                        p.plu && `PLU: ${p.plu}`,
+                                        p.barcode && `EAN: ${p.barcode}`,
+                                        p.externalId && `Ref: ${p.externalId}`,
+                                      ]
+                                        .filter(Boolean)
+                                        .join(" · ")}
+                                    </p>
+                                  )}
                                   <div className="flex items-center gap-2 mt-0.5">
                                     <span
                                       className="text-sm font-bold"

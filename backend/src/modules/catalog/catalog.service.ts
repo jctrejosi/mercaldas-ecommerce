@@ -1493,7 +1493,9 @@ export class CatalogService {
             ? or(
                 ilike(products.name, `%${search}%`),
                 ilike(products.description, `%${search}%`),
-                ilike(productVariants.sku, `%${search}%`),
+                ilike(products.plu, `%${search}%`),
+                ilike(productVariants.barcode, `%${search}%`),
+                ilike(products.externalId, `%${search}%`),
               )
             : undefined,
           this.buildPriceRangeCondition(query.priceRange),
@@ -1506,7 +1508,19 @@ export class CatalogService {
             : undefined,
         ),
       )
-      .orderBy(...this.buildSort(sort))
+      .orderBy(
+        search
+          ? sql`CASE
+            WHEN ${products.name} ILIKE ${'%' + search + '%'} THEN 0
+            WHEN ${products.description} ILIKE ${'%' + search + '%'} THEN 1
+            WHEN ${products.plu} ILIKE ${'%' + search + '%'} THEN 2
+            WHEN ${productVariants.barcode} ILIKE ${'%' + search + '%'} THEN 3
+            WHEN ${products.externalId} ILIKE ${'%' + search + '%'} THEN 4
+            ELSE 5
+          END`
+          : this.buildSort(sort)[0],
+        ...(search ? [asc(products.name)] : this.buildSort(sort).slice(1)),
+      )
       .limit(limit * 3)
       .offset(offset);
 
