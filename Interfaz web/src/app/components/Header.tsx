@@ -243,7 +243,7 @@ export function Header({
     const activeId = path.length > 0 ? path[path.length - 1] : null;
     return (
       <div
-        className="py-2 min-w-[220px]"
+        className="py-2 w-[240px] shrink-0"
         onMouseEnter={() => {
           if (subTimerRef.current) clearTimeout(subTimerRef.current);
         }}
@@ -262,7 +262,7 @@ export function Header({
                 onOpenCatalog(id);
                 setCategoriesOpen(false);
               }}
-              className={`w-full flex items-center gap-3 px-4 py-2.5 hover:bg-muted transition-colors text-left ${isActive ? "bg-muted" : ""}`}
+              className={`w-full flex items-center gap-2.5 px-3 py-2 hover:bg-muted transition-colors text-left min-h-[32px] ${isActive ? "bg-muted" : ""}`}
               onMouseEnter={() => {
                 if (subTimerRef.current) clearTimeout(subTimerRef.current);
                 if (hasChildren) {
@@ -273,29 +273,18 @@ export function Header({
               }}
             >
               <div
-                className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
+                className="w-6 h-6 rounded-lg flex items-center justify-center flex-shrink-0 text-[10px] font-bold"
                 style={{
                   background: cat.bg || "#F4F4F6",
                   color: cat.color || "#6B7280",
                 }}
               >
-                {Icon ? (
-                  <Icon className="w-3.5 h-3.5" />
-                ) : (
-                  <span className="font-bold text-[10px]">
-                    {cat.name.charAt(0)}
-                  </span>
-                )}
+                {Icon ? <Icon className="w-3 h-3" /> : cat.name.charAt(0)}
               </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-foreground">
+              <div className="flex-1 min-w-0 leading-tight">
+                <p className="text-xs font-semibold text-foreground uppercase tracking-wide whitespace-normal">
                   {cat.name}
                 </p>
-                {cat.count !== undefined && (
-                  <p className="text-xs text-muted-foreground">
-                    {cat.count} producto{cat.count !== 1 ? "s" : ""}
-                  </p>
-                )}
               </div>
               {hasChildren && (
                 <ChevronRight className="w-3 h-3 text-muted-foreground flex-shrink-0" />
@@ -770,7 +759,7 @@ export function Header({
                 }}
               >
                 {/* Root column */}
-                <div className="max-h-[70vh] overflow-y-auto">
+                <div className="max-h-[70vh] overflow-y-auto overflow-x-hidden">
                   <FlyoutColumn
                     categoryIds={rootCategories.map((c) => c.id)}
                     path={[]}
@@ -785,7 +774,7 @@ export function Header({
                     return (
                       <div
                         key={`${id}-${colIdx}`}
-                        className="border-l border-border max-h-[70vh] overflow-y-auto"
+                        className="border-l border-border max-h-[70vh] overflow-y-auto overflow-x-hidden"
                         onMouseEnter={() => {
                           if (subTimerRef.current)
                             clearTimeout(subTimerRef.current);
