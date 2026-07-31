@@ -1822,6 +1822,7 @@ export const orders = pgTable(
     userAgent: text('user_agent'),
     notes: text(),
     internalNotes: text('internal_notes'),
+    reviewedAt: timestamp('reviewed_at', { withTimezone: true, mode: 'string' }),
     createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' })
       .defaultNow()
       .notNull(),

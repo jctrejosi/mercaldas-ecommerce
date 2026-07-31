@@ -53,11 +53,26 @@ export class AdminOrdersController {
     });
   }
 
+  @Get('unreviewed-count')
+  @ApiOperation({ summary: 'Obtener conteo de pedidos sin revisar' })
+  @ApiResponse({ status: 200, description: 'Conteo de pedidos no revisados' })
+  getUnreviewedCount() {
+    return this.ordersService.getUnreviewedCount();
+  }
+
   @Get(':id')
   @ApiOperation({ summary: 'Obtener detalle de un pedido (admin)' })
   @ApiResponse({ status: 200, description: 'Detalle del pedido' })
   getOrderById(@Param('id') id: string) {
     return this.ordersService.getOrderById(Number(id));
+  }
+
+  @Post(':id/reviewed')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Marcar pedido como revisado' })
+  @ApiResponse({ status: 200, description: 'Pedido marcado como revisado' })
+  markAsReviewed(@Param('id') id: string) {
+    return this.ordersService.markAsReviewed(Number(id));
   }
 
   @Post(':id/status')

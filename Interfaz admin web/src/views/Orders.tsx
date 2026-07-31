@@ -76,7 +76,7 @@ function OrderDetail({ order: initialOrder, onClose }: { order: Order; onClose: 
             <button className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
               <Printer size={12} /> Factura
             </button>
-            <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-500">✕</button>
+            <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-500 cursor-pointer">✕</button>
           </div>
         </div>
 
@@ -181,6 +181,15 @@ export default function Orders() {
     fetchOrders();
   }, [fetchOrders]);
 
+  // Mark loaded orders as reviewed
+  useEffect(() => {
+    if (orders.length > 0) {
+      orders.forEach((o) => {
+        ordersService.markAsReviewed(o.orderId.toString()).catch(() => {});
+      });
+    }
+  }, [orders]);
+
   const filtered = orders.filter((o) => {
     const matchSearch =
       !search ||
@@ -211,10 +220,10 @@ export default function Orders() {
           </div>
           <div className="flex items-center gap-2">
             <div className="flex items-center bg-white border border-gray-200 rounded-xl p-1">
-              <button onClick={() => setMode("kanban")} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${mode === "kanban" ? "bg-amber-400 text-amber-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>
+              <button onClick={() => setMode("kanban")} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-all cursor-pointer ${mode === "kanban" ? "bg-amber-400 text-amber-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>
                 <LayoutGrid size={14} /> Kanban
               </button>
-              <button onClick={() => setMode("table")} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${mode === "table" ? "bg-amber-400 text-amber-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>
+              <button onClick={() => setMode("table")} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-all cursor-pointer ${mode === "table" ? "bg-amber-400 text-amber-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>
                 <List size={14} /> Tabla
               </button>
             </div>
@@ -233,7 +242,7 @@ export default function Orders() {
               <button
                 key={s}
                 onClick={() => setStatusFilter(statusFilter === s ? "todos" : s)}
-                className={`rounded-xl border p-3 text-left transition-all hover:shadow-sm ${statusFilter === s ? `${cfg.bg} ${cfg.border}` : "bg-white border-gray-100"}`}
+                className={`rounded-xl border p-3 text-left transition-all hover:shadow-sm cursor-pointer ${statusFilter === s ? `${cfg.bg} ${cfg.border}` : "bg-white border-gray-100"}`}
               >
                 <p className={`text-lg font-bold ${statusFilter === s ? cfg.color : "text-gray-800"}`}>{count}</p>
                 <p className={`text-[10px] font-semibold ${statusFilter === s ? cfg.color : "text-gray-500"}`}>{cfg.label}</p>
@@ -258,7 +267,7 @@ export default function Orders() {
           <div className="flex flex-wrap items-center gap-2">
             <button
               onClick={() => setStatusFilter("todos")}
-              className={`text-xs font-semibold px-3 py-1.5 rounded-full border transition-all ${
+              className={`text-xs font-semibold px-3 py-1.5 rounded-full border transition-all cursor-pointer ${
                 statusFilter === "todos"
                   ? "bg-gray-800 text-white border-gray-800"
                   : "bg-white text-gray-500 border-gray-200 hover:border-gray-300 hover:text-gray-700"
@@ -273,7 +282,7 @@ export default function Orders() {
                 <button
                   key={s}
                   onClick={() => setStatusFilter(isActive ? "todos" : s)}
-                  className={`text-xs font-semibold px-3 py-1.5 rounded-full border transition-all flex items-center gap-1.5 ${
+                  className={`text-xs font-semibold px-3 py-1.5 rounded-full border transition-all flex items-center gap-1.5 cursor-pointer ${
                     isActive
                       ? `${cfg.bg} ${cfg.color} ${cfg.border}`
                       : "bg-white text-gray-500 border-gray-200 hover:border-gray-300 hover:text-gray-700"

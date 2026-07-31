@@ -39,6 +39,7 @@ import {
 import Dashboard from "./views/Dashboard";
 import Products from "./views/Products";
 import Orders from "./views/Orders";
+import { ordersService } from "./services/orders.service";
 import HomepageEditor from "./views/HomepageEditor";
 import Banners from "./views/Banners";
 import Reports from "./views/Reports";
@@ -100,7 +101,7 @@ const NAV: NavSection[] = [
   {
     title: "Comercio",
     items: [
-      { id: "orders", label: "Pedidos", icon: ShoppingCart, badge: 8 },
+      { id: "orders", label: "Pedidos", icon: ShoppingCart },
       { id: "customers", label: "Clientes", icon: Users },
       { id: "promotions", label: "Promociones", icon: Percent },
     ],
@@ -426,10 +427,12 @@ function Sidebar({
   current,
   onNavigate,
   collapsed,
+  unreviewedCount,
 }: {
   current: ViewId;
   onNavigate: (v: ViewId) => void;
   collapsed: boolean;
+  unreviewedCount: number;
 }) {
   return (
     <aside
@@ -462,6 +465,7 @@ function Sidebar({
             )}
             {section.items.map((item) => {
               const active = current === item.id;
+              const badge = item.id === "orders" && unreviewedCount > 0 ? unreviewedCount : item.badge;
               return (
                 <button
                   key={item.id}
@@ -475,12 +479,12 @@ function Sidebar({
                 >
                   <item.icon size={15} className="shrink-0" />
                   {!collapsed && <span className="truncate">{item.label}</span>}
-                  {!collapsed && item.badge && (
+                  {!collapsed && badge && (
                     <span className="ml-auto bg-amber-400 text-amber-900 text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center">
-                      {item.badge}
+                      {badge}
                     </span>
                   )}
-                  {collapsed && item.badge && (
+                  {collapsed && badge && (
                     <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-amber-400 rounded-full" />
                   )}
                 </button>
@@ -673,6 +677,7 @@ export default function App() {
   const [view, navigate] = useViewFromUrl();
   const [cmdOpen, setCmdOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
+  const [unreviewedCount, setUnreviewedCount] = useState(0);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -686,9 +691,19 @@ export default function App() {
     return () => window.removeEventListener("keydown", handler);
   }, []);
 
+  // Fetch unreviewed orders count
+  useEffect(() => {
+    const fetchCount = () => {
+      ordersService.getUnreviewedCount().then((r) => setUnreviewedCount(r.count)).catch(() => {});
+    };
+    fetchCount();
+    const interval = setInterval(fetchCount, 30000); // refresh every 30s
+    return () => clearInterval(interval);
+  }, []);
+
   return (
     <div className="flex h-screen overflow-hidden bg-gray-50">
-      <Sidebar current={view} onNavigate={navigate} collapsed={collapsed} />
+      <Sidebar current={view} onNavigate={navigate} collapsed={collapsed} unreviewedCount={unreviewedCount} />
 
       <div className="flex flex-col flex-1 min-w-0">
         <TopBar

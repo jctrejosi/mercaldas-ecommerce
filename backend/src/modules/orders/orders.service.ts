@@ -859,6 +859,32 @@ export class OrdersService {
     };
   }
 
+  async getUnreviewedCount(): Promise<{ count: number }> {
+    const result = await this.db
+      .select({
+        count: sql<number>`COUNT(*)::int`,
+      })
+      .from(orders)
+      .where(isNull(orders.reviewedAt));
+
+    return { count: Number(result[0]?.count ?? 0) };
+  }
+
+  async markAsReviewed(orderId: number) {
+    const result = await this.db
+      .update(orders)
+      .set({ reviewedAt: new Date().toISOString() })
+      .where(
+        and(
+          eq(orders.id, BigInt(orderId)),
+          isNull(orders.reviewedAt),
+        ),
+      )
+      .returning({ id: orders.id });
+
+    return { reviewed: result.length > 0 };
+  }
+
   private adminMapStatusToDb(status: string): string | null {
     switch (status) {
       case 'pendiente':

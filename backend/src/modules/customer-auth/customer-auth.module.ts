@@ -3,7 +3,9 @@ import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { CustomerAuthController } from './customer-auth.controller';
+import { AdminCustomersController } from './admin-customers.controller';
 import { CustomerAuthService } from './customer-auth.service';
+import { CustomersService } from './customers.service';
 import { CustomerJwtStrategy } from './strategies/customer-jwt.strategy';
 import { CustomerLocalStrategy } from './strategies/customer-local.strategy';
 
@@ -36,9 +38,10 @@ import { CustomerLocalStrategy } from './strategies/customer-local.strategy';
       },
     }),
   ],
-  controllers: [CustomerAuthController],
+  controllers: [CustomerAuthController, AdminCustomersController],
   providers: [
     CustomerAuthService,
+    CustomersService,
     CustomerJwtStrategy,
     CustomerLocalStrategy,
   ],

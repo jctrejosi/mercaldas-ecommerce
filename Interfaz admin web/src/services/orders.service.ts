@@ -83,4 +83,14 @@ export const ordersService = {
       body: JSON.stringify({ status }),
     });
   },
+
+  async getUnreviewedCount(): Promise<{ count: number }> {
+    return fetchJson(`${API_BASE_URL}/admin/orders/unreviewed-count`);
+  },
+
+  async markAsReviewed(id: string): Promise<{ reviewed: boolean }> {
+    return fetchJson(`${API_BASE_URL}/admin/orders/${id}/reviewed`, {
+      method: "POST",
+    });
+  },
 };
