@@ -650,6 +650,7 @@ export const brands = pgTable(
     code: varchar({ length: 50 }),
     // You can use { mode: "bigint" } if numbers are exceeding js number limitations
     logoMediaId: bigint('logo_media_id', { mode: 'number' }),
+    isPublic: boolean('is_public').default(true).notNull(),
     isFeatured: boolean('is_featured').default(false).notNull(),
     isActive: boolean('is_active').default(true).notNull(),
     createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' })
@@ -692,6 +693,7 @@ export const products = pgTable(
     featured: boolean().default(false).notNull(),
     manufacturer: varchar({ length: 255 }),
     visibility: varchar({ length: 20 }).default('PUBLIC').notNull(),
+    isPublic: boolean('is_public').default(true).notNull(),
     isActive: boolean('is_active').default(true).notNull(),
     publishedAt: timestamp('published_at', { mode: 'string' }),
     createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' })

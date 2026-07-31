@@ -134,6 +134,7 @@ export class AdminCatalogController {
       description?: string;
       country?: string;
       isFeatured?: boolean;
+      isPublic?: boolean;
       imageUrl?: string;
     },
   ) {
@@ -154,6 +155,7 @@ export class AdminCatalogController {
       country?: string;
       isFeatured?: boolean;
       isActive?: boolean;
+      isPublic?: boolean;
       imageUrl?: string;
     },
   ) {

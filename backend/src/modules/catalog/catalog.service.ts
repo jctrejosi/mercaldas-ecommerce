@@ -79,6 +79,7 @@ type CatalogProductResponse = {
   productTypeName: string | null;
   isActive: boolean;
   isFeatured: boolean;
+  isPublic: boolean;
   stock: number;
 };
 
@@ -592,6 +593,7 @@ export class CatalogService {
         country: brands.country,
         isFeatured: brands.isFeatured,
         isActive: brands.isActive,
+        isPublic: brands.isPublic,
         createdAt: brands.createdAt,
         productCount: sql<number>`count(DISTINCT ${products.id})`,
       })
@@ -610,6 +612,7 @@ export class CatalogService {
         brands.country,
         brands.isFeatured,
         brands.isActive,
+        brands.isPublic,
         brands.createdAt,
       )
       .orderBy(asc(brands.name));
@@ -625,6 +628,7 @@ export class CatalogService {
       country: row.country,
       isFeatured: row.isFeatured,
       isActive: row.isActive,
+      isPublic: row.isPublic,
       createdAt: row.createdAt,
       productCount: Number(row.productCount),
     }));
@@ -637,6 +641,7 @@ export class CatalogService {
     description?: string;
     country?: string;
     isFeatured?: boolean;
+    isPublic?: boolean;
     imageUrl?: string;
   }) {
     const slug = slugify(body.name, { lower: true, strict: true });
@@ -671,6 +676,7 @@ export class CatalogService {
         country: body.country ?? '',
         logoMediaId,
         isFeatured: body.isFeatured ?? false,
+        isPublic: body.isPublic ?? true,
         isActive: true,
       })
       .returning({ id: brands.id });
@@ -688,6 +694,7 @@ export class CatalogService {
       country?: string;
       isFeatured?: boolean;
       isActive?: boolean;
+      isPublic?: boolean;
       imageUrl?: string;
     },
   ) {
@@ -704,6 +711,7 @@ export class CatalogService {
     if (body.country !== undefined) updateData.country = body.country;
     if (body.isFeatured !== undefined) updateData.isFeatured = body.isFeatured;
     if (body.isActive !== undefined) updateData.isActive = body.isActive;
+    if (body.isPublic !== undefined) updateData.isPublic = body.isPublic;
 
     if (body.imageUrl) {
       const [mediaRow] = await this.drizzleService.db
@@ -1202,6 +1210,7 @@ export class CatalogService {
           description: dto.description ?? null,
           brandId: dto.brandId ?? null,
           isActive: dto.isActive ?? true,
+          isPublic: dto.isPublic ?? true,
           featured: dto.isFeatured ?? false,
         })
         .returning({ id: products.id });
@@ -1271,6 +1280,7 @@ export class CatalogService {
           description: dto.description ?? null,
           brandId: dto.brandId ?? null,
           isActive: dto.isActive ?? true,
+          isPublic: dto.isPublic ?? true,
           featured: dto.isFeatured ?? false,
           updatedAt: new Date().toISOString(),
         })
@@ -1428,6 +1438,7 @@ export class CatalogService {
         description: products.description,
         isActive: products.isActive,
         isFeatured: products.featured,
+        isPublic: products.isPublic,
         categoryId: categories.id,
         categoryName: categories.name,
         brandId: products.brandId,
@@ -1557,6 +1568,7 @@ export class CatalogService {
         productTypeName: row.productTypeName,
         isActive: row.isActive,
         isFeatured: row.isFeatured,
+        isPublic: row.isPublic,
         stock: 0,
       });
       productIds.push(productId);
@@ -1614,6 +1626,7 @@ export class CatalogService {
         originalPrice: productVariants.currentComparePrice,
         isActive: products.isActive,
         isFeatured: products.featured,
+        isPublic: products.isPublic,
         productType: productTypes.name,
         category: categories.name,
         brand: brands.name,
@@ -1906,6 +1919,7 @@ export class CatalogService {
         productTypeName: productTypes.name,
         isActive: products.isActive,
         isFeatured: products.featured,
+        isPublic: products.isPublic,
         stock: inventory.stock,
       })
       .from(favorites)
@@ -1973,6 +1987,7 @@ export class CatalogService {
       productTypeName: row.productTypeName,
       isActive: row.isActive,
       isFeatured: Boolean(row.isFeatured),
+      isPublic: row.isPublic,
       stock: Number(row.stock ?? 0),
     }));
   }

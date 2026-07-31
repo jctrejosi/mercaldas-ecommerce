@@ -56,6 +56,10 @@ export class CreateProductDto {
   isFeatured?: boolean;
 
   @IsOptional()
+  @IsBoolean()
+  isPublic?: boolean;
+
+  @IsOptional()
   @Transform(({ value }) => Number(value))
   @IsNumber()
   categoryId?: number;
