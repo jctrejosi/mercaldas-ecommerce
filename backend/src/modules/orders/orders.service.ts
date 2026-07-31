@@ -3,7 +3,17 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { and, asc, desc, eq, inArray, isNull } from 'drizzle-orm';
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  inArray,
+  isNull,
+  like,
+  or,
+  sql,
+} from 'drizzle-orm';
 import { DrizzleService } from '../../database/drizzle.service';
 import {
   branches,
@@ -246,7 +256,10 @@ export class OrdersService {
           providerResponse: {
             paymentMethod: dto.paymentMethod,
             simulated: dto.paymentMethod !== 'tarjeta',
-            provider: dto.paymentMethod === 'tarjeta' ? cardProvider : this.mapPaymentProvider(dto.paymentMethod),
+            provider:
+              dto.paymentMethod === 'tarjeta'
+                ? cardProvider
+                : this.mapPaymentProvider(dto.paymentMethod),
             shippingType: dto.shippingType,
             paymentDetails: this.buildPaymentResponse(dto),
             cardTransaction,
@@ -290,15 +303,25 @@ export class OrdersService {
       };
     });
 
-    if (dto.paymentMethod === "tarjeta" && orderStatus === "payment_pending") { this.paymentVerification.verifyAndNotify(result.orderId, result.referenceCode, result.cardTransaction); };
+    if (dto.paymentMethod === 'tarjeta' && orderStatus === 'payment_pending') {
+      this.paymentVerification.verifyAndNotify(
+        result.orderId,
+        result.referenceCode,
+        result.cardTransaction,
+      );
+    }
 
     // Notify customer about order creation
     await this.notificationsService.create({
       type: 'ORDER',
-      title: orderStatus === 'payment_pending' ? 'Pedido recibido - Pago pendiente' : 'Pedido confirmado',
-      message: orderStatus === 'payment_pending'
-        ? `Tu pedido ${result.referenceCode} está pendiente de confirmación de pago. Te notificaremos cuando se apruebe.`
-        : `Tu pedido ${result.referenceCode} ha sido registrado y será procesado pronto.`,
+      title:
+        orderStatus === 'payment_pending'
+          ? 'Pedido recibido - Pago pendiente'
+          : 'Pedido confirmado',
+      message:
+        orderStatus === 'payment_pending'
+          ? `Tu pedido ${result.referenceCode} está pendiente de confirmación de pago. Te notificaremos cuando se apruebe.`
+          : `Tu pedido ${result.referenceCode} ha sido registrado y será procesado pronto.`,
       targetCustomerId: customerId,
       linkUrl: `/account?tab=orders`,
     });
@@ -322,7 +345,10 @@ export class OrdersService {
         paymentMethod: payments.paymentMethod,
       })
       .from(orders)
-      .leftJoin(customerAddresses, eq(customerAddresses.id, orders.customerAddressId))
+      .leftJoin(
+        customerAddresses,
+        eq(customerAddresses.id, orders.customerAddressId),
+      )
       .leftJoin(payments, eq(payments.orderId, orders.id))
       .where(eq(orders.customerId, customerId))
       .orderBy(desc(orders.createdAt));
@@ -343,12 +369,18 @@ export class OrdersService {
         image: media.path,
       })
       .from(orderItems)
-      .leftJoin(productVariants, eq(productVariants.id, orderItems.productVariantId))
+      .leftJoin(
+        productVariants,
+        eq(productVariants.id, orderItems.productVariantId),
+      )
       .leftJoin(products, eq(products.id, productVariants.productId))
-      .leftJoin(productImages, and(
-        eq(productImages.productId, products.id),
-        eq(productImages.isCover, true),
-      ))
+      .leftJoin(
+        productImages,
+        and(
+          eq(productImages.productId, products.id),
+          eq(productImages.isCover, true),
+        ),
+      )
       .leftJoin(media, eq(media.id, productImages.mediaId))
       .where(inArray(orderItems.orderId, orderIds))
       .orderBy(asc(orderItems.id));
@@ -391,27 +423,43 @@ export class OrdersService {
 
   private reverseMapPaymentMethod(method: string | null) {
     switch (method) {
-      case 'CARD': return 'tarjeta';
-      case 'PSE': return 'pse';
-      case 'CASH': return 'efectivo';
-      case 'NEQUI': return 'nequi';
-      case 'DAVIPLATA': return 'daviplata';
-      case 'BANK_TRANSFER': return 'efectivo';
-      default: return 'efectivo';
+      case 'CARD':
+        return 'tarjeta';
+      case 'PSE':
+        return 'pse';
+      case 'CASH':
+        return 'efectivo';
+      case 'NEQUI':
+        return 'nequi';
+      case 'DAVIPLATA':
+        return 'daviplata';
+      case 'BANK_TRANSFER':
+        return 'efectivo';
+      default:
+        return 'efectivo';
     }
   }
 
   private mapOrderStatus(status: string | null) {
     switch (status) {
-      case 'created': return 'preparando';
-      case 'confirmed': return 'preparando';
-      case 'payment_pending': return 'pendiente';
-      case 'paid': return 'preparando';
-      case 'preparing': return 'preparando';
-      case 'shipped': return 'en camino';
-      case 'delivered': return 'entregado';
-      case 'cancelled': return 'cancelado';
-      default: return 'preparando';
+      case 'created':
+        return 'preparando';
+      case 'confirmed':
+        return 'preparando';
+      case 'payment_pending':
+        return 'pendiente';
+      case 'paid':
+        return 'preparando';
+      case 'preparing':
+        return 'preparando';
+      case 'shipped':
+        return 'en camino';
+      case 'delivered':
+        return 'entregado';
+      case 'cancelled':
+        return 'cancelado';
+      default:
+        return 'preparando';
     }
   }
 
@@ -537,6 +585,298 @@ export class OrdersService {
       case 'efectivo':
       default:
         return 'cash_on_delivery';
+    }
+  }
+
+  // ── Admin methods ──
+
+  async getAllOrders(filters?: {
+    status?: string;
+    search?: string;
+    limit?: number;
+    offset?: number;
+  }) {
+    const conditions: any[] = [];
+
+    if (filters?.status) {
+      const dbStatus = this.adminMapStatusToDb(filters.status);
+      if (dbStatus) {
+        conditions.push(
+          eq(
+            orders.status,
+            dbStatus as (typeof orders.status.enumValues)[number],
+          ),
+        );
+      }
+    }
+
+    if (filters?.search) {
+      const s = `%${filters.search}%`;
+      conditions.push(
+        or(
+          like(orders.referenceCode, s),
+          like(customers.firstName, s),
+          like(customers.lastName, s),
+          like(customers.email, s),
+        ),
+      );
+    }
+
+    const query = this.db
+      .select({
+        id: orders.id,
+        referenceCode: orders.referenceCode,
+        status: orders.status,
+        subtotal: orders.subtotal,
+        shippingCost: orders.shippingCost,
+        grandTotal: orders.grandTotal,
+        notes: orders.notes,
+        createdAt: orders.createdAt,
+        customerId: orders.customerId,
+        customerName: sql<string>`CONCAT(${customers.firstName}, ' ', ${customers.lastName})`,
+        customerEmail: customers.email,
+        customerPhone: customers.phone,
+        addressLine1: customerAddresses.addressLine1,
+        addressLine2: customerAddresses.addressLine2,
+        city: customerAddresses.city,
+        paymentMethod: payments.paymentMethod,
+        paymentStatus: payments.status,
+      })
+      .from(orders)
+      .leftJoin(customers, eq(customers.id, orders.customerId))
+      .leftJoin(
+        customerAddresses,
+        eq(customerAddresses.id, orders.customerAddressId),
+      )
+      .leftJoin(payments, eq(payments.orderId, orders.id));
+
+    if (conditions.length > 0) {
+      query.where(and(...conditions));
+    }
+
+    query.orderBy(desc(orders.createdAt));
+
+    if (filters?.limit) {
+      query.limit(filters.limit);
+    }
+    if (filters?.offset) {
+      query.offset(filters.offset);
+    }
+
+    const rows = await query;
+
+    // Get item counts per order
+    const orderIds = rows.map((r) => Number(r.id));
+    const itemCounts = new Map<number, number>();
+    if (orderIds.length > 0) {
+      const countRows = await this.db
+        .select({
+          orderId: orderItems.orderId,
+          count: sql<number>`COUNT(*)::int`,
+        })
+        .from(orderItems)
+        .where(inArray(orderItems.orderId, orderIds))
+        .groupBy(orderItems.orderId);
+      for (const cr of countRows) {
+        itemCounts.set(Number(cr.orderId), Number(cr.count));
+      }
+    }
+
+    return rows.map((row) => ({
+      id: row.referenceCode,
+      orderId: Number(row.id),
+      customer: row.customerName ?? row.customerEmail ?? 'Cliente',
+      phone: row.customerPhone ?? '',
+      address: [row.addressLine1, row.addressLine2, row.city]
+        .filter(Boolean)
+        .join(', '),
+      total: Number(row.grandTotal ?? 0),
+      payment: this.reverseMapPaymentMethod(row.paymentMethod),
+      status: this.mapOrderStatus(row.status),
+      itemsCount: itemCounts.get(Number(row.id)) ?? 0,
+      date: row.createdAt
+        ? new Date(row.createdAt).toISOString().split('T')[0]
+        : '',
+      time: row.createdAt
+        ? new Date(row.createdAt).toLocaleTimeString('es-CO', {
+            hour: '2-digit',
+            minute: '2-digit',
+          })
+        : '',
+      note: row.notes ?? undefined,
+    }));
+  }
+
+  async getOrderById(orderId: number) {
+    const row = await this.db
+      .select({
+        id: orders.id,
+        referenceCode: orders.referenceCode,
+        status: orders.status,
+        subtotal: orders.subtotal,
+        shippingCost: orders.shippingCost,
+        grandTotal: orders.grandTotal,
+        notes: orders.notes,
+        createdAt: orders.createdAt,
+        customerId: orders.customerId,
+        customerName: sql<string>`CONCAT(${customers.firstName}, ' ', ${customers.lastName})`,
+        customerEmail: customers.email,
+        customerPhone: customers.phone,
+        addressLine1: customerAddresses.addressLine1,
+        addressLine2: customerAddresses.addressLine2,
+        city: customerAddresses.city,
+        paymentMethod: payments.paymentMethod,
+      })
+      .from(orders)
+      .leftJoin(customers, eq(customers.id, orders.customerId))
+      .leftJoin(
+        customerAddresses,
+        eq(customerAddresses.id, orders.customerAddressId),
+      )
+      .leftJoin(payments, eq(payments.orderId, orders.id))
+      .where(eq(orders.id, BigInt(orderId)))
+      .limit(1);
+
+    if (!row.length) {
+      throw new NotFoundException('Pedido no encontrado');
+    }
+
+    const o = row[0];
+
+    // Get items
+    const items = await this.db
+      .select({
+        productName: orderItems.productName,
+        quantity: orderItems.quantity,
+        unitPrice: orderItems.unitPriceNet,
+        total: orderItems.total,
+        variantSku: orderItems.variantSku,
+        image: media.path,
+      })
+      .from(orderItems)
+      .leftJoin(
+        productVariants,
+        eq(productVariants.id, orderItems.productVariantId),
+      )
+      .leftJoin(products, eq(products.id, productVariants.productId))
+      .leftJoin(
+        productImages,
+        and(
+          eq(productImages.productId, products.id),
+          eq(productImages.isCover, true),
+        ),
+      )
+      .leftJoin(media, eq(media.id, productImages.mediaId))
+      .where(eq(orderItems.orderId, Number(orderId)))
+      .orderBy(asc(orderItems.id));
+
+    // Get status history
+    const history = await this.db
+      .select({
+        status: orderStatusHistory.status,
+        note: orderStatusHistory.note,
+        createdAt: orderStatusHistory.createdAt,
+      })
+      .from(orderStatusHistory)
+      .where(eq(orderStatusHistory.orderId, Number(orderId)))
+      .orderBy(asc(orderStatusHistory.createdAt));
+
+    return {
+      id: o.referenceCode,
+      customer: o.customerName ?? o.customerEmail ?? 'Cliente',
+      phone: o.customerPhone ?? '',
+      address: [o.addressLine1, o.addressLine2, o.city]
+        .filter(Boolean)
+        .join(', '),
+      items: items.map((item) => ({
+        name: item.productName,
+        qty: Number(item.quantity ?? 1),
+        price: Number(item.unitPrice ?? 0),
+      })),
+      total: Number(o.grandTotal ?? 0),
+      payment: this.reverseMapPaymentMethod(o.paymentMethod),
+      status: this.mapOrderStatus(o.status),
+      date: o.createdAt
+        ? new Date(o.createdAt).toISOString().split('T')[0]
+        : '',
+      time: o.createdAt
+        ? new Date(o.createdAt).toLocaleTimeString('es-CO', {
+            hour: '2-digit',
+            minute: '2-digit',
+          })
+        : '',
+      note: o.notes ?? undefined,
+      statusHistory: history.map((h) => ({
+        status: this.mapOrderStatus(h.status),
+        note: h.note ?? undefined,
+        time: h.createdAt
+          ? new Date(h.createdAt).toLocaleTimeString('es-CO', {
+              hour: '2-digit',
+              minute: '2-digit',
+            })
+          : '',
+      })),
+    };
+  }
+
+  async updateOrderStatus(orderId: number, newStatus: string) {
+    const dbStatus = this.adminMapStatusToDb(newStatus);
+    if (!dbStatus) {
+      throw new BadRequestException(`Estado inválido: ${newStatus}`);
+    }
+
+    const [existing] = await this.db
+      .select({ id: orders.id, status: orders.status })
+      .from(orders)
+      .where(eq(orders.id, BigInt(orderId)))
+      .limit(1);
+
+    if (!existing) {
+      throw new NotFoundException('Pedido no encontrado');
+    }
+
+    await this.db.transaction(async (tx) => {
+      await tx
+        .update(orders)
+        .set({
+          status: dbStatus as (typeof orders.status.enumValues)[number],
+          updatedAt: new Date().toISOString(),
+        })
+        .where(eq(orders.id, BigInt(orderId)));
+
+      await tx.insert(orderStatusHistory).values({
+        orderId,
+        status: dbStatus as (typeof orders.status.enumValues)[number],
+        oldStatus: existing.status,
+        createdAt: new Date().toISOString(),
+      });
+    });
+
+    return {
+      success: true,
+      status: this.mapOrderStatus(dbStatus),
+      orderId,
+    };
+  }
+
+  private adminMapStatusToDb(status: string): string | null {
+    switch (status) {
+      case 'pendiente':
+        return 'payment_pending';
+      case 'confirmado':
+        return 'paid';
+      case 'preparando':
+        return 'preparing';
+      case 'listo':
+        return 'shipped';
+      case 'en camino':
+        return 'shipped';
+      case 'entregado':
+        return 'delivered';
+      case 'cancelado':
+        return 'cancelled';
+      default:
+        return null;
     }
   }
 }
