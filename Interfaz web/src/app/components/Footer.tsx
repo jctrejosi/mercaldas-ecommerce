@@ -44,7 +44,7 @@ export function Footer({ categories, onCategoryClick }: FooterProps) {
                 <a
                   key={i}
                   href="#"
-                  className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors hover:bg-white/20"
+                  className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors hover:bg-white/20 cursor-pointer"
                   style={{ background: "rgba(255,255,255,0.08)" }}
                 >
                   <Icon
@@ -65,7 +65,7 @@ export function Footer({ categories, onCategoryClick }: FooterProps) {
                 <li key={c.id}>
                   <button
                     onClick={() => onCategoryClick(c.name)}
-                    className="text-xs hover:text-white transition-colors text-left"
+                    className="text-xs hover:text-white transition-colors text-left cursor-pointer underline-offset-4 hover:underline"
                     style={{ color: "rgba(255,255,255,0.5)" }}
                   >
                     {c.name}
@@ -89,7 +89,7 @@ export function Footer({ categories, onCategoryClick }: FooterProps) {
                 <li key={l}>
                   <a
                     href="#"
-                    className="text-xs hover:text-white transition-colors"
+                    className="text-xs hover:text-white transition-colors cursor-pointer underline-offset-4 hover:underline"
                     style={{ color: "rgba(255,255,255,0.5)" }}
                   >
                     {l}

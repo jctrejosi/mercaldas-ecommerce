@@ -60,7 +60,8 @@ function ZoomImage({ src, alt }: { src?: string; alt: string }) {
   const [pos, setPos] = useState({ x: 50, y: 50 });
   const [hover, setHover] = useState(false);
 
-  const handleMouse = useCallback((e: React.MouseEvent) => {
+  const handleMouse = useCallback((e: React.PointerEvent) => {
+    if (e.pointerType !== "mouse") return;
     const rect = containerRef.current?.getBoundingClientRect();
     if (!rect) return;
     const x = ((e.clientX - rect.left) / rect.width) * 100;
@@ -73,14 +74,16 @@ function ZoomImage({ src, alt }: { src?: string; alt: string }) {
     <div
       ref={containerRef}
       className="relative w-full h-full cursor-crosshair"
-      onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => setHover(false)}
-      onMouseMove={handleMouse}
+      onPointerEnter={(e) => {
+        if (e.pointerType === "mouse") setHover(true);
+      }}
+      onPointerLeave={() => setHover(false)}
+      onPointerMove={handleMouse}
     >
       <img src={imgSrc} alt={alt} className="w-full h-full object-cover" />
       {hover && imgSrc && (
         <div
-          className="absolute inset-0 z-10 pointer-events-none"
+          className="absolute inset-0 z-[1] pointer-events-none"
           style={{
             backgroundImage: 'url("' + imgSrc + '")',
             backgroundSize: "250%",
@@ -142,7 +145,6 @@ export function ProductDetailModal({
   const inCart = product ? cartItems.find((c) => c.id === product.id) : null;
   const cartQty = inCart?.quantity ?? 0;
 
-  // Reset localQty when product changes
   useEffect(() => {
     setLocalQty(1);
   }, [product?.id]);
@@ -200,31 +202,32 @@ export function ProductDetailModal({
       {/* Backdrop */}
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
 
-      {/* Panel */}
+      {/* Panel - ahora ocupa toda la altura en móvil */}
       <div
-        className="relative bg-background w-full sm:max-w-3xl sm:rounded-2xl overflow-hidden shadow-2xl max-h-[92vh] flex flex-col"
+        className="relative bg-background w-full sm:max-w-3xl sm:rounded-2xl overflow-hidden shadow-2xl h-full sm:max-h-[92vh] sm:h-auto flex flex-col"
         onClick={(e) => e.stopPropagation()}
         style={{
           animation: "slideUp 0.28s cubic-bezier(0.34,1.56,0.64,1) both",
         }}
       >
-        {/* Close */}
+        {/* Close button - mejorado para móvil */}
         <button
           onClick={onClose}
-          className="absolute top-3 right-3 z-10 w-9 h-9 rounded-full bg-black/10 hover:bg-black/20 flex items-center justify-center transition-colors backdrop-blur-sm"
+          className="absolute top-3 right-3 z-30 w-10 h-10 sm:w-9 sm:h-9 rounded-full bg-white/90 hover:bg-white shadow-lg flex items-center justify-center transition-colors backdrop-blur-sm border border-border/20"
+          aria-label="Cerrar"
         >
-          <X className="w-4.5 h-4.5 text-foreground" />
+          <X className="w-5 h-5 sm:w-4.5 sm:h-4.5 text-foreground" />
         </button>
 
         <div className="overflow-y-auto flex-1">
           {/* Hero image + info */}
           <div className="grid sm:grid-cols-2">
-            {/* Image with magnifier */}
-            <div className="relative bg-muted aspect-square overflow-hidden">
+            {/* Image with magnifier - en móvil ocupa menos espacio */}
+            <div className="relative bg-muted aspect-square sm:aspect-square max-h-[50vh] sm:max-h-none overflow-hidden">
               <ZoomImage src={product.image} alt={product.name} />
               {product.badge && (
                 <span
-                  className="absolute top-3 left-3 text-xs font-bold px-2.5 py-1 rounded-full text-white"
+                  className="absolute top-3 left-3 z-[2] text-xs font-bold px-2.5 py-1 rounded-full text-white"
                   style={{
                     background:
                       product.badge === "Nuevo" ? "#1A1A2E" : "#FF4444",
@@ -235,7 +238,7 @@ export function ProductDetailModal({
               )}
               {discount && (
                 <div
-                  className="absolute bottom-3 left-3 flex items-center gap-1 text-white text-xs font-bold px-2.5 py-1 rounded-full"
+                  className="absolute bottom-3 left-3 z-[2] flex items-center gap-1 text-white text-xs font-bold px-2.5 py-1 rounded-full"
                   style={{ background: "#FF4444" }}
                 >
                   <TrendingUp className="w-3 h-3" />
@@ -244,14 +247,14 @@ export function ProductDetailModal({
               )}
             </div>
 
-            {/* Info */}
-            <div className="p-5 flex flex-col gap-3">
+            {/* Info - scrollable en móvil */}
+            <div className="p-4 sm:p-5 flex flex-col gap-3 overflow-y-auto">
               <div>
                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
                   {product.category}
                 </p>
                 <h2
-                  className="text-xl font-bold text-foreground leading-tight mt-1"
+                  className="text-xl sm:text-2xl font-bold text-foreground leading-tight mt-1"
                   style={{ fontFamily: "'Bricolage Grotesque', sans-serif" }}
                 >
                   {product.name}
@@ -279,13 +282,13 @@ export function ProductDetailModal({
               {/* Pricing */}
               <div className="flex items-baseline gap-2">
                 <span
-                  className="text-3xl font-bold text-foreground"
+                  className="text-2xl sm:text-3xl font-bold text-foreground"
                   style={{ fontFamily: "'Bricolage Grotesque', sans-serif" }}
                 >
                   {fmt(product.price)}
                 </span>
                 {product.originalPrice && (
-                  <span className="text-base text-muted-foreground line-through">
+                  <span className="text-sm sm:text-base text-muted-foreground line-through">
                     {fmt(product.originalPrice)}
                   </span>
                 )}
@@ -361,7 +364,7 @@ export function ProductDetailModal({
 
           {/* Related products */}
           {relatedProducts.length > 0 && (
-            <div className="border-t border-border px-5 py-4">
+            <div className="border-t border-border px-4 sm:px-5 py-4">
               <p className="text-sm font-bold text-foreground mb-3">
                 Productos relacionados
               </p>
@@ -422,7 +425,6 @@ function RelatedProductCard({
         >
           {fmt(rp.price)}
         </p>
-        {/* Local quantity stepper */}
         <div className="flex items-center border border-border rounded-lg overflow-hidden mt-1.5">
           <button
             onClick={() => setLocalQty((prev) => Math.max(1, prev - 1))}
@@ -439,7 +441,6 @@ function RelatedProductCard({
             <Plus className="w-3 h-3" />
           </button>
         </div>
-        {/* Agregar button */}
         <button
           onClick={() => onAdd(rp, localQty)}
           className="w-full flex items-center justify-center gap-1 py-1 rounded-lg font-semibold text-xs mt-1.5 transition-all hover:brightness-95 active:scale-95"
