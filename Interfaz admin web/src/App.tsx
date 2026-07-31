@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+import dsiLogo from "./assets/logo.png";
 import {
   LayoutDashboard,
   Package,
@@ -699,6 +700,28 @@ export default function App() {
         <main className="flex-1 overflow-y-auto">
           <ViewRenderer view={view} />
         </main>
+        <footer className="shrink-0 border-t border-gray-100 bg-white px-6 py-2.5 relative flex items-center justify-center">
+          <a
+            href="https://dsi.com.co"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="absolute left-6 flex items-center hover:opacity-80 transition-opacity"
+          >
+            <img
+              src={dsiLogo}
+              alt="DSI SA"
+              className="w-8 h-8 object-contain"
+            />
+          </a>
+          <p className="text-[11px] text-gray-400">
+            © 2026 Desarrollado por{" "}
+            <span className="font-bold text-gray-600">DSI SA</span> · Todos los
+            derechos reservados
+          </p>
+          <p className="absolute right-6 text-[11px] text-gray-400">
+            Manizales, Caldas, Colombia
+          </p>
+        </footer>
       </div>
 
       {cmdOpen && (

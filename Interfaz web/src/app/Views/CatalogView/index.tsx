@@ -68,8 +68,8 @@ export function CatalogPage({
 
   useEffect(() => {
     catalogService
-      .getCatalogBrands()
-      .then((b: any) => setBrands(b))
+      .getFeaturedBrands()
+      .then(setBrands)
       .catch(() => {});
     catalogService
       .getProductTypes()

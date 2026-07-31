@@ -6,6 +6,7 @@ import {
 } from "lucide-react";
 import { Logo } from "../Logo";
 import type { CatalogCategory } from "../types";
+import dsiLogo from "../../assets/logo.png";
 
 const PAYMENT_ICONS = [
   "Visa",
@@ -23,9 +24,7 @@ interface FooterProps {
 
 export function Footer({ categories, onCategoryClick }: FooterProps) {
   // Tomar las primeras 6 categorías raíz para el footer
-  const footerCategories = categories
-    .filter((c) => !c.parentId)
-    .slice(0, 6);
+  const footerCategories = categories.filter((c) => !c.parentId).slice(0, 6);
 
   return (
     <footer className="pt-12 pb-6" style={{ background: "#111827" }}>
@@ -162,14 +161,30 @@ export function Footer({ categories, onCategoryClick }: FooterProps) {
         </div>
 
         <div
-          className="border-t pt-4 flex flex-col md:flex-row items-center justify-between gap-2"
+          className="border-t pt-4 pb-2 relative flex items-center justify-center"
           style={{ borderColor: "rgba(255,255,255,0.08)" }}
         >
-          <p className="text-xs" style={{ color: "rgba(255,255,255,0.3)" }}>
-            © 2025 Mercaldas S.A.S. · NIT 890.800.427-3 · Todos los derechos
-            reservados
+          <a
+            href="https://dsi.com.co"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="absolute left-0 flex items-center hover:opacity-80 transition-opacity"
+          >
+            <img
+              src={dsiLogo}
+              alt="DSI SA"
+              className="w-9 h-9 object-contain"
+            />
+          </a>
+          <p className="text-xs" style={{ color: "rgba(255,255,255,0.4)" }}>
+            © 2026 Desarrollado por{" "}
+            <span className="font-bold text-white/70">DSI SA</span> · Todos los
+            derechos reservados
           </p>
-          <p className="text-xs" style={{ color: "rgba(255,255,255,0.3)" }}>
+          <p
+            className="absolute right-0 text-xs"
+            style={{ color: "rgba(255,255,255,0.3)" }}
+          >
             Manizales, Caldas, Colombia
           </p>
         </div>
