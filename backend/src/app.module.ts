@@ -11,6 +11,7 @@ import { PaymentsModule } from './modules/payments/payments.module';
 import { CartModule } from './modules/cart/cart.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { CloudinaryModule } from './modules/cloudinary/cloudinary.module';
+import { PromotionsModule } from './modules/promotions/promotions.module';
 import {
   appConfig,
   databaseConfig,
@@ -46,6 +47,7 @@ import {
     CartModule,
     NotificationsModule,
     CloudinaryModule,
+    PromotionsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

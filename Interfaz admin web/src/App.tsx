@@ -40,6 +40,7 @@ import Dashboard from "./views/Dashboard";
 import Products from "./views/Products";
 import Orders from "./views/Orders";
 import { ordersService } from "./services/orders.service";
+import { authService, type UserProfile } from "./services/auth.service";
 import HomepageEditor from "./views/HomepageEditor";
 import Banners from "./views/Banners";
 import Reports from "./views/Reports";
@@ -523,11 +524,13 @@ function TopBar({
   onOpenCommand,
   collapsed,
   onToggleCollapse,
+  user,
 }: {
   current: ViewId;
   onOpenCommand: () => void;
   collapsed: boolean;
   onToggleCollapse: () => void;
+  user: UserProfile | null;
 }) {
   const [notifOpen, setNotifOpen] = useState(false);
   const [userOpen, setUserOpen] = useState(false);
@@ -540,6 +543,16 @@ function TopBar({
     document.addEventListener("click", handler);
     return () => document.removeEventListener("click", handler);
   }, []);
+
+  const initials = user
+    ? [user.firstName, user.lastName]
+        .filter(Boolean)
+        .map((n) => n?.[0] ?? "")
+        .join("")
+        .toUpperCase() || user.username?.[0]?.toUpperCase() || "U"
+    : "JR";
+  const displayName = user?.fullName || "Jorge Ramírez";
+  const displayEmail = user?.email || "jorge@mercaldas.com";
 
   return (
     <header className="h-14 bg-white border-b border-gray-100 flex items-center gap-3 px-4 shrink-0 z-30">
@@ -595,7 +608,7 @@ function TopBar({
             className="flex items-center gap-2 pl-1 pr-2 py-1 rounded-lg hover:bg-gray-100 transition-colors"
           >
             <div className="w-7 h-7 rounded-full bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center">
-              <span className="text-xs font-bold text-white">JR</span>
+              <span className="text-xs font-bold text-white">{initials}</span>
             </div>
             <ChevronDown size={13} className="text-gray-400" />
           </button>
@@ -603,9 +616,9 @@ function TopBar({
             <div className="absolute right-0 top-full mt-2 w-52 bg-white rounded-xl shadow-xl border border-gray-200 py-1.5 z-40">
               <div className="px-4 py-2 border-b border-gray-100 mb-1">
                 <p className="text-sm font-semibold text-gray-800">
-                  Jorge Ramírez
+                  {displayName}
                 </p>
-                <p className="text-xs text-gray-500">jorge@mercaldas.com</p>
+                <p className="text-xs text-gray-500">{displayEmail}</p>
               </div>
               {[
                 { icon: User, label: "Mi perfil" },
@@ -634,10 +647,12 @@ function TopBar({
   );
 }
 
-function ViewRenderer({ view }: { view: ViewId }) {
+function ViewRenderer({ view, user }: { view: ViewId; user: UserProfile | null }) {
+  const userName = user?.firstName || user?.fullName?.split(" ")[0] || "Usuario";
+  
   switch (view) {
     case "dashboard":
-      return <Dashboard />;
+      return <Dashboard userName={userName} />;
     case "products":
       return <Products />;
     case "orders":
@@ -678,6 +693,7 @@ export default function App() {
   const [cmdOpen, setCmdOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
   const [unreviewedCount, setUnreviewedCount] = useState(0);
+  const [user, setUser] = useState<UserProfile | null>(null);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -701,6 +717,16 @@ export default function App() {
     return () => clearInterval(interval);
   }, []);
 
+  // Fetch authenticated user profile
+  useEffect(() => {
+    authService
+      .getProfile()
+      .then((profile) => setUser(profile))
+      .catch(() => {
+        // User not authenticated or token expired
+      });
+  }, []);
+
   return (
     <div className="flex h-screen overflow-hidden bg-gray-50">
       <Sidebar current={view} onNavigate={navigate} collapsed={collapsed} unreviewedCount={unreviewedCount} />
@@ -711,9 +737,10 @@ export default function App() {
           onOpenCommand={() => setCmdOpen(true)}
           collapsed={collapsed}
           onToggleCollapse={() => setCollapsed((c) => !c)}
+          user={user}
         />
         <main className="flex-1 overflow-y-auto">
-          <ViewRenderer view={view} />
+          <ViewRenderer view={view} user={user} />
         </main>
         <footer className="shrink-0 border-t border-gray-100 bg-white px-6 py-2.5 relative flex items-center justify-center">
           <a

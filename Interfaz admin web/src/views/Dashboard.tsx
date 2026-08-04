@@ -99,7 +99,26 @@ const CustomTooltip = ({ active, payload, label }: any) => {
   );
 };
 
-export default function Dashboard() {
+function getGreeting() {
+  const hour = new Date().getHours();
+  if (hour < 12) return "Buenos días";
+  if (hour < 19) return "Buenas tardes";
+  return "Buenas noches";
+}
+
+function getTodayString() {
+  const days = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
+  const months = ["enero", "febrero", "marzo", "abril", "mayo", "junio",
+    "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
+  const now = new Date();
+  const dayName = days[now.getDay()];
+  const day = now.getDate();
+  const month = months[now.getMonth()];
+  const year = now.getFullYear();
+  return `${dayName}, ${day} de ${month} ${year}`;
+}
+
+export default function Dashboard({ userName = "Usuario" }: { userName?: string }) {
   const [period, setPeriod] = useState<"7d" | "30d" | "90d">("7d");
 
   return (
@@ -107,8 +126,8 @@ export default function Dashboard() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Buenos días, Jorge 👋</h1>
-          <p className="text-sm text-gray-500 mt-0.5">Miércoles, 23 de julio 2025 — Aquí tienes el resumen del día</p>
+          <h1 className="text-2xl font-bold text-gray-900">{getGreeting()}, {userName} 👋</h1>
+          <p className="text-sm text-gray-500 mt-0.5">{getTodayString()} — Aquí tienes el resumen del día</p>
         </div>
         <div className="flex items-center gap-2">
           <button className="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors">
