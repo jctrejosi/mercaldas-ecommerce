@@ -1,12 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import {
-  Plus,
-  Edit,
-  Trash2,
-  X,
-  Upload,
-  Calendar,
-  Loader2,
+  Plus, Edit, Trash2, X, Calendar, Loader2, Filter,
 } from "lucide-react";
 import {
   bannersService,
@@ -37,6 +31,78 @@ const STATUS_LABEL: Record<string, string> = {
   expirado: "Expirado",
 };
 
+// ── Inline filter creation mini-modal ──
+function FilterMiniForm({
+  onCreated,
+  onCancel,
+}: {
+  onCreated: (f: FilterConfig) => void;
+  onCancel: () => void;
+}) {
+  const [name, setName] = useState("");
+  const [categoryIds, setCategoryIds] = useState("");
+  const [brandId, setBrandId] = useState("");
+  const [productTypeCode, setProductTypeCode] = useState("");
+  const [onSale, setOnSale] = useState(false);
+  const [search, setSearch] = useState("");
+  const [sort, setSort] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  const handleCreate = async () => {
+    if (!name.trim()) { setError("Nombre requerido"); return; }
+    setSaving(true); setError("");
+    try {
+      const f = await filtersService.create({
+        name: name.trim(),
+        categoryIds: categoryIds ? categoryIds.split(",").map((s) => parseInt(s.trim())).filter((n) => !isNaN(n)) : [],
+        brandId: brandId ? parseInt(brandId) : null,
+        productTypeCode: productTypeCode.trim() || undefined,
+        onSale,
+        search: search.trim() || undefined,
+        sort: sort || undefined,
+      });
+      onCreated(f);
+    } catch (e: any) {
+      setError(e.message || "Error");
+    } finally { setSaving(false); }
+  };
+
+  return (
+    <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 space-y-3">
+      <p className="text-xs font-semibold text-gray-700">Nuevo filtro</p>
+      {error && <p className="text-xs text-red-600">{error}</p>}
+      <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Nombre del filtro *" className="w-full px-3 py-2 text-xs border rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-300" />
+      <div className="grid grid-cols-2 gap-2">
+        <input value={categoryIds} onChange={(e) => setCategoryIds(e.target.value)} placeholder="IDs categorías (1,2,3)" className="w-full px-3 py-2 text-xs border rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-300" />
+        <input value={brandId} onChange={(e) => setBrandId(e.target.value)} placeholder="ID marca" className="w-full px-3 py-2 text-xs border rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-300" />
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        <input value={productTypeCode} onChange={(e) => setProductTypeCode(e.target.value)} placeholder="Tipo producto" className="w-full px-3 py-2 text-xs border rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-300" />
+        <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Búsqueda" className="w-full px-3 py-2 text-xs border rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-300" />
+      </div>
+      <div className="flex items-center gap-4">
+        <select value={sort} onChange={(e) => setSort(e.target.value)} className="px-3 py-2 text-xs border rounded-lg bg-white flex-1">
+          <option value="">Orden: por defecto</option>
+          <option value="precio-asc">Precio ↑</option>
+          <option value="precio-desc">Precio ↓</option>
+          <option value="descuento">Descuento</option>
+          <option value="relevancia">Relevancia</option>
+          <option value="vendidos">Vendidos</option>
+        </select>
+        <label className="flex items-center gap-1.5 text-xs"><input type="checkbox" checked={onSale} onChange={(e) => setOnSale(e.target.checked)} className="w-3.5 h-3.5" /> Oferta</label>
+      </div>
+      <div className="flex gap-2">
+        <button onClick={handleCreate} disabled={saving} className="flex items-center gap-1 px-3 py-1.5 text-xs font-bold bg-amber-400 text-amber-900 rounded-lg hover:bg-amber-500 disabled:opacity-50">
+          {saving && <Loader2 size={12} className="animate-spin" />} Crear filtro
+        </button>
+        <button onClick={onCancel} className="px-3 py-1.5 text-xs text-gray-500 hover:text-gray-700">Cancelar</button>
+      </div>
+    </div>
+  );
+}
+
+// ── Main Drawer ──
 function BannerDrawer({
   banner,
   onClose,
@@ -62,48 +128,32 @@ function BannerDrawer({
   const [position, setPosition] = useState(banner?.position?.toString() ?? "0");
   const [isActive, setIsActive] = useState(banner?.isActive ?? true);
   const [startDate, setStartDate] = useState(
-    banner?.startDate
-      ? new Date(banner.startDate).toISOString().slice(0, 16)
-      : "",
+    banner?.startDate ? new Date(banner.startDate).toISOString().slice(0, 16) : "",
   );
-  const [filterId, setFilterId] = useState<string>(
-    banner?.filterId?.toString() ?? "",
+  const [endDate, setEndDate] = useState(
+    banner?.endDate ? new Date(banner.endDate).toISOString().slice(0, 16) : "",
   );
+  const [filterId, setFilterId] = useState<string>(banner?.filterId?.toString() ?? "");
   const [savedFilters, setSavedFilters] = useState<FilterConfig[]>([]);
+  const [showFilterForm, setShowFilterForm] = useState(false);
 
   useEffect(() => {
     filtersService.getAll().then(setSavedFilters).catch(() => {});
   }, []);
-  const [endDate, setEndDate] = useState(
-    banner?.endDate
-      ? new Date(banner.endDate).toISOString().slice(0, 16)
-      : "",
-  );
 
   const handleSave = async () => {
-    if (!title.trim()) {
-      setError("El título es obligatorio");
-      return;
-    }
-    if (!imageUrl.trim()) {
-      setError("La imagen es obligatoria");
-      return;
-    }
-
-    setError("");
-    setSaving(true);
+    if (!title.trim()) { setError("El título es obligatorio"); return; }
+    if (!imageUrl.trim()) { setError("La imagen es obligatoria"); return; }
+    setError(""); setSaving(true);
     try {
-      // Create a media record for the image URL
       const imageMediaId = await createMediaFromUrl(imageUrl.trim());
-      const mobileMediaId = mobileImageUrl.trim()
-        ? await createMediaFromUrl(mobileImageUrl.trim())
-        : undefined;
-
+      const mobileMediaId = mobileImageUrl.trim() ? await createMediaFromUrl(mobileImageUrl.trim()) : undefined;
       const data: CreateBannerData = {
         title: title.trim(),
         subtitle: subtitle.trim() || undefined,
         mediaId: imageMediaId,
         mobileImageId: mobileMediaId,
+        filterId: filterId ? parseInt(filterId) : null,
         linkUrl: linkUrl.trim() || undefined,
         ctaText: ctaText.trim() || undefined,
         bgColor: bgColor.trim() || undefined,
@@ -113,20 +163,13 @@ function BannerDrawer({
         isActive,
         startDate: startDate ? new Date(startDate).toISOString() : undefined,
         endDate: endDate ? new Date(endDate).toISOString() : undefined,
-        filterId: filterId ? parseInt(filterId) : null,
       };
-
-      if (isEdit && banner) {
-        await bannersService.update(banner.id, data);
-      } else {
-        await bannersService.create(data);
-      }
+      if (isEdit && banner) await bannersService.update(banner.id, data);
+      else await bannersService.create(data);
       onSaved();
     } catch (e: any) {
       setError(e.message || "Error al guardar");
-    } finally {
-      setSaving(false);
-    }
+    } finally { setSaving(false); }
   };
 
   return (
@@ -134,89 +177,45 @@ function BannerDrawer({
       <div className="flex-1 bg-black/40" onClick={onClose} />
       <div className="w-full max-w-xl bg-white flex flex-col shadow-2xl overflow-y-auto">
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 sticky top-0 bg-white z-10">
-          <h2 className="font-bold text-gray-900">
-            {isEdit ? "Editar Banner" : "Nuevo Banner"}
-          </h2>
-          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-500">
-            <X size={16} />
-          </button>
+          <h2 className="font-bold text-gray-900">{isEdit ? "Editar Banner" : "Nuevo Banner"}</h2>
+          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-500"><X size={16} /></button>
         </div>
 
         <div className="p-6 space-y-5">
-          {error && (
-            <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl px-4 py-2.5">
-              {error}
-            </div>
-          )}
+          {error && <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl px-4 py-2.5">{error}</div>}
 
           <div>
             <label className="block text-xs font-semibold text-gray-600 mb-1.5">Título *</label>
-            <input
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-300"
-              placeholder="Ej: Oferta de verano — Frutas"
-            />
+            <input value={title} onChange={(e) => setTitle(e.target.value)} className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-300" placeholder="Ej: Oferta de verano — Frutas" />
           </div>
 
           <div>
             <label className="block text-xs font-semibold text-gray-600 mb-1.5">Subtítulo (para hero slides)</label>
-            <input
-              value={subtitle}
-              onChange={(e) => setSubtitle(e.target.value)}
-              className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-300"
-              placeholder="Texto descriptivo debajo del título"
-            />
+            <input value={subtitle} onChange={(e) => setSubtitle(e.target.value)} className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-300" placeholder="Texto descriptivo debajo del título" />
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-semibold text-gray-600 mb-1.5">Tipo de banner</label>
-              <select
-                value={bannerType}
-                onChange={(e) => setBannerType(e.target.value as BannerType)}
-                className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-300 bg-white"
-              >
-                {Object.entries(BANNER_TYPE_LABEL).map(([v, l]) => (
-                  <option key={v} value={v}>{l}</option>
-                ))}
+              <select value={bannerType} onChange={(e) => setBannerType(e.target.value as BannerType)} className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-300 bg-white">
+                {Object.entries(BANNER_TYPE_LABEL).map(([v, l]) => (<option key={v} value={v}>{l}</option>))}
               </select>
             </div>
             <div>
               <label className="block text-xs font-semibold text-gray-600 mb-1.5">Prioridad</label>
-              <input
-                type="number"
-                value={position}
-                onChange={(e) => setPosition(e.target.value)}
-                min={0}
-                className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-300"
-              />
+              <input type="number" value={position} onChange={(e) => setPosition(e.target.value)} min={0} className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-300" />
             </div>
           </div>
 
           <div>
             <label className="block text-xs font-semibold text-gray-600 mb-1.5">URL de imagen (escritorio) *</label>
-            <input
-              value={imageUrl}
-              onChange={(e) => setImageUrl(e.target.value)}
-              className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-300 font-mono"
-              placeholder="https://..."
-            />
-            {imageUrl && (
-              <div className="mt-2 rounded-xl overflow-hidden bg-gray-100 h-24">
-                <img src={imageUrl} alt="preview" className="w-full h-full object-cover" />
-              </div>
-            )}
+            <input value={imageUrl} onChange={(e) => setImageUrl(e.target.value)} className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-300 font-mono" placeholder="https://..." />
+            {imageUrl && <div className="mt-2 rounded-xl overflow-hidden bg-gray-100 h-24"><img src={imageUrl} alt="preview" className="w-full h-full object-cover" /></div>}
           </div>
 
           <div>
             <label className="block text-xs font-semibold text-gray-600 mb-1.5">URL de imagen (móvil)</label>
-            <input
-              value={mobileImageUrl}
-              onChange={(e) => setMobileImageUrl(e.target.value)}
-              className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-300 font-mono"
-              placeholder="https://... (opcional)"
-            />
+            <input value={mobileImageUrl} onChange={(e) => setMobileImageUrl(e.target.value)} className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-300 font-mono" placeholder="https://... (opcional)" />
           </div>
 
           {bannerType === "hero" && (
@@ -224,33 +223,15 @@ function BannerDrawer({
               <div>
                 <label className="block text-xs font-semibold text-gray-600 mb-1.5">Color de fondo</label>
                 <div className="flex items-center gap-2">
-                  <input
-                    type="color"
-                    value={bgColor}
-                    onChange={(e) => setBgColor(e.target.value)}
-                    className="w-8 h-8 rounded cursor-pointer border-0"
-                  />
-                  <input
-                    value={bgColor}
-                    onChange={(e) => setBgColor(e.target.value)}
-                    className="flex-1 px-3 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-300 font-mono"
-                  />
+                  <input type="color" value={bgColor} onChange={(e) => setBgColor(e.target.value)} className="w-8 h-8 rounded cursor-pointer border-0" />
+                  <input value={bgColor} onChange={(e) => setBgColor(e.target.value)} className="flex-1 px-3 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-300 font-mono" />
                 </div>
               </div>
               <div>
                 <label className="block text-xs font-semibold text-gray-600 mb-1.5">Color de acento</label>
                 <div className="flex items-center gap-2">
-                  <input
-                    type="color"
-                    value={accentColor}
-                    onChange={(e) => setAccentColor(e.target.value)}
-                    className="w-8 h-8 rounded cursor-pointer border-0"
-                  />
-                  <input
-                    value={accentColor}
-                    onChange={(e) => setAccentColor(e.target.value)}
-                    className="flex-1 px-3 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-300 font-mono"
-                  />
+                  <input type="color" value={accentColor} onChange={(e) => setAccentColor(e.target.value)} className="w-8 h-8 rounded cursor-pointer border-0" />
+                  <input value={accentColor} onChange={(e) => setAccentColor(e.target.value)} className="flex-1 px-3 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-300 font-mono" />
                 </div>
               </div>
             </div>
@@ -259,85 +240,88 @@ function BannerDrawer({
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-semibold text-gray-600 mb-1.5">URL de destino</label>
-              <input
-                value={linkUrl}
-                onChange={(e) => setLinkUrl(e.target.value)}
-                className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-300 font-mono"
-                placeholder="/categoria/ofertas"
-              />
+              <input value={linkUrl} onChange={(e) => setLinkUrl(e.target.value)} className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-300 font-mono" placeholder="/categoria/ofertas" />
             </div>
             <div>
               <label className="block text-xs font-semibold text-gray-600 mb-1.5">Texto del botón (CTA)</label>
-              <input
-                value={ctaText}
-                onChange={(e) => setCtaText(e.target.value)}
-                className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-300"
-                placeholder="Ver ofertas"
-              />
+              <input value={ctaText} onChange={(e) => setCtaText(e.target.value)} className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-300" placeholder="Ver ofertas" />
             </div>
           </div>
 
-          {/* Filter selector */}
-          <div>
-            <label className="block text-xs font-semibold text-gray-600 mb-1.5">
-              Redirigir a filtro guardado
-            </label>
-            <select
-              value={filterId}
-              onChange={(e) => setFilterId(e.target.value)}
-              className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-300 bg-white"
-            >
-              <option value="">Sin filtro</option>
-              {savedFilters.map((f) => (
-                <option key={f.id} value={f.id}>
-                  {f.name}
-                </option>
-              ))}
-            </select>
-            <p className="text-xs text-gray-400 mt-1">
-              Al hacer clic en el banner se aplicará este filtro en el catálogo.
+          {/* ── Filter selector with inline creation ── */}
+          <div className="bg-amber-50/50 border border-amber-200 rounded-xl p-4 space-y-3">
+            <div className="flex items-center gap-2">
+              <Filter size={14} className="text-amber-600" />
+              <label className="text-xs font-semibold text-amber-800">Redirigir a filtro guardado</label>
+            </div>
+            <p className="text-xs text-amber-700/70">
+              Al hacer clic en el banner, se aplicará este filtro en el catálogo de la tienda.
             </p>
+            <div className="flex items-center gap-2">
+              <select
+                value={filterId}
+                onChange={(e) => setFilterId(e.target.value)}
+                className="flex-1 px-3 py-2.5 text-sm border border-amber-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-400 bg-white"
+              >
+                <option value="">Sin filtro</option>
+                {savedFilters.map((f) => (
+                  <option key={f.id} value={f.id}>{f.name}</option>
+                ))}
+              </select>
+              <button
+                type="button"
+                onClick={() => setShowFilterForm(!showFilterForm)}
+                className="shrink-0 flex items-center gap-1 px-3 py-2.5 text-xs font-semibold text-amber-700 bg-white border border-amber-300 rounded-xl hover:bg-amber-100 transition-colors"
+              >
+                <Plus size={12} /> Nuevo
+              </button>
+            </div>
+
+            {showFilterForm && (
+              <FilterMiniForm
+                onCreated={(f) => {
+                  setSavedFilters((prev) => [...prev, f]);
+                  setFilterId(f.id.toString());
+                  setShowFilterForm(false);
+                }}
+                onCancel={() => setShowFilterForm(false)}
+              />
+            )}
+
+            {filterId && banner?.filter && (
+              <div className="text-xs text-amber-700 bg-white/60 rounded-lg px-3 py-2 space-y-1">
+                <p className="font-semibold">Filtro actual: {banner.filter.name}</p>
+                <div className="flex flex-wrap gap-1">
+                  {banner.filter.categoryIds.length > 0 && <span className="bg-amber-100 px-1.5 py-0.5 rounded">Cat: {banner.filter.categoryIds.join(", ")}</span>}
+                  {banner.filter.brandId && <span className="bg-amber-100 px-1.5 py-0.5 rounded">Marca: {banner.filter.brandId}</span>}
+                  {banner.filter.productTypeCode && <span className="bg-amber-100 px-1.5 py-0.5 rounded">Tipo: {banner.filter.productTypeCode}</span>}
+                  {banner.filter.onSale && <span className="bg-amber-100 px-1.5 py-0.5 rounded">En oferta</span>}
+                  {banner.filter.search && <span className="bg-amber-100 px-1.5 py-0.5 rounded">Buscar: {banner.filter.search}</span>}
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-semibold text-gray-600 mb-1.5">Fecha inicio</label>
-              <input
-                type="datetime-local"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-300"
-              />
+              <input type="datetime-local" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-300" />
             </div>
             <div>
               <label className="block text-xs font-semibold text-gray-600 mb-1.5">Fecha fin</label>
-              <input
-                type="datetime-local"
-                value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
-                className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-300"
-              />
+              <input type="datetime-local" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-300" />
             </div>
           </div>
 
           <label className="flex items-center gap-3 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={isActive}
-              onChange={(e) => setIsActive(e.target.checked)}
-              className="w-4 h-4 rounded border-gray-300 text-amber-500 focus:ring-amber-300"
-            />
+            <input type="checkbox" checked={isActive} onChange={(e) => setIsActive(e.target.checked)} className="w-4 h-4 rounded border-gray-300 text-amber-500 focus:ring-amber-300" />
             <span className="text-sm text-gray-700">Banner activo</span>
           </label>
         </div>
 
         <div className="flex items-center justify-between px-6 py-4 border-t border-gray-100 bg-gray-50 sticky bottom-0">
           <button onClick={onClose} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800">Cancelar</button>
-          <button
-            onClick={handleSave}
-            disabled={saving}
-            className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-amber-900 bg-amber-400 hover:bg-amber-500 disabled:opacity-50 rounded-xl transition-colors"
-          >
+          <button onClick={handleSave} disabled={saving} className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-amber-900 bg-amber-400 hover:bg-amber-500 disabled:opacity-50 rounded-xl transition-colors">
             {saving && <Loader2 size={14} className="animate-spin" />}
             {isEdit ? "Guardar cambios" : "Crear Banner"}
           </button>
@@ -347,7 +331,7 @@ function BannerDrawer({
   );
 }
 
-// Helper: create a media record from a URL
+// Helper
 async function createMediaFromUrl(url: string): Promise<number> {
   const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:3000";
   const res = await fetch(`${API_BASE_URL}/admin/banners/upload-url`, {
@@ -361,6 +345,7 @@ async function createMediaFromUrl(url: string): Promise<number> {
   return data.mediaId;
 }
 
+// ── Main view ──
 export default function Banners() {
   const [banners, setBanners] = useState<Banner[]>([]);
   const [loading, setLoading] = useState(true);
@@ -373,47 +358,24 @@ export default function Banners() {
   const fetchBanners = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await bannersService.getAll({
-        bannerType: typeFilter || undefined,
-      });
+      const data = await bannersService.getAll({ bannerType: typeFilter || undefined });
       setBanners(data);
-    } catch (e) {
-      console.error("Error fetching banners", e);
-    } finally {
-      setLoading(false);
-    }
+    } catch (e) { console.error("Error fetching banners", e); }
+    finally { setLoading(false); }
   }, [typeFilter]);
 
-  useEffect(() => {
-    fetchBanners();
-  }, [fetchBanners]);
+  useEffect(() => { fetchBanners(); }, [fetchBanners]);
 
-  const handleEdit = (b: Banner) => {
-    setEditingBanner(b);
-    setDrawerOpen(true);
-  };
-
-  const handleCreate = () => {
-    setEditingBanner(null);
-    setDrawerOpen(true);
-  };
+  const handleEdit = (b: Banner) => { setEditingBanner(b); setDrawerOpen(true); };
+  const handleCreate = () => { setEditingBanner(null); setDrawerOpen(true); };
 
   const handleDelete = async () => {
     if (!deleteConfirm) return;
-    try {
-      await bannersService.remove(deleteConfirm.id);
-      setDeleteConfirm(null);
-      fetchBanners();
-    } catch (e) {
-      console.error("Error deleting banner", e);
-    }
+    try { await bannersService.remove(deleteConfirm.id); setDeleteConfirm(null); fetchBanners(); }
+    catch (e) { console.error("Error deleting banner", e); }
   };
 
-  const filtered = banners.filter((b) => {
-    if (filter !== "todas" && b.status !== filter) return false;
-    return true;
-  });
-
+  const filtered = banners.filter((b) => filter === "todas" || b.status === filter);
   const heroBanners = banners.filter((b) => b.bannerType === "hero");
   const activeHeroCount = heroBanners.filter((b) => b.status === "activo").length;
   const scheduledHeroCount = heroBanners.filter((b) => b.status === "programado").length;
@@ -426,147 +388,70 @@ export default function Banners() {
             <h1 className="text-2xl font-bold text-gray-900">Banners CMS</h1>
             <p className="text-sm text-gray-500 mt-0.5">Gestiona los banners del sitio web</p>
           </div>
-          <button
-            onClick={handleCreate}
-            className="flex items-center gap-2 px-3 py-2 text-sm font-bold text-amber-900 bg-amber-400 hover:bg-amber-500 rounded-xl transition-colors"
-          >
+          <button onClick={handleCreate} className="flex items-center gap-2 px-3 py-2 text-sm font-bold text-amber-900 bg-amber-400 hover:bg-amber-500 rounded-xl transition-colors">
             <Plus size={14} /> Nuevo banner
           </button>
         </div>
 
-        {/* Layout map */}
         <div className="bg-white rounded-2xl border border-gray-100 p-5">
           <h3 className="font-semibold text-gray-900 mb-4 text-sm">Mapa de posiciones — Homepage</h3>
           <div className="space-y-2 max-w-2xl mx-auto">
             <div className="bg-amber-50 border-2 border-amber-200 rounded-xl p-3 text-center">
               <p className="text-xs font-bold text-amber-700">HERO PRINCIPAL — 1920×600px</p>
-              <p className="text-xs text-amber-600 mt-0.5">
-                {activeHeroCount} activos · {scheduledHeroCount} programados
-              </p>
+              <p className="text-xs text-amber-600 mt-0.5">{activeHeroCount} activos · {scheduledHeroCount} programados</p>
             </div>
           </div>
         </div>
 
-        {/* Type filter tabs */}
         <div className="flex gap-1 bg-white border border-gray-200 rounded-xl p-1 w-fit">
-          {[
-            { key: "", label: "Todos" },
-            { key: "hero", label: "Hero" },
-            { key: "promo", label: "Promo" },
-            { key: "sidebar", label: "Lateral" },
-            { key: "footer", label: "Footer" },
-          ].map((t) => (
-            <button
-              key={t.key}
-              onClick={() => setTypeFilter(t.key)}
-              className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${
-                typeFilter === t.key
-                  ? "bg-amber-400 text-amber-900 shadow-sm"
-                  : "text-gray-500 hover:text-gray-700"
-              }`}
-            >
-              {t.label}
-            </button>
+          {[{ key: "", label: "Todos" }, { key: "hero", label: "Hero" }, { key: "promo", label: "Promo" }, { key: "sidebar", label: "Lateral" }, { key: "footer", label: "Footer" }].map((t) => (
+            <button key={t.key} onClick={() => setTypeFilter(t.key)} className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${typeFilter === t.key ? "bg-amber-400 text-amber-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>{t.label}</button>
           ))}
         </div>
 
-        {/* Status filter tabs */}
         <div className="flex gap-1 bg-white border border-gray-200 rounded-xl p-1 w-fit">
           {(["todas", "activo", "programado", "inactivo", "expirado"] as const).map((f) => (
-            <button
-              key={f}
-              onClick={() => setFilter(f)}
-              className={`px-3 py-1.5 text-xs font-semibold rounded-lg capitalize transition-all ${
-                filter === f
-                  ? "bg-amber-400 text-amber-900 shadow-sm"
-                  : "text-gray-500 hover:text-gray-700"
-              }`}
-            >
-              {f === "todas" ? "Todos" : STATUS_LABEL[f]}
-            </button>
+            <button key={f} onClick={() => setFilter(f)} className={`px-3 py-1.5 text-xs font-semibold rounded-lg capitalize transition-all ${filter === f ? "bg-amber-400 text-amber-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>{f === "todas" ? "Todos" : STATUS_LABEL[f]}</button>
           ))}
         </div>
 
-        {loading && (
-          <div className="flex items-center justify-center py-12">
-            <Loader2 size={24} className="animate-spin text-gray-400" />
-          </div>
-        )}
+        {loading && <div className="flex items-center justify-center py-12"><Loader2 size={24} className="animate-spin text-gray-400" /></div>}
 
-        {/* Banner cards */}
         {!loading && (
           <div className="space-y-3">
             {filtered.length === 0 ? (
-              <div className="text-center py-12 text-sm text-gray-400">
-                No se encontraron banners
-              </div>
+              <div className="text-center py-12 text-sm text-gray-400">No se encontraron banners</div>
             ) : (
               filtered.map((b) => (
-                <div
-                  key={b.id}
-                  className="bg-white rounded-2xl border border-gray-100 overflow-hidden hover:shadow-md transition-shadow"
-                >
+                <div key={b.id} className="bg-white rounded-2xl border border-gray-100 overflow-hidden hover:shadow-md transition-shadow">
                   <div className="flex gap-4 p-4">
                     <div className="w-48 h-24 rounded-xl overflow-hidden bg-gray-100 shrink-0">
-                      {b.image ? (
-                        <img src={b.image} alt={b.title ?? ""} className="w-full h-full object-cover" />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center text-gray-400 text-xs">
-                          Sin imagen
-                        </div>
-                      )}
+                      {b.image ? <img src={b.image} alt={b.title ?? ""} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-gray-400 text-xs">Sin imagen</div>}
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-start justify-between">
                         <div>
                           <p className="font-semibold text-gray-900">{b.title}</p>
-                          <p className="text-xs text-gray-500 mt-0.5">
-                            {BANNER_TYPE_LABEL[b.bannerType] ?? b.bannerType} · Prioridad {b.position}
-                          </p>
+                          <p className="text-xs text-gray-500 mt-0.5">{BANNER_TYPE_LABEL[b.bannerType] ?? b.bannerType} · Prioridad {b.position}</p>
                         </div>
-                        <span className={`text-xs font-semibold px-2.5 py-1 rounded-full border ${STATUS_BADGE[b.status]}`}>
-                          {STATUS_LABEL[b.status]}
-                        </span>
+                        <span className={`text-xs font-semibold px-2.5 py-1 rounded-full border ${STATUS_BADGE[b.status]}`}>{STATUS_LABEL[b.status]}</span>
                       </div>
-                      <div className="flex items-center gap-4 mt-3 text-xs text-gray-400">
-                        {b.startDate && (
-                          <span className="flex items-center gap-1">
-                            <Calendar size={11} /> {new Date(b.startDate).toLocaleDateString("es-CO")}
-                            {b.endDate && ` → ${new Date(b.endDate).toLocaleDateString("es-CO")}`}
+                      <div className="flex items-center gap-4 mt-3 text-xs text-gray-400 flex-wrap">
+                        {b.startDate && <span className="flex items-center gap-1"><Calendar size={11} /> {new Date(b.startDate).toLocaleDateString("es-CO")}{b.endDate && ` → ${new Date(b.endDate).toLocaleDateString("es-CO")}`}</span>}
+                        {b.linkUrl && <span className="font-mono">{b.linkUrl}</span>}
+                        {b.filter && (
+                          <span className="flex items-center gap-1 text-amber-600 font-medium">
+                            <Filter size={10} /> {b.filter.name}
                           </span>
                         )}
-                        {b.linkUrl && <span className="font-mono">{b.linkUrl}</span>}
                       </div>
                       <div className="flex items-center gap-6 mt-3">
-                        <div className="text-center">
-                          <p className="text-sm font-bold text-gray-700">{b.views.toLocaleString()}</p>
-                          <p className="text-xs text-gray-400">Vistas</p>
-                        </div>
-                        <div className="text-center">
-                          <p className="text-sm font-bold text-gray-700">{b.clicks.toLocaleString()}</p>
-                          <p className="text-xs text-gray-400">Clics</p>
-                        </div>
-                        {b.views > 0 && (
-                          <div className="text-center">
-                            <p className="text-sm font-bold text-amber-600">
-                              {((b.clicks / b.views) * 100).toFixed(1)}%
-                            </p>
-                            <p className="text-xs text-gray-400">CTR</p>
-                          </div>
-                        )}
+                        <div className="text-center"><p className="text-sm font-bold text-gray-700">{b.views.toLocaleString()}</p><p className="text-xs text-gray-400">Vistas</p></div>
+                        <div className="text-center"><p className="text-sm font-bold text-gray-700">{b.clicks.toLocaleString()}</p><p className="text-xs text-gray-400">Clics</p></div>
+                        {b.views > 0 && <div className="text-center"><p className="text-sm font-bold text-amber-600">{((b.clicks / b.views) * 100).toFixed(1)}%</p><p className="text-xs text-gray-400">CTR</p></div>}
                         <div className="ml-auto flex items-center gap-1">
-                          <button
-                            onClick={() => handleEdit(b)}
-                            className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors"
-                          >
-                            <Edit size={14} />
-                          </button>
-                          <button
-                            onClick={() => setDeleteConfirm(b)}
-                            className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500 transition-colors"
-                          >
-                            <Trash2 size={14} />
-                          </button>
+                          <button onClick={() => handleEdit(b)} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors"><Edit size={14} /></button>
+                          <button onClick={() => setDeleteConfirm(b)} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500 transition-colors"><Trash2 size={14} /></button>
                         </div>
                       </div>
                     </div>
@@ -578,37 +463,16 @@ export default function Banners() {
         )}
       </div>
 
-      {drawerOpen && (
-        <BannerDrawer
-          banner={editingBanner}
-          onClose={() => {
-            setDrawerOpen(false);
-            setEditingBanner(null);
-          }}
-          onSaved={() => {
-            setDrawerOpen(false);
-            setEditingBanner(null);
-            fetchBanners();
-          }}
-        />
-      )}
-
+      {drawerOpen && <BannerDrawer banner={editingBanner} onClose={() => { setDrawerOpen(false); setEditingBanner(null); }} onSaved={() => { setDrawerOpen(false); setEditingBanner(null); fetchBanners(); }} />}
       {deleteConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div className="absolute inset-0 bg-black/40" onClick={() => setDeleteConfirm(null)} />
           <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 mx-4">
             <h3 className="font-semibold text-gray-900 mb-2">Eliminar banner</h3>
-            <p className="text-sm text-gray-500 mb-5">
-              ¿Estás seguro de eliminar "{deleteConfirm.title}"?
-            </p>
+            <p className="text-sm text-gray-500 mb-5">¿Estás seguro de eliminar "{deleteConfirm.title}"?</p>
             <div className="flex items-center justify-end gap-2">
               <button onClick={() => setDeleteConfirm(null)} className="px-4 py-2 text-sm text-gray-600">Cancelar</button>
-              <button
-                onClick={handleDelete}
-                className="px-4 py-2 text-sm font-bold text-white bg-red-500 hover:bg-red-600 rounded-xl transition-colors"
-              >
-                Eliminar
-              </button>
+              <button onClick={handleDelete} className="px-4 py-2 text-sm font-bold text-white bg-red-500 hover:bg-red-600 rounded-xl transition-colors">Eliminar</button>
             </div>
           </div>
         </div>
