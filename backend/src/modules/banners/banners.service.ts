@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { and, eq, desc, sql } from 'drizzle-orm';
 import { DrizzleService } from '../../database/drizzle.service';
-import { banners, media } from '../../../drizzle/schema';
+import { banners, media, savedFilters } from '../../../drizzle/schema';
 import {
   CreateBannerDto,
   UpdateBannerDto,
@@ -26,6 +26,19 @@ export interface BannerResponse {
   isActive: boolean;
   startDate: string | null;
   endDate: string | null;
+  filterId: number | null;
+  filter: {
+    id: number;
+    name: string;
+    categoryIds: number[];
+    brandId: number | null;
+    productTypeCode: string | null;
+    onSale: boolean;
+    search: string | null;
+    sort: string | null;
+    priceMin: number | null;
+    priceMax: number | null;
+  } | null;
   clicks: number;
   views: number;
   status: 'activo' | 'programado' | 'inactivo' | 'expirado';
@@ -76,6 +89,30 @@ export class BannersService {
       this.resolveImagePath(row.mobileImageId),
     ]);
 
+    let filter: BannerResponse['filter'] = null;
+    if (row.filterId) {
+      const rows = await this.db
+        .select()
+        .from(savedFilters)
+        .where(eq(savedFilters.id, BigInt(row.filterId)))
+        .limit(1);
+      const f: any = rows[0];
+      if (f) {
+        filter = {
+          id: Number(f.id),
+          name: f.name,
+          categoryIds: (f.categoryIds as number[]) ?? [],
+          brandId: f.brandId,
+          productTypeCode: f.productTypeCode,
+          onSale: f.onSale ?? false,
+          search: f.search,
+          sort: f.sort,
+          priceMin: f.priceMin,
+          priceMax: f.priceMax,
+        };
+      }
+    }
+
     return {
       id: Number(row.id),
       title: row.title,
@@ -94,6 +131,8 @@ export class BannersService {
       isActive: row.isActive,
       startDate: row.startDate,
       endDate: row.endDate,
+      filterId: row.filterId ? Number(row.filterId) : null,
+      filter,
       clicks: row.clicks,
       views: row.views,
       status: this.computeStatus(row),
@@ -147,6 +186,7 @@ export class BannersService {
         description: dto.description ?? null,
         mediaId: dto.mediaId,
         mobileImageId: dto.mobileImageId ?? null,
+        filterId: dto.filterId ?? null,
         linkUrl: dto.linkUrl ?? null,
         linkTarget: dto.linkTarget ?? '_self',
         altText: dto.altText ?? dto.title,
@@ -175,6 +215,7 @@ export class BannersService {
     if (dto.mediaId !== undefined) updateData.mediaId = dto.mediaId;
     if (dto.mobileImageId !== undefined)
       updateData.mobileImageId = dto.mobileImageId;
+    if (dto.filterId !== undefined) updateData.filterId = dto.filterId;
     if (dto.linkUrl !== undefined) updateData.linkUrl = dto.linkUrl;
     if (dto.linkTarget !== undefined) updateData.linkTarget = dto.linkTarget;
     if (dto.altText !== undefined) updateData.altText = dto.altText;

@@ -14,6 +14,7 @@ import {
   type BannerType,
   type CreateBannerData,
 } from "../services/banners.service";
+import { filtersService, type FilterConfig } from "../services/filters.service";
 
 const BANNER_TYPE_LABEL: Record<string, string> = {
   hero: "Hero Principal",
@@ -65,6 +66,14 @@ function BannerDrawer({
       ? new Date(banner.startDate).toISOString().slice(0, 16)
       : "",
   );
+  const [filterId, setFilterId] = useState<string>(
+    banner?.filterId?.toString() ?? "",
+  );
+  const [savedFilters, setSavedFilters] = useState<FilterConfig[]>([]);
+
+  useEffect(() => {
+    filtersService.getAll().then(setSavedFilters).catch(() => {});
+  }, []);
   const [endDate, setEndDate] = useState(
     banner?.endDate
       ? new Date(banner.endDate).toISOString().slice(0, 16)
@@ -104,6 +113,7 @@ function BannerDrawer({
         isActive,
         startDate: startDate ? new Date(startDate).toISOString() : undefined,
         endDate: endDate ? new Date(endDate).toISOString() : undefined,
+        filterId: filterId ? parseInt(filterId) : null,
       };
 
       if (isEdit && banner) {
@@ -265,6 +275,28 @@ function BannerDrawer({
                 placeholder="Ver ofertas"
               />
             </div>
+          </div>
+
+          {/* Filter selector */}
+          <div>
+            <label className="block text-xs font-semibold text-gray-600 mb-1.5">
+              Redirigir a filtro guardado
+            </label>
+            <select
+              value={filterId}
+              onChange={(e) => setFilterId(e.target.value)}
+              className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-300 bg-white"
+            >
+              <option value="">Sin filtro</option>
+              {savedFilters.map((f) => (
+                <option key={f.id} value={f.id}>
+                  {f.name}
+                </option>
+              ))}
+            </select>
+            <p className="text-xs text-gray-400 mt-1">
+              Al hacer clic en el banner se aplicará este filtro en el catálogo.
+            </p>
           </div>
 
           <div className="grid grid-cols-2 gap-4">

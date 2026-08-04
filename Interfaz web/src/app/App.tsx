@@ -439,6 +439,33 @@ export default function App() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
+  const handleApplyFilter = (f: {
+    categoryIds?: number[];
+    brandId?: number | null;
+    productTypeCode?: string;
+    onSale?: boolean;
+    search?: string;
+    sort?: string;
+    priceMin?: number;
+    priceMax?: number;
+  }) => {
+    if (f.categoryIds?.length) setCatalogCategory(f.categoryIds);
+    else setCatalogCategory([]);
+    setCatalogBrand(f.brandId ?? null);
+    setCatalogProductType(f.productTypeCode ?? "");
+    setCatalogOnSale(f.onSale ?? false);
+    setCatalogSearch(f.search ?? "");
+    if (f.sort) setCatalogSort(f.sort);
+    if (f.priceMin !== undefined || f.priceMax !== undefined) {
+      setCatalogPriceRange("custom");
+    } else {
+      setCatalogPriceRange("all");
+    }
+    setCurrentView("catalog");
+    navigate("/catalog");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
   const handleAddressClick = () => {
     if (customer) {
       setCurrentView("account");
@@ -735,6 +762,7 @@ export default function App() {
           onBrandClick={handleBrandClick}
           productTypes={landingProductTypes}
           onProductTypeClick={handleProductTypeClick}
+          onApplyFilter={handleApplyFilter}
         />
       </main>
 

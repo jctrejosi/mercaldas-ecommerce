@@ -21,6 +21,19 @@ export type Banner = {
   isActive: boolean;
   startDate: string | null;
   endDate: string | null;
+  filterId: number | null;
+  filter: {
+    id: number;
+    name: string;
+    categoryIds: number[];
+    brandId: number | null;
+    productTypeCode: string | null;
+    onSale: boolean;
+    search: string | null;
+    sort: string | null;
+    priceMin: number | null;
+    priceMax: number | null;
+  } | null;
   clicks: number;
   views: number;
   status: BannerStatus;
@@ -34,6 +47,7 @@ export type CreateBannerData = {
   description?: string;
   mediaId: number;
   mobileImageId?: number;
+  filterId?: number | null;
   linkUrl?: string;
   linkTarget?: string;
   altText?: string;

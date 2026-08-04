@@ -27,6 +27,7 @@ interface LandingViewProps {
   onViewCatalog: () => void;
   onBrandClick: (brandId: number) => void;
   onProductTypeClick: (code: string) => void;
+  onApplyFilter: (f: { categoryIds?: number[]; brandId?: number | null; productTypeCode?: string; onSale?: boolean; search?: string; sort?: string; priceMin?: number; priceMax?: number }) => void;
   featuredBrands: Brand[];
 }
 
@@ -43,6 +44,7 @@ export function LandingView({
   onProductClick,
   onCategoryClick,
   onViewCatalog,
+  onApplyFilter,
   featuredBrands,
   branches,
   onBrandClick,
@@ -51,7 +53,7 @@ export function LandingView({
 }: LandingViewProps) {
   return (
     <>
-      <HeroSection />
+      <HeroSection onApplyFilter={onApplyFilter} />
 
       <QuickCategoriesSection
         productTypes={productTypes}
@@ -70,7 +72,7 @@ export function LandingView({
         onProductClick={onProductClick}
         onViewAll={onViewCatalog}
       />
-      <AdvertisingBanner onShop={onViewCatalog} />
+      <AdvertisingBanner onShop={onViewCatalog} onApplyFilter={onApplyFilter} />
       <DailyDealsSection
         cartItems={cartItems}
         onAdd={onAdd}

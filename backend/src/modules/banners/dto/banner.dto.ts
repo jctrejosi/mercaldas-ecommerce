@@ -76,6 +76,11 @@ export class CreateBannerDto {
   @IsInt()
   position?: number;
 
+  @ApiPropertyOptional({ description: 'ID de filtro guardado para redirección' })
+  @IsOptional()
+  @IsInt()
+  filterId?: number;
+
   @ApiPropertyOptional({ description: 'Activo', default: true })
   @IsOptional()
   @IsBoolean()
@@ -158,6 +163,11 @@ export class UpdateBannerDto {
   @IsOptional()
   @IsInt()
   position?: number;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsInt()
+  filterId?: number;
 
   @ApiPropertyOptional()
   @IsOptional()

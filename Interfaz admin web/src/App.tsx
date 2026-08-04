@@ -54,6 +54,7 @@ import Inventory from "./views/Inventory";
 import Delivery from "./views/Delivery";
 import UsersView from "./views/Users";
 import SettingsView from "./views/Settings";
+import Filters from "./views/Filters";
 
 export type ViewId =
   | "dashboard"
@@ -67,6 +68,7 @@ export type ViewId =
   | "homepage"
   | "banners"
   | "marketplace"
+  | "filters"
   | "inventory"
   | "delivery"
   | "reports"
@@ -112,6 +114,7 @@ const NAV: NavSection[] = [
     items: [
       // { id: "homepage", label: "Editor de Inicio", icon: LayoutTemplate }, // Oculto por ahora
       { id: "banners", label: "Banners CMS", icon: Image },
+      { id: "filters", label: "Filtros", icon: Search },
       { id: "marketplace", label: "Publicidad", icon: Megaphone },
     ],
   },
@@ -148,6 +151,7 @@ const VIEW_PATHS: Record<string, ViewId> = {
   "homepage-editor": "homepage",
   banners: "banners",
   marketplace: "marketplace",
+  filters: "filters",
   inventory: "inventory",
   delivery: "delivery",
   reports: "reports",
@@ -167,6 +171,7 @@ const VIEW_SLUGS: Record<ViewId, string> = {
   homepage: "homepage-editor",
   banners: "banners",
   marketplace: "marketplace",
+  filters: "filters",
   inventory: "inventory",
   delivery: "delivery",
   reports: "reports",
@@ -213,6 +218,7 @@ const LABELS: Record<ViewId, string> = {
   homepage: "Editor de Inicio",
   banners: "Banners CMS",
   marketplace: "Publicidad Marketplace",
+  filters: "Filtros",
   inventory: "Inventario",
   delivery: "Entregas",
   reports: "Reportes",
@@ -673,6 +679,8 @@ function ViewRenderer({ view, user }: { view: ViewId; user: UserProfile | null }
       return <Banners />;
     case "marketplace":
       return <Marketplace />;
+    case "filters":
+      return <Filters />;
     case "inventory":
       return <Inventory />;
     case "delivery":

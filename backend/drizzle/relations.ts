@@ -52,6 +52,7 @@ import {
   menuItems,
   pages,
   banners,
+  savedFilters,
   auditLogs,
   notifications,
   permissions,
@@ -735,6 +736,10 @@ export const bannersRelations = relations(banners, ({ one }) => ({
     references: [media.id],
     relationName: 'banners_mobileImage',
   }),
+  filter: one(savedFilters, {
+    fields: [banners.filterId],
+    references: [savedFilters.id],
+  }),
 }));
 
 export const auditLogsRelations = relations(auditLogs, ({ one }) => ({
@@ -874,3 +879,7 @@ export const promotionProductsRelations = relations(
     }),
   }),
 );
+
+export const savedFiltersRelations = relations(savedFilters, ({ many }) => ({
+  banners: many(banners),
+}));

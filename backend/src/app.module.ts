@@ -13,6 +13,7 @@ import { NotificationsModule } from './modules/notifications/notifications.modul
 import { CloudinaryModule } from './modules/cloudinary/cloudinary.module';
 import { PromotionsModule } from './modules/promotions/promotions.module';
 import { BannersModule } from './modules/banners/banners.module';
+import { FiltersModule } from './modules/filters/filters.module';
 import {
   appConfig,
   databaseConfig,
@@ -50,6 +51,7 @@ import {
     CloudinaryModule,
     PromotionsModule,
     BannersModule,
+    FiltersModule,
   ],
   controllers: [AppController],
   providers: [AppService],

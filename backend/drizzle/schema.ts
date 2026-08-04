@@ -2739,6 +2739,36 @@ export const menuItems = pgTable(
   ],
 );
 
+export const savedFilters = pgTable(
+  'saved_filters',
+  {
+    id: bigserial({ mode: 'bigint' }).primaryKey().notNull(),
+    name: varchar({ length: 100 }).notNull(),
+    description: text(),
+    categoryIds: jsonb('category_ids').default('[]').notNull(),
+    brandId: bigint('brand_id', { mode: 'number' }),
+    productTypeCode: varchar('product_type_code', { length: 50 }),
+    onSale: boolean('on_sale').default(false),
+    search: varchar({ length: 200 }),
+    sort: varchar({ length: 50 }),
+    priceMin: integer('price_min'),
+    priceMax: integer('price_max'),
+    isActive: boolean('is_active').default(true).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'string' })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    index('idx_saved_filters_active').using(
+      'btree',
+      table.isActive.asc().nullsLast().op('bool_ops'),
+    ),
+  ],
+);
+
 export const banners = pgTable(
   'banners',
   {
@@ -2763,6 +2793,8 @@ export const banners = pgTable(
     endDate: timestamp('end_date', { withTimezone: true, mode: 'string' }),
     // You can use { mode: "bigint" } if numbers are exceeding js number limitations
     mobileImageId: bigint('mobile_image_id', { mode: 'number' }),
+    // You can use { mode: "bigint" } if numbers are exceeding js number limitations
+    filterId: bigint('filter_id', { mode: 'number' }),
     clicks: integer().default(0).notNull(),
     views: integer().default(0).notNull(),
     createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' })
@@ -2799,6 +2831,11 @@ export const banners = pgTable(
       columns: [table.mobileImageId],
       foreignColumns: [media.id],
       name: 'banners_mobile_image_id_fkey',
+    }).onDelete('set null'),
+    foreignKey({
+      columns: [table.filterId],
+      foreignColumns: [savedFilters.id],
+      name: 'banners_filter_id_fkey',
     }).onDelete('set null'),
     check(
       'banner_dates_check',
