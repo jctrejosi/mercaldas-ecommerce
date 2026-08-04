@@ -75,6 +75,10 @@ export const catalogService = {
     return fetchJson(`${API_BASE_URL}/catalog/product-types`);
   },
 
+  async getFeaturedProductTypes(): Promise<{ id: number; code: string; name: string; count: number }[]> {
+    return fetchJson(`${API_BASE_URL}/landing/product-types`);
+  },
+
   async getCatalogData(
     params?: CatalogProductsQuery,
   ): Promise<CatalogDataResponse> {

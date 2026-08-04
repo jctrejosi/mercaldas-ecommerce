@@ -13,6 +13,7 @@ interface QuickCategoriesSectionProps {
   productTypes?: ProductType[];
   onProductTypeClick: (code: string) => void;
   onViewAll: () => void;
+  loading?: boolean;
 }
 
 const ICONS = ["🥬", "🥩", "🥛", "🥫", "🧹", "💄", "👶", "🍷", "🏠", "💻", "🐾", "🔌"];

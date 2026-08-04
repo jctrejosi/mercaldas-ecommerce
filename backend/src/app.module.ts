@@ -15,6 +15,7 @@ import { PromotionsModule } from './modules/promotions/promotions.module';
 import { BannersModule } from './modules/banners/banners.module';
 import { FiltersModule } from './modules/filters/filters.module';
 import { BranchesModule } from './modules/branches/branches.module';
+import { LandingModule } from './modules/landing/landing.module';
 import {
   appConfig,
   databaseConfig,
@@ -54,6 +55,7 @@ import {
     BannersModule,
     FiltersModule,
     BranchesModule,
+    LandingModule,
   ],
   controllers: [AppController],
   providers: [AppService],

@@ -245,7 +245,7 @@ export default function App() {
           .then(setLandingBranches)
           .catch(() => {});
         void catalogService
-          .getProductTypes()
+          .getFeaturedProductTypes()
           .then(setLandingProductTypes)
           .catch(() => {});
       })

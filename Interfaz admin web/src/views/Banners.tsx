@@ -3,6 +3,7 @@ import {
   Plus, Edit, Trash2, X, Loader2, Filter, GripVertical,
   Image, Type, Palette, Link, Calendar, Eye, ChevronLeft, ChevronRight,
   LayoutTemplate, SlidersHorizontal, Zap, Truck, ShieldCheck, Clock, Megaphone,
+  Layers,
 } from "lucide-react";
 import {
   bannersService,
@@ -974,6 +975,73 @@ function BenefitsEditor({
   );
 }
 
+// ── Product Types Selector ──
+interface LandingProductType { id: number; code: string; name: string; count: number; selected: boolean; }
+
+function ProductTypeEditor({
+  productTypes,
+  onClose,
+  onSaved,
+}: {
+  productTypes: LandingProductType[];
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [items, setItems] = useState(productTypes);
+  const [saving, setSaving] = useState(false);
+
+  const toggle = (code: string) => {
+    setItems((prev) => prev.map((t) => (t.code === code ? { ...t, selected: !t.selected } : t)));
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      const codes = items.filter((t) => t.selected).map((t) => t.code);
+      const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:3000";
+      await fetch(`${API_BASE}/admin/landing/product-types`, {
+        method: "PUT", credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ codes }),
+      });
+      onSaved();
+    } catch (e) { console.error(e); }
+    finally { setSaving(false); }
+  };
+
+  const selectedCount = items.filter((t) => t.selected).length;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[85vh] flex flex-col mx-4 overflow-hidden">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 shrink-0">
+          <div>
+            <h2 className="font-bold text-gray-900">Tipos de Producto en Home</h2>
+            <p className="text-xs text-gray-400 mt-0.5">{selectedCount} de {items.length} seleccionados</p>
+          </div>
+          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-500"><X size={16} /></button>
+        </div>
+        <div className="flex-1 overflow-y-auto p-6 space-y-1">
+          {items.map((t) => (
+            <label key={t.code} className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors">
+              <input type="checkbox" checked={t.selected} onChange={() => toggle(t.code)} className="w-4 h-4 rounded border-gray-300 text-amber-500 focus:ring-amber-300" />
+              <span className="flex-1 text-sm text-gray-700">{t.name}</span>
+              <span className="text-xs text-gray-400">{t.count} productos</span>
+            </label>
+          ))}
+        </div>
+        <div className="flex items-center justify-between px-6 py-4 border-t border-gray-100 bg-gray-50 shrink-0">
+          <button onClick={onClose} className="px-4 py-2 text-sm text-gray-600">Cancelar</button>
+          <button onClick={handleSave} disabled={saving} className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-amber-900 bg-amber-400 hover:bg-amber-500 disabled:opacity-50 rounded-xl">
+            {saving && <Loader2 size={14} className="animate-spin" />}Guardar
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Main Page ──
 export default function Banners() {
   const [slides, setSlides] = useState<Banner[]>([]);
@@ -984,6 +1052,8 @@ export default function Banners() {
   const [managerOpen, setManagerOpen] = useState(false);
   const [promoManagerOpen, setPromoManagerOpen] = useState(false);
   const [benefitsOpen, setBenefitsOpen] = useState(false);
+  const [prodTypesOpen, setProdTypesOpen] = useState(false);
+  const [landingTypes, setLandingTypes] = useState<LandingProductType[]>([]);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -998,6 +1068,11 @@ export default function Banners() {
       setPromos(p);
       setBenefits(b);
       setFilters(f);
+
+      // Load landing product types
+      const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:3000";
+      const res = await fetch(`${API_BASE}/admin/landing/product-types`, { credentials: "include" });
+      if (res.ok) setLandingTypes(await res.json());
     } catch (e) { console.error(e); }
     finally { setLoading(false); }
   }, []);
@@ -1115,6 +1190,27 @@ export default function Banners() {
                 </div>
               )}
             </div>
+
+            {/* Product Types card */}
+            <div
+              onClick={() => setProdTypesOpen(true)}
+              className="bg-white rounded-2xl border border-gray-100 p-5 cursor-pointer hover:shadow-md hover:border-amber-200 transition-all group"
+            >
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-10 h-10 rounded-xl bg-purple-100 flex items-center justify-center group-hover:bg-purple-200 transition-colors">
+                  <Layers size={18} className="text-purple-600" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-gray-900 text-sm">Tipos de Producto — Home</h3>
+                  <p className="text-xs text-gray-500">Selecciona cuáles mostrar en la landing</p>
+                </div>
+              </div>
+              <div className="flex gap-6 text-sm">
+                <div><span className="font-bold text-gray-900">{landingTypes.length}</span> <span className="text-gray-400 text-xs">tipos totales</span></div>
+                <div><span className="font-bold text-green-600">{landingTypes.filter((t) => t.selected).length}</span> <span className="text-gray-400 text-xs">visibles</span></div>
+              </div>
+            </div>
+
           </>
         )}
       </div>
@@ -1145,6 +1241,15 @@ export default function Banners() {
           benefits={benefits}
           onClose={() => { setBenefitsOpen(false); fetchData(); }}
           onSaved={() => { setBenefitsOpen(false); fetchData(); }}
+        />
+      )}
+
+      {/* Product types editor */}
+      {prodTypesOpen && (
+        <ProductTypeEditor
+          productTypes={landingTypes}
+          onClose={() => setProdTypesOpen(false)}
+          onSaved={() => { setProdTypesOpen(false); fetchData(); }}
         />
       )}
     </>
