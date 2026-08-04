@@ -14,6 +14,7 @@ import { CloudinaryModule } from './modules/cloudinary/cloudinary.module';
 import { PromotionsModule } from './modules/promotions/promotions.module';
 import { BannersModule } from './modules/banners/banners.module';
 import { FiltersModule } from './modules/filters/filters.module';
+import { BranchesModule } from './modules/branches/branches.module';
 import {
   appConfig,
   databaseConfig,
@@ -52,6 +53,7 @@ import {
     PromotionsModule,
     BannersModule,
     FiltersModule,
+    BranchesModule,
   ],
   controllers: [AppController],
   providers: [AppService],

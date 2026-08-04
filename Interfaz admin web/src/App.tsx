@@ -54,6 +54,7 @@ import Inventory from "./views/Inventory";
 import Delivery from "./views/Delivery";
 import UsersView from "./views/Users";
 import SettingsView from "./views/Settings";
+import Branches from "./views/Branches";
 
 export type ViewId =
   | "dashboard"
@@ -71,7 +72,8 @@ export type ViewId =
   | "delivery"
   | "reports"
   | "users"
-  | "settings";
+  | "settings"
+  | "branches";
 
 interface NavItem {
   id: ViewId;
@@ -120,6 +122,7 @@ const NAV: NavSection[] = [
     items: [
       { id: "inventory", label: "Inventario", icon: Warehouse },
       { id: "delivery", label: "Entregas", icon: Truck },
+      { id: "branches", label: "Sucursales", icon: Building2 },
     ],
   },
   {
@@ -150,6 +153,7 @@ const VIEW_PATHS: Record<string, ViewId> = {
   marketplace: "marketplace",
   inventory: "inventory",
   delivery: "delivery",
+  branches: "branches",
   reports: "reports",
   users: "users",
   settings: "settings",
@@ -169,6 +173,7 @@ const VIEW_SLUGS: Record<ViewId, string> = {
   marketplace: "marketplace",
   inventory: "inventory",
   delivery: "delivery",
+  branches: "branches",
   reports: "reports",
   users: "users",
   settings: "settings",
@@ -215,6 +220,7 @@ const LABELS: Record<ViewId, string> = {
   marketplace: "Publicidad Marketplace",
   inventory: "Inventario",
   delivery: "Entregas",
+  branches: "Sucursales",
   reports: "Reportes",
   users: "Usuarios y Permisos",
   settings: "Configuración",
@@ -677,6 +683,8 @@ function ViewRenderer({ view, user }: { view: ViewId; user: UserProfile | null }
       return <Inventory />;
     case "delivery":
       return <Delivery />;
+    case "branches":
+      return <Branches />;
     case "reports":
       return <Reports />;
     case "users":
