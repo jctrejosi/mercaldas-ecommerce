@@ -129,6 +129,9 @@ export const mediaRelations = relations(media, ({ one, many }) => ({
     relationName: 'invoices_xmlMediaId_media_id',
   }),
   banners: many(banners),
+  banners_mobileImage: many(banners, {
+    relationName: 'banners_mobileImage',
+  }),
 }));
 
 export const branchesRelations = relations(branches, ({ one, many }) => ({
@@ -726,6 +729,11 @@ export const bannersRelations = relations(banners, ({ one }) => ({
   media: one(media, {
     fields: [banners.mediaId],
     references: [media.id],
+  }),
+  mobileImage: one(media, {
+    fields: [banners.mobileImageId],
+    references: [media.id],
+    relationName: 'banners_mobileImage',
   }),
 }));
 

@@ -1,50 +1,76 @@
 import { ChevronLeft, ChevronRight, Sparkles } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import type { Slide } from "../types";
 
-const HERO_SLIDES: Slide[] = [
+const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:3000";
+
+interface HeroSlide {
+  id: number;
+  title: string;
+  subtitle: string;
+  cta: string;
+  ctaText: string;
+  image: string;
+  mobileImage: string;
+  bg: string;
+  accent: string;
+}
+
+async function fetchHeroSlides(): Promise<HeroSlide[]> {
+  try {
+    const res = await fetch(
+      `${API_BASE_URL}/banners?bannerType=hero`,
+    );
+    if (!res.ok) return [];
+    const banners = await res.json();
+    return banners.map((b: any) => ({
+      id: b.id,
+      title: b.title || "",
+      subtitle: b.subtitle || b.description || "",
+      cta: b.linkUrl || "",
+      ctaText: b.ctaText || "Ver más",
+      image: b.image || "",
+      mobileImage: b.mobileImage || b.image || "",
+      bg: b.bgColor || "#1A1A2E",
+      accent: b.accentColor || "#FFF200",
+    }));
+  } catch {
+    return [];
+  }
+}
+
+// Fallback slides
+const FALLBACK_SLIDES: HeroSlide[] = [
   {
     id: 1,
     title: "Frutas y Verduras\nFrescas del Día",
     subtitle:
       "Directo de los mejores cultivadores de la región. Frescura garantizada en cada entrega.",
-    cta: "Ver Frutas y Verduras",
+    cta: "",
+    ctaText: "Ver Frutas y Verduras",
     image:
       "https://images.unsplash.com/photo-1729622493745-03ca9590c64a?w=1200&h=600&fit=crop&auto=format",
+    mobileImage:
+      "https://images.unsplash.com/photo-1729622493745-03ca9590c64a?w=600&h=400&fit=crop&auto=format",
     bg: "#1A1A2E",
-    accent: "#FFF200",
-  },
-  {
-    id: 2,
-    title: "Hasta 30% OFF\nen Productos Seleccionados",
-    subtitle:
-      "Aprovecha nuestras promociones de temporada. Ofertas válidas hasta agotar existencias.",
-    cta: "Ver Todas las Ofertas",
-    image:
-      "https://images.unsplash.com/photo-1607083207685-aaf05f2c908c?w=1200&h=600&fit=crop&auto=format",
-    bg: "#8B0000",
-    accent: "#FFF200",
-  },
-  {
-    id: 3,
-    title: "Tu Mercado Completo\nSin Salir de Casa",
-    subtitle: "Miles de productos, domicilio en Manizales en menos de 2 horas.",
-    cta: "Empezar a Comprar",
-    image:
-      "https://images.unsplash.com/photo-1533413710577-c1b62c5fc55b?w=1200&h=600&fit=crop&auto=format",
-    bg: "#1A4A2E",
     accent: "#FFF200",
   },
 ];
 
 export function HeroSection() {
+  const [slides, setSlides] = useState<HeroSlide[]>(FALLBACK_SLIDES);
   const [currentSlide, setCurrentSlide] = useState(0);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    fetchHeroSlides().then((data) => {
+      if (data.length > 0) setSlides(data);
+    });
+  }, []);
 
   const startSlideTimer = () => {
     if (intervalRef.current) clearInterval(intervalRef.current);
     intervalRef.current = setInterval(() => {
-      setCurrentSlide((s) => (s + 1) % HERO_SLIDES.length);
+      setCurrentSlide((s) => (s + 1) % slides.length);
     }, 4500);
   };
 
@@ -53,14 +79,16 @@ export function HeroSection() {
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
-  }, []);
+  }, [slides.length]);
 
   const goSlide = (dir: number) => {
-    setCurrentSlide((s) => (s + dir + HERO_SLIDES.length) % HERO_SLIDES.length);
+    setCurrentSlide((s) => (s + dir + slides.length) % slides.length);
     startSlideTimer();
   };
 
-  const slide = HERO_SLIDES[currentSlide];
+  if (slides.length === 0) return null;
+
+  const slide = slides[currentSlide];
 
   return (
     <section
@@ -84,19 +112,24 @@ export function HeroSection() {
             >
               {slide.title}
             </h1>
-            <p
-              className="text-sm md:text-base mb-7 max-w-sm"
-              style={{ color: "rgba(255,255,255,0.75)" }}
-            >
-              {slide.subtitle}
-            </p>
-            <button
-              className="inline-flex items-center gap-2 px-6 py-3 rounded-xl font-bold text-sm transition-all hover:brightness-95 active:scale-95"
-              style={{ background: slide.accent, color: "#1A1A2E" }}
-            >
-              {slide.cta}
-              <ChevronRight className="w-4 h-4" />
-            </button>
+            {slide.subtitle && (
+              <p
+                className="text-sm md:text-base mb-7 max-w-sm"
+                style={{ color: "rgba(255,255,255,0.75)" }}
+              >
+                {slide.subtitle}
+              </p>
+            )}
+            {slide.ctaText && (
+              <a
+                href={slide.cta || "#"}
+                className="inline-flex items-center gap-2 px-6 py-3 rounded-xl font-bold text-sm transition-all hover:brightness-95 active:scale-95"
+                style={{ background: slide.accent, color: "#1A1A2E" }}
+              >
+                {slide.ctaText}
+                <ChevronRight className="w-4 h-4" />
+              </a>
+            )}
           </div>
 
           {/* Background image */}
@@ -116,47 +149,53 @@ export function HeroSection() {
           </div>
 
           {/* Arrows */}
-          <button
-            onClick={() => goSlide(-1)}
-            className="absolute left-2 top-1/2 -translate-y-1/2 z-20 w-9 h-9 rounded-full flex items-center justify-center transition-all hover:scale-110"
-            style={{
-              background: "rgba(255,255,255,0.2)",
-              backdropFilter: "blur(4px)",
-            }}
-          >
-            <ChevronLeft className="w-4 h-4 text-white" />
-          </button>
-          <button
-            onClick={() => goSlide(1)}
-            className="absolute right-2 md:right-[42%] top-1/2 -translate-y-1/2 z-20 w-9 h-9 rounded-full flex items-center justify-center transition-all hover:scale-110"
-            style={{
-              background: "rgba(255,255,255,0.2)",
-              backdropFilter: "blur(4px)",
-            }}
-          >
-            <ChevronRight className="w-4 h-4 text-white" />
-          </button>
+          {slides.length > 1 && (
+            <>
+              <button
+                onClick={() => goSlide(-1)}
+                className="absolute left-2 top-1/2 -translate-y-1/2 z-20 w-9 h-9 rounded-full flex items-center justify-center transition-all hover:scale-110"
+                style={{
+                  background: "rgba(255,255,255,0.2)",
+                  backdropFilter: "blur(4px)",
+                }}
+              >
+                <ChevronLeft className="w-4 h-4 text-white" />
+              </button>
+              <button
+                onClick={() => goSlide(1)}
+                className="absolute right-2 md:right-[42%] top-1/2 -translate-y-1/2 z-20 w-9 h-9 rounded-full flex items-center justify-center transition-all hover:scale-110"
+                style={{
+                  background: "rgba(255,255,255,0.2)",
+                  backdropFilter: "blur(4px)",
+                }}
+              >
+                <ChevronRight className="w-4 h-4 text-white" />
+              </button>
+            </>
+          )}
         </div>
       </div>
 
       {/* Dots */}
-      <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2 z-20">
-        {HERO_SLIDES.map((_, i) => (
-          <button
-            key={i}
-            onClick={() => {
-              setCurrentSlide(i);
-              startSlideTimer();
-            }}
-            className="h-1.5 rounded-full transition-all duration-300"
-            style={{
-              width: i === currentSlide ? "24px" : "6px",
-              background:
-                i === currentSlide ? "#FFF200" : "rgba(255,255,255,0.4)",
-            }}
-          />
-        ))}
-      </div>
+      {slides.length > 1 && (
+        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2 z-20">
+          {slides.map((_, i) => (
+            <button
+              key={i}
+              onClick={() => {
+                setCurrentSlide(i);
+                startSlideTimer();
+              }}
+              className="h-1.5 rounded-full transition-all duration-300"
+              style={{
+                width: i === currentSlide ? "24px" : "6px",
+                background:
+                  i === currentSlide ? "#FFF200" : "rgba(255,255,255,0.4)",
+              }}
+            />
+          ))}
+        </div>
+      )}
     </section>
   );
 }

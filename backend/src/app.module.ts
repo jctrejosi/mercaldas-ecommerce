@@ -12,6 +12,7 @@ import { CartModule } from './modules/cart/cart.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { CloudinaryModule } from './modules/cloudinary/cloudinary.module';
 import { PromotionsModule } from './modules/promotions/promotions.module';
+import { BannersModule } from './modules/banners/banners.module';
 import {
   appConfig,
   databaseConfig,
@@ -48,6 +49,7 @@ import {
     NotificationsModule,
     CloudinaryModule,
     PromotionsModule,
+    BannersModule,
   ],
   controllers: [AppController],
   providers: [AppService],

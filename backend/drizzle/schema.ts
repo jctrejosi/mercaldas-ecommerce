@@ -2752,10 +2752,19 @@ export const banners = pgTable(
       .notNull(),
     altText: varchar('alt_text', { length: 255 }),
     description: text(),
+    subtitle: text(),
+    ctaText: varchar('cta_text', { length: 100 }),
+    bgColor: varchar('bg_color', { length: 20 }),
+    accentColor: varchar('accent_color', { length: 20 }),
+    bannerType: varchar('banner_type', { length: 20 }).default('promo').notNull(),
     position: integer().default(0),
     isActive: boolean('is_active').default(true).notNull(),
     startDate: timestamp('start_date', { withTimezone: true, mode: 'string' }),
     endDate: timestamp('end_date', { withTimezone: true, mode: 'string' }),
+    // You can use { mode: "bigint" } if numbers are exceeding js number limitations
+    mobileImageId: bigint('mobile_image_id', { mode: 'number' }),
+    clicks: integer().default(0).notNull(),
+    views: integer().default(0).notNull(),
     createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' })
       .defaultNow()
       .notNull(),
@@ -2777,11 +2786,20 @@ export const banners = pgTable(
       'btree',
       table.position.asc().nullsLast().op('int4_ops'),
     ),
+    index('idx_banners_type').using(
+      'btree',
+      table.bannerType.asc().nullsLast().op('text_ops'),
+    ),
     foreignKey({
       columns: [table.mediaId],
       foreignColumns: [media.id],
       name: 'banners_media_id_fkey',
     }).onDelete('cascade'),
+    foreignKey({
+      columns: [table.mobileImageId],
+      foreignColumns: [media.id],
+      name: 'banners_mobile_image_id_fkey',
+    }).onDelete('set null'),
     check(
       'banner_dates_check',
       sql`(end_date IS NULL) OR (start_date IS NULL) OR (end_date > start_date)`,

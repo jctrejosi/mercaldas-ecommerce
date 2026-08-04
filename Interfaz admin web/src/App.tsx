@@ -110,7 +110,7 @@ const NAV: NavSection[] = [
   {
     title: "Contenido",
     items: [
-      { id: "homepage", label: "Editor de Inicio", icon: LayoutTemplate },
+      // { id: "homepage", label: "Editor de Inicio", icon: LayoutTemplate }, // Oculto por ahora
       { id: "banners", label: "Banners CMS", icon: Image },
       { id: "marketplace", label: "Publicidad", icon: Megaphone },
     ],
