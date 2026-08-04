@@ -141,9 +141,9 @@ export function HeroSection({
       <style>{ANIM_STYLES}</style>
 
       <div className="max-w-7xl mx-auto px-4">
-        <div className="relative flex items-center min-h-[320px] md:min-h-[420px]">
+        <div className="relative flex items-center h-[340px] md:h-[420px]">
           {/* Content */}
-          <div key={animKey} className="relative z-10 flex-1 py-10 max-w-xl">
+          <div key={animKey} className="relative z-10 flex-1 py-8 max-w-xl">
             <div
               className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-widest px-3 py-1 rounded-full mb-5"
               style={{
@@ -168,7 +168,7 @@ export function HeroSection({
             </h1>
             {slide.subtitle && (
               <p
-                className="text-sm md:text-base mb-7 max-w-sm"
+                className="text-sm md:text-base mb-7 max-w-sm line-clamp-2"
                 style={{
                   color: "rgba(255,255,255,0.75)",
                   animation: "heroFadeIn 0.5s ease both",

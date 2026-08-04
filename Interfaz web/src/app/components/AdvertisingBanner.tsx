@@ -132,11 +132,10 @@ export function AdvertisingBanner({
       <style>{ANIM_STYLES}</style>
       <div className="max-w-7xl mx-auto px-4">
         <div
-          className="relative overflow-hidden rounded-2xl"
+          className="relative overflow-hidden rounded-2xl h-40 md:h-44"
           style={{
             background: banner.bg,
             transition: "background 0.6s ease",
-            minHeight: "160px",
           }}
         >
           {/* BG image with crossfade */}
@@ -157,10 +156,10 @@ export function AdvertisingBanner({
           </div>
 
           {/* Content */}
-          <div key={animKey} className="relative z-10 px-7 py-8 flex flex-col md:flex-row md:items-center gap-5">
-            <div className="flex-1">
+          <div key={animKey} className="relative z-10 px-7 py-6 flex flex-col md:flex-row md:items-center gap-4 h-full">
+            <div className="flex-1 min-w-0">
               <span
-                className="inline-block text-[10px] font-black tracking-widest px-2.5 py-1 rounded-full mb-3"
+                className="inline-block text-[10px] font-black tracking-widest px-2.5 py-1 rounded-full mb-2"
                 style={{
                   background: banner.accent,
                   color: "#1A1A2E",
@@ -171,7 +170,7 @@ export function AdvertisingBanner({
                 {banner.badge}
               </span>
               <h2
-                className="text-2xl md:text-3xl font-black text-white leading-tight mb-2"
+                className="text-xl md:text-2xl font-black text-white leading-tight mb-1 truncate"
                 style={{
                   fontFamily: "'Bricolage Grotesque', sans-serif",
                   animation: "promoFadeIn 0.5s ease both",
@@ -181,7 +180,7 @@ export function AdvertisingBanner({
                 {banner.title}
               </h2>
               <p
-                className="text-sm max-w-sm"
+                className="text-sm max-w-sm line-clamp-2"
                 style={{
                   color: "rgba(255,255,255,0.7)",
                   animation: "promoFadeIn 0.5s ease both",

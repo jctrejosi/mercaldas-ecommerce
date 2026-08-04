@@ -113,8 +113,8 @@ const NAV: NavSection[] = [
     title: "Contenido",
     items: [
       // { id: "homepage", label: "Editor de Inicio", icon: LayoutTemplate }, // Oculto por ahora
-      { id: "banners", label: "Banners CMS", icon: Image },
-      { id: "marketplace", label: "Publicidad", icon: Megaphone },
+      // { id: "marketplace", label: "Publicidad", icon: Megaphone }, // Oculto por ahora
+      { id: "banners", label: "Home", icon: LayoutTemplate },
     ],
   },
   {
@@ -216,7 +216,7 @@ const LABELS: Record<ViewId, string> = {
   customers: "Clientes",
   promotions: "Promociones",
   homepage: "Editor de Inicio",
-  banners: "Banners CMS",
+  banners: "Home",
   marketplace: "Publicidad Marketplace",
   inventory: "Inventario",
   delivery: "Entregas",
