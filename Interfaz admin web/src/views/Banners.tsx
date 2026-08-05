@@ -1,15 +1,20 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   Plus, Edit, Trash2, X, Loader2, Filter, GripVertical,
   Image, Type, Palette, Link, Calendar, Eye, ChevronLeft, ChevronRight,
   LayoutTemplate, SlidersHorizontal, Zap, Truck, ShieldCheck, Clock, Megaphone,
-  Layers,
+  Layers, Search, Package, ArrowUp, ArrowDown, Check, Save,
 } from "lucide-react";
 import {
   bannersService,
   type Banner,
   type CreateBannerData,
 } from "../services/banners.service";
+import {
+  featuredService,
+  type FeaturedTab,
+  type FeaturedProduct,
+} from "../services/featured.service";
 import { filtersService, type FilterConfig } from "../services/filters.service";
 
 const STATUS_BADGE: Record<string, string> = {
@@ -976,7 +981,7 @@ function BenefitsEditor({
 }
 
 // ── Product Types Selector ──
-interface LandingProductType { id: number; code: string; name: string; count: number; selected: boolean; }
+interface LandingProductType { id: number; code: string; name: string; count: number; isActive: boolean; selected: boolean; }
 
 function ProductTypeEditor({
   productTypes,
@@ -989,9 +994,22 @@ function ProductTypeEditor({
 }) {
   const [items, setItems] = useState(productTypes);
   const [saving, setSaving] = useState(false);
+  const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:3000";
 
-  const toggle = (code: string) => {
+  const toggleSelected = (code: string) => {
     setItems((prev) => prev.map((t) => (t.code === code ? { ...t, selected: !t.selected } : t)));
+  };
+
+  const toggleActive = async (pt: LandingProductType) => {
+    const newActive = !pt.isActive;
+    try {
+      await fetch(`${API_BASE}/admin/landing/product-types/${pt.id}/active`, {
+        method: "PATCH", credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isActive: newActive }),
+      });
+      setItems((prev) => prev.map((t) => (t.id === pt.id ? { ...t, isActive: newActive } : t)));
+    } catch (e) { console.error(e); }
   };
 
   const handleSave = async () => {
@@ -1010,6 +1028,7 @@ function ProductTypeEditor({
   };
 
   const selectedCount = items.filter((t) => t.selected).length;
+  const activeCount = items.filter((t) => t.isActive).length;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
@@ -1018,26 +1037,390 @@ function ProductTypeEditor({
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 shrink-0">
           <div>
             <h2 className="font-bold text-gray-900">Tipos de Producto en Home</h2>
-            <p className="text-xs text-gray-400 mt-0.5">{selectedCount} de {items.length} seleccionados</p>
+            <p className="text-xs text-gray-400 mt-0.5">
+              {selectedCount} visibles · {activeCount} activos de {items.length} totales
+            </p>
           </div>
           <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-500"><X size={16} /></button>
         </div>
         <div className="flex-1 overflow-y-auto p-6 space-y-1">
           {items.map((t) => (
-            <label key={t.code} className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors">
-              <input type="checkbox" checked={t.selected} onChange={() => toggle(t.code)} className="w-4 h-4 rounded border-gray-300 text-amber-500 focus:ring-amber-300" />
-              <span className="flex-1 text-sm text-gray-700">{t.name}</span>
-              <span className="text-xs text-gray-400">{t.count} productos</span>
-            </label>
+            <div key={t.code} className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-gray-50 transition-colors">
+              <label className="flex items-center gap-3 flex-1 cursor-pointer">
+                <input type="checkbox" checked={t.selected} onChange={() => toggleSelected(t.code)} className="w-4 h-4 rounded border-gray-300 text-amber-500 focus:ring-amber-300" />
+                <span className={`flex-1 text-sm ${t.isActive ? 'text-gray-700' : 'text-gray-300 line-through'}`}>{t.name}</span>
+                <span className="text-xs text-gray-400">{t.count} productos</span>
+              </label>
+              {/* isActive toggle switch */}
+              <button
+                onClick={(e) => { e.stopPropagation(); toggleActive(t); }}
+                className={`relative w-9 h-5 rounded-full transition-colors flex-shrink-0 cursor-pointer ${t.isActive ? 'bg-green-500' : 'bg-gray-300'}`}
+              >
+                <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${t.isActive ? 'left-4' : 'left-0.5'}`} />
+              </button>
+            </div>
           ))}
         </div>
         <div className="flex items-center justify-between px-6 py-4 border-t border-gray-100 bg-gray-50 shrink-0">
           <button onClick={onClose} className="px-4 py-2 text-sm text-gray-600">Cancelar</button>
           <button onClick={handleSave} disabled={saving} className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-amber-900 bg-amber-400 hover:bg-amber-500 disabled:opacity-50 rounded-xl">
-            {saving && <Loader2 size={14} className="animate-spin" />}Guardar
+            {saving && <Loader2 size={14} className="animate-spin" />}Guardar selección
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+// ── Featured Products Manager ──
+function FeaturedProductsManager({
+  onClose,
+  onSaved,
+}: {
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [tabs, setTabs] = useState<FeaturedTab[]>([]);
+  const [selectedTab, setSelectedTab] = useState<number | null>(null);
+  const [products, setProducts] = useState<FeaturedProduct[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [productsLoading, setProductsLoading] = useState(false);
+  const [newTabName, setNewTabName] = useState("");
+  const [creating, setCreating] = useState(false);
+  const [renamingId, setRenamingId] = useState<number | null>(null);
+  const [renameValue, setRenameValue] = useState("");
+  const [search, setSearch] = useState("");
+  const [searchResults, setSearchResults] = useState<FeaturedProduct[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [adding, setAdding] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState<FeaturedTab | null>(null);
+  const [error, setError] = useState("");
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const loadTabs = useCallback(async () => {
+    const data = await featuredService.getTabs();
+    setTabs(data);
+    setSelectedTab((prev) => {
+      if (prev !== null && data.some((t) => t.id === prev)) return prev;
+      return data.length ? data[0].id : null;
+    });
+    setLoading(false);
+  }, []);
+
+  const loadProducts = useCallback(async (tabId: number) => {
+    setProductsLoading(true);
+    try {
+      setProducts(await featuredService.getTabProducts(tabId));
+    } catch (e: any) { setError(e.message || "Error"); }
+    finally { setProductsLoading(false); }
+  }, []);
+
+  useEffect(() => { void loadTabs(); }, [loadTabs]);
+
+  useEffect(() => {
+    if (selectedTab === null) { setProducts([]); return; }
+    void loadProducts(selectedTab);
+  }, [selectedTab, loadProducts]);
+
+  const handleCreateTab = async () => {
+    if (!newTabName.trim()) return;
+    setCreating(true); setError("");
+    try {
+      const data = await featuredService.createTab({ name: newTabName.trim() });
+      setTabs(data);
+      setNewTabName("");
+      const created = data[data.length - 1];
+      setSelectedTab(created.id);
+    } catch (e: any) { setError(e.message || "Error"); }
+    finally { setCreating(false); }
+  };
+
+  const handleRename = async (id: number) => {
+    if (!renameValue.trim()) { setRenamingId(null); return; }
+    setError("");
+    try {
+      const data = await featuredService.updateTab(id, { name: renameValue.trim() });
+      setTabs(data);
+    } catch (e: any) { setError(e.message || "Error"); }
+    finally { setRenamingId(null); }
+  };
+
+  const handleToggleActive = async (tab: FeaturedTab) => {
+    setError("");
+    try {
+      const data = await featuredService.updateTab(tab.id, { isActive: !tab.isActive });
+      setTabs(data);
+    } catch (e: any) { setError(e.message || "Error"); }
+  };
+
+  const handleMove = async (index: number, dir: -1 | 1) => {
+    const target = index + dir;
+    if (target < 0 || target >= tabs.length) return;
+    const reordered = [...tabs];
+    const [item] = reordered.splice(index, 1);
+    reordered.splice(target, 0, item);
+    setTabs(reordered);
+    setError("");
+    try {
+      for (let i = 0; i < reordered.length; i++) {
+        await featuredService.updateTab(reordered[i].id, { position: i });
+      }
+    } catch (e: any) { setError(e.message || "Error al reordenar"); }
+  };
+
+  const handleDelete = async () => {
+    if (!deleteConfirm) return;
+    setError("");
+    try {
+      const data = await featuredService.deleteTab(deleteConfirm.id);
+      setTabs(data);
+      setDeleteConfirm(null);
+      setSelectedTab(data.length ? data[0].id : null);
+    } catch (e: any) { setError(e.message || "Error"); }
+  };
+
+  const handleSearch = (q: string) => {
+    setSearch(q);
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+    searchTimer.current = setTimeout(async () => {
+      if (!q.trim()) { setSearchResults([]); return; }
+      setSearching(true);
+      try {
+        setSearchResults(await featuredService.searchProducts(q.trim()));
+      } catch (e: any) { setError(e.message || "Error"); }
+      finally { setSearching(false); }
+    }, 350);
+  };
+
+  const handleAdd = async (productId: number) => {
+    if (selectedTab === null) return;
+    setAdding(true); setError("");
+    try {
+      const data = await featuredService.assignProducts(selectedTab, [productId]);
+      setProducts(data);
+      setSearch(""); setSearchResults([]);
+      await loadTabs();
+    } catch (e: any) { setError(e.message || "Error"); }
+    finally { setAdding(false); }
+  };
+
+  const handleRemove = async (productId: number) => {
+    if (selectedTab === null) return;
+    setError("");
+    try {
+      const data = await featuredService.removeProduct(selectedTab, productId);
+      setProducts(data);
+      await loadTabs();
+    } catch (e: any) { setError(e.message || "Error"); }
+  };
+
+  const handleMoveProduct = async (index: number, dir: -1 | 1) => {
+    if (selectedTab === null) return;
+    const target = index + dir;
+    if (target < 0 || target >= products.length) return;
+    const reordered = [...products];
+    const [item] = reordered.splice(index, 1);
+    reordered.splice(target, 0, item);
+    setProducts(reordered);
+    setError("");
+    try {
+      const data = await featuredService.reorderProducts(
+        selectedTab,
+        reordered.map((p) => p.id),
+      );
+      setProducts(data);
+    } catch (e: any) { setError(e.message || "Error al reordenar"); }
+  };
+
+  const selected = tabs.find((t) => t.id === selectedTab) ?? null;
+  const assignedIds = new Set(products.map((p) => p.id));
+
+  return (
+    <div className="fixed inset-0 z-[60] flex">
+      <div className="flex-1 bg-black/50" onClick={onClose} />
+      <div className="w-full max-w-5xl bg-white flex flex-col shadow-2xl">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+          <div>
+            <h2 className="font-bold text-gray-900">Productos Destacados — Landing Page</h2>
+            <p className="text-xs text-gray-400 mt-0.5">Pestañas y productos que aparecen en la sección de destacados</p>
+          </div>
+          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-500"><X size={16} /></button>
+        </div>
+
+        {error && <div className="mx-6 mt-4 text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl px-4 py-2.5">{error}</div>}
+
+        <div className="flex-1 flex overflow-hidden">
+          {/* Left: Tabs */}
+          <div className="w-72 border-r border-gray-100 flex flex-col shrink-0">
+            <div className="p-4 border-b border-gray-100 space-y-2">
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Pestañas</p>
+              <div className="flex gap-2">
+                <input
+                  value={newTabName}
+                  onChange={(e) => setNewTabName(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") void handleCreateTab(); }}
+                  placeholder="Nueva pestaña..."
+                  className="flex-1 px-3 py-2 text-xs border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-300"
+                />
+                <button
+                  onClick={handleCreateTab}
+                  disabled={creating || !newTabName.trim()}
+                  className="px-3 py-2 text-xs font-bold bg-amber-400 text-amber-900 rounded-xl hover:bg-amber-500 disabled:opacity-40 flex items-center gap-1"
+                >
+                  {creating ? <Loader2 size={12} className="animate-spin" /> : <Plus size={12} />} Añadir
+                </button>
+              </div>
+            </div>
+            <div className="flex-1 overflow-y-auto p-2 space-y-1">
+              {loading ? (
+                <div className="flex justify-center py-8"><Loader2 size={20} className="animate-spin text-gray-300" /></div>
+              ) : tabs.length === 0 ? (
+                <p className="text-xs text-gray-400 text-center py-8">Crea la primera pestaña</p>
+              ) : (
+                tabs.map((tab, i) => (
+                  <div
+                    key={tab.id}
+                    className={`group rounded-xl px-3 py-2.5 cursor-pointer transition-colors ${selectedTab === tab.id ? "bg-amber-50 border border-amber-200" : "border border-transparent hover:bg-gray-50"}`}
+                    onClick={() => setSelectedTab(tab.id)}
+                  >
+                    {renamingId === tab.id ? (
+                      <div className="flex gap-1.5" onClick={(e) => e.stopPropagation()}>
+                        <input
+                          value={renameValue}
+                          onChange={(e) => setRenameValue(e.target.value)}
+                          onKeyDown={(e) => { if (e.key === "Enter") void handleRename(tab.id); }}
+                          autoFocus
+                          className="flex-1 px-2 py-1 text-xs border rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-300"
+                        />
+                        <button onClick={() => void handleRename(tab.id)} className="p-1 text-green-600"><Check size={13} /></button>
+                        <button onClick={() => setRenamingId(null)} className="p-1 text-gray-400"><X size={13} /></button>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="flex items-center gap-2">
+                          <span className={`flex-1 text-sm font-semibold ${tab.isActive ? "text-gray-800" : "text-gray-300 line-through"}`}>
+                            {tab.name}
+                          </span>
+                          <span className="text-[10px] text-gray-400 font-medium">{tab.productCount}</span>
+                        </div>
+                        <div className="flex items-center gap-0.5 mt-1 opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => e.stopPropagation()}>
+                          <button onClick={() => handleMove(i, -1)} disabled={i === 0} className="p-1 rounded hover:bg-gray-200 text-gray-500 disabled:opacity-30"><ArrowUp size={11} /></button>
+                          <button onClick={() => handleMove(i, 1)} disabled={i === tabs.length - 1} className="p-1 rounded hover:bg-gray-200 text-gray-500 disabled:opacity-30"><ArrowDown size={11} /></button>
+                          <button onClick={() => { setRenamingId(tab.id); setRenameValue(tab.name); }} className="p-1 rounded hover:bg-gray-200 text-gray-500"><Edit size={11} /></button>
+                          <button onClick={() => handleToggleActive(tab)} className={`p-1 rounded hover:bg-gray-200 ${tab.isActive ? "text-green-600" : "text-gray-400"}`}>{tab.isActive ? <Eye size={11} /> : <Eye size={11} />}</button>
+                          {!tab.isDefault && (
+                            <button onClick={() => setDeleteConfirm(tab)} className="p-1 rounded hover:bg-red-50 text-red-500"><Trash2 size={11} /></button>
+                          )}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+
+          {/* Right: Products */}
+          <div className="flex-1 flex flex-col min-w-0">
+            <div className="p-4 border-b border-gray-100">
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">
+                {selected ? `Productos en "${selected.name}" (${products.length})` : "Selecciona una pestaña"}
+              </p>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <input
+                  value={search}
+                  onChange={(e) => handleSearch(e.target.value)}
+                  placeholder="Buscar producto por nombre, PLU o código..."
+                  className="w-full pl-9 pr-3 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-300"
+                />
+              </div>
+              {searching && <div className="mt-2 text-xs text-gray-400"><Loader2 size={12} className="animate-spin inline mr-1" />Buscando...</div>}
+              {searchResults.length > 0 && (
+                <div className="mt-2 max-h-56 overflow-y-auto border border-gray-100 rounded-xl divide-y divide-gray-50">
+                  {searchResults.map((p) => (
+                    <div key={p.id} className="flex items-center gap-3 px-3 py-2">
+                      <div className="w-9 h-9 rounded-lg bg-gray-100 overflow-hidden shrink-0">
+                        {p.image && <img src={p.image} alt="" className="w-full h-full object-cover" />}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-semibold text-gray-700 truncate">{p.name}</p>
+                        <p className="text-[10px] text-gray-400">{p.plu || p.externalId || p.barcode || "—"} · ${p.price.toLocaleString("es-CO")}</p>
+                      </div>
+                      <button
+                        onClick={() => void handleAdd(p.id)}
+                        disabled={adding || assignedIds.has(p.id)}
+                        className="px-2.5 py-1.5 text-[11px] font-bold rounded-lg bg-amber-400 text-amber-900 hover:bg-amber-500 disabled:opacity-40 flex items-center gap-1"
+                      >
+                        {assignedIds.has(p.id) ? <Check size={11} /> : <Plus size={11} />}
+                        {assignedIds.has(p.id) ? "Agregado" : "Agregar"}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div className="flex-1 overflow-y-auto p-4">
+              {productsLoading ? (
+                <div className="flex justify-center py-12"><Loader2 size={22} className="animate-spin text-gray-300" /></div>
+              ) : products.length === 0 ? (
+                <div className="text-center py-12">
+                  <Package size={28} className="mx-auto text-gray-300 mb-2" />
+                  <p className="text-sm text-gray-400">Sin productos asignados</p>
+                  <p className="text-xs text-gray-300">Busca y agrega productos desde la barra superior</p>
+                </div>
+              ) : (
+                <div className="space-y-1.5">
+                  {products.map((p, i) => (
+                    <div key={p.id} className="flex items-center gap-3 px-3 py-2 rounded-xl border border-gray-100 hover:border-amber-200 transition-colors">
+                      <div className="flex flex-col gap-0.5">
+                        <button onClick={() => handleMoveProduct(i, -1)} disabled={i === 0} className="p-0.5 rounded hover:bg-gray-100 text-gray-400 disabled:opacity-30"><ArrowUp size={11} /></button>
+                        <button onClick={() => handleMoveProduct(i, 1)} disabled={i === products.length - 1} className="p-0.5 rounded hover:bg-gray-100 text-gray-400 disabled:opacity-30"><ArrowDown size={11} /></button>
+                      </div>
+                      <div className="w-11 h-11 rounded-lg bg-gray-100 overflow-hidden shrink-0">
+                        {p.image && <img src={p.image} alt="" className="w-full h-full object-cover" />}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold text-gray-700 truncate">{p.name}</p>
+                        <p className="text-[11px] text-gray-400">{p.plu || p.externalId || p.barcode || "—"}</p>
+                      </div>
+                      <span className="text-sm font-bold text-gray-800">${p.price.toLocaleString("es-CO")}</span>
+                      {p.originalPrice && (
+                        <span className="text-xs text-gray-400 line-through">${p.originalPrice.toLocaleString("es-CO")}</span>
+                      )}
+                      <button onClick={() => void handleRemove(p.id)} className="p-1.5 rounded-lg hover:bg-red-50 text-gray-300 hover:text-red-500 transition-colors"><Trash2 size={15} /></button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between px-6 py-4 border-t border-gray-100 bg-gray-50">
+          <button onClick={onClose} className="px-4 py-2 text-sm text-gray-600">Cerrar</button>
+          <button onClick={onSaved} className="px-4 py-2 text-sm font-bold text-amber-900 bg-amber-400 hover:bg-amber-500 rounded-xl flex items-center gap-2">
+            <Save size={14} /> Guardar cambios
+          </button>
+        </div>
+      </div>
+
+      {/* Delete confirm */}
+      {deleteConfirm && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setDeleteConfirm(null)} />
+          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm mx-4 p-6">
+            <h3 className="font-bold text-gray-900 mb-2">Eliminar pestaña</h3>
+            <p className="text-sm text-gray-500 mb-4">
+              ¿Seguro que quieres eliminar "{deleteConfirm.name}"? Se quitarán sus productos asignados.
+            </p>
+            <div className="flex justify-end gap-2">
+              <button onClick={() => setDeleteConfirm(null)} className="px-4 py-2 text-sm text-gray-600">Cancelar</button>
+              <button onClick={handleDelete} className="px-4 py-2 text-sm font-bold text-white bg-red-500 hover:bg-red-600 rounded-xl">Eliminar</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1053,6 +1436,7 @@ export default function Banners() {
   const [promoManagerOpen, setPromoManagerOpen] = useState(false);
   const [benefitsOpen, setBenefitsOpen] = useState(false);
   const [prodTypesOpen, setProdTypesOpen] = useState(false);
+  const [featuredOpen, setFeaturedOpen] = useState(false);
   const [landingTypes, setLandingTypes] = useState<LandingProductType[]>([]);
 
   const fetchData = useCallback(async () => {
@@ -1127,6 +1511,60 @@ export default function Banners() {
               )}
             </div>
 
+            {/* Product Types card */}
+            <div
+              onClick={() => setProdTypesOpen(true)}
+              className="bg-white rounded-2xl border border-gray-100 p-5 cursor-pointer hover:shadow-md hover:border-amber-200 transition-all group"
+            >
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-10 h-10 rounded-xl bg-purple-100 flex items-center justify-center group-hover:bg-purple-200 transition-colors">
+                  <Layers size={18} className="text-purple-600" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-gray-900 text-sm">Tipos de Producto — Home</h3>
+                  <p className="text-xs text-gray-500">Selecciona cuáles mostrar en la landing</p>
+                </div>
+              </div>
+              <div className="flex gap-6 text-sm">
+                <div><span className="font-bold text-gray-900">{landingTypes.length}</span> <span className="text-gray-400 text-xs">tipos totales</span></div>
+                <div><span className="font-bold text-green-600">{landingTypes.filter((t) => t.selected).length}</span> <span className="text-gray-400 text-xs">visibles</span></div>
+              </div>
+            </div>
+
+            {/* Benefits card */}
+            <div
+              onClick={() => setBenefitsOpen(true)}
+              className="bg-white rounded-2xl border border-gray-100 p-5 cursor-pointer hover:shadow-md hover:border-amber-200 transition-all group"
+            >
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-10 h-10 rounded-xl bg-green-100 flex items-center justify-center group-hover:bg-green-200 transition-colors">
+                  <Zap size={18} className="text-green-600" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-gray-900 text-sm">Barra de Beneficios — Landing Page</h3>
+                  <p className="text-xs text-gray-500">Textos promocionales debajo del carousel de tipos</p>
+                </div>
+              </div>
+              <div className="flex gap-6 text-sm">
+                <div><span className="font-bold text-gray-900">{benefits.length}</span> <span className="text-gray-400 text-xs">ítems</span></div>
+                <div><span className="font-bold text-green-600">{benefitsActive}</span> <span className="text-gray-400 text-xs">activos</span></div>
+              </div>
+              {benefits.length > 0 && (
+                <div className="mt-3 rounded-lg p-3" style={{ background: "#FFF200" }}>
+                  <div className="flex flex-wrap items-center gap-4 text-xs font-bold" style={{ color: "#1A1A2E" }}>
+                    {benefits.sort((a, b) => a.position - b.position).map((b) => {
+                      const Icon = BENEFIT_ICONS[b.subtitle || "zap"] || Zap;
+                      return (
+                        <span key={b.id} className="flex items-center gap-1.5">
+                          <Icon size={13} /> {b.title}
+                        </span>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+
             {/* Promo/Advertising card */}
             <div
               onClick={() => setPromoManagerOpen(true)}
@@ -1157,58 +1595,21 @@ export default function Banners() {
               )}
             </div>
 
-            {/* Benefits/Promo card */}
+            {/* Featured Products card */}
             <div
-              onClick={() => setBenefitsOpen(true)}
+              onClick={() => setFeaturedOpen(true)}
               className="bg-white rounded-2xl border border-gray-100 p-5 cursor-pointer hover:shadow-md hover:border-amber-200 transition-all group"
             >
               <div className="flex items-center gap-3 mb-3">
-                <div className="w-10 h-10 rounded-xl bg-green-100 flex items-center justify-center group-hover:bg-green-200 transition-colors">
-                  <Zap size={18} className="text-green-600" />
+                <div className="w-10 h-10 rounded-xl bg-indigo-100 flex items-center justify-center group-hover:bg-indigo-200 transition-colors">
+                  <Package size={18} className="text-indigo-600" />
                 </div>
                 <div>
-                  <h3 className="font-semibold text-gray-900 text-sm">Barra de Beneficios — Landing Page</h3>
-                  <p className="text-xs text-gray-500">Textos promocionales debajo del carousel</p>
+                  <h3 className="font-semibold text-gray-900 text-sm">Productos Destacados — Landing Page</h3>
+                  <p className="text-xs text-gray-500">Pestañas (Más vendidos, Promociones...) y productos asignados</p>
                 </div>
               </div>
-              <div className="flex gap-6 text-sm">
-                <div><span className="font-bold text-gray-900">{benefits.length}</span> <span className="text-gray-400 text-xs">ítems</span></div>
-                <div><span className="font-bold text-green-600">{benefitsActive}</span> <span className="text-gray-400 text-xs">activos</span></div>
-              </div>
-              {benefits.length > 0 && (
-                <div className="mt-3 rounded-lg p-3" style={{ background: "#FFF200" }}>
-                  <div className="flex flex-wrap items-center gap-4 text-xs font-bold" style={{ color: "#1A1A2E" }}>
-                    {benefits.sort((a, b) => a.position - b.position).map((b) => {
-                      const Icon = BENEFIT_ICONS[b.subtitle || "zap"] || Zap;
-                      return (
-                        <span key={b.id} className="flex items-center gap-1.5">
-                          <Icon size={13} /> {b.title}
-                        </span>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Product Types card */}
-            <div
-              onClick={() => setProdTypesOpen(true)}
-              className="bg-white rounded-2xl border border-gray-100 p-5 cursor-pointer hover:shadow-md hover:border-amber-200 transition-all group"
-            >
-              <div className="flex items-center gap-3 mb-3">
-                <div className="w-10 h-10 rounded-xl bg-purple-100 flex items-center justify-center group-hover:bg-purple-200 transition-colors">
-                  <Layers size={18} className="text-purple-600" />
-                </div>
-                <div>
-                  <h3 className="font-semibold text-gray-900 text-sm">Tipos de Producto — Home</h3>
-                  <p className="text-xs text-gray-500">Selecciona cuáles mostrar en la landing</p>
-                </div>
-              </div>
-              <div className="flex gap-6 text-sm">
-                <div><span className="font-bold text-gray-900">{landingTypes.length}</span> <span className="text-gray-400 text-xs">tipos totales</span></div>
-                <div><span className="font-bold text-green-600">{landingTypes.filter((t) => t.selected).length}</span> <span className="text-gray-400 text-xs">visibles</span></div>
-              </div>
+              <p className="text-xs text-gray-400">Administra las pestañas y adjunta productos a cada una</p>
             </div>
 
           </>
@@ -1250,6 +1651,14 @@ export default function Banners() {
           productTypes={landingTypes}
           onClose={() => setProdTypesOpen(false)}
           onSaved={() => { setProdTypesOpen(false); fetchData(); }}
+        />
+      )}
+
+      {/* Featured products manager */}
+      {featuredOpen && (
+        <FeaturedProductsManager
+          onClose={() => setFeaturedOpen(false)}
+          onSaved={() => { setFeaturedOpen(false); }}
         />
       )}
     </>

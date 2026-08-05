@@ -49,18 +49,16 @@ async function fetchHeroSlides(): Promise<HeroSlide[]> {
 
 const FALLBACK_SLIDES: HeroSlide[] = [
   {
-    id: 1,
-    title: "Frutas y Verduras\nFrescas del Día",
+    id: 0,
+    title: "Configura tus slides\ndesde el panel admin",
     subtitle:
-      "Directo de los mejores cultivadores de la región. Frescura garantizada en cada entrega.",
+      "Ve a Contenido → Home en el panel de administración para añadir banners hero con imágenes, textos y colores personalizados.",
     cta: "",
-    ctaText: "Ver Frutas y Verduras",
-    image:
-      "https://images.unsplash.com/photo-1729622493745-03ca9590c64a?w=1200&h=600&fit=crop&auto=format",
-    mobileImage:
-      "https://images.unsplash.com/photo-1729622493745-03ca9590c64a?w=600&h=400&fit=crop&auto=format",
-    bg: "#1A1A2E",
-    accent: "#FFF200",
+    ctaText: "Ir al panel admin",
+    image: "",
+    mobileImage: "",
+    bg: "#374151",
+    accent: "#9CA3AF",
   },
 ];
 
@@ -198,21 +196,23 @@ export function HeroSection({
           </div>
 
           {/* Background image with crossfade */}
-          <div className="absolute right-0 top-0 h-full w-1/2 md:w-5/12">
-            <img
-              key={`img-${currentIndex}`}
-              src={slide.image}
-              alt={slide.title}
-              className="w-full h-full object-cover"
-              style={{ opacity: 0.45, animation: "heroImageIn 0.7s ease both" }}
-            />
-            <div
-              className="absolute inset-0"
-              style={{
-                background: `linear-gradient(to right, ${slide.bg} 10%, transparent 60%)`,
-              }}
-            />
-          </div>
+          {slide.image && (
+            <div className="absolute right-0 top-0 h-full w-1/2 md:w-5/12">
+              <img
+                key={`img-${currentIndex}`}
+                src={slide.image}
+                alt={slide.title}
+                className="w-full h-full object-cover"
+                style={{ opacity: 0.45, animation: "heroImageIn 0.7s ease both" }}
+              />
+              <div
+                className="absolute inset-0"
+                style={{
+                  background: `linear-gradient(to right, ${slide.bg} 10%, transparent 60%)`,
+                }}
+              />
+            </div>
+          )}
 
           {/* Arrows */}
           {slides.length > 1 && (

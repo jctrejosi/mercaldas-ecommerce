@@ -192,6 +192,9 @@ export default function App() {
   const [landingProductTypes, setLandingProductTypes] = useState<
     { id: number; code: string; name: string; count: number }[]
   >([]);
+  const [featuredTabs, setFeaturedTabs] = useState<
+    { id: number; name: string; slug: string; position: number }[]
+  >([]);
   const [apiError, setApiError] = useState<number | null>(null);
   const [healthChecked, setHealthChecked] = useState(false);
 
@@ -248,6 +251,13 @@ export default function App() {
           .getFeaturedProductTypes()
           .then(setLandingProductTypes)
           .catch(() => {});
+        void catalogService
+          .getFeaturedTabs()
+          .then((tabs) => {
+            setFeaturedTabs(tabs);
+            if (tabs.length > 0) setActiveTab(tabs[0].slug);
+          })
+          .catch(() => {});
       })
       .catch(() => {
         setHealthChecked(true); // salir del loading para mostrar ErrorPage
@@ -258,12 +268,11 @@ export default function App() {
   const fetchLandingProducts = useCallback(async (tab: string) => {
     setLandingLoading(true);
     try {
-      let params: CatalogProductsQuery = { limit: 8 };
-      if (tab === "promociones") {
-        params.onSale = true;
-        params.sort = "descuento";
-      } else if (tab === "recomendados") params.sort = "relevancia";
-      setLandingProducts(await catalogService.getProducts(params));
+      if (tab) {
+        setLandingProducts(await catalogService.getFeaturedTabProducts(tab));
+      } else {
+        setLandingProducts([]);
+      }
     } catch {
       setLandingProducts([]);
     } finally {
@@ -762,6 +771,7 @@ export default function App() {
           onBrandClick={handleBrandClick}
           productTypes={landingProductTypes}
           onProductTypeClick={handleProductTypeClick}
+          featuredTabs={featuredTabs}
           onApplyFilter={handleApplyFilter}
         />
       </main>

@@ -3398,3 +3398,66 @@ export const shoppingListItems = pgTable(
     }).onDelete('cascade'),
   ],
 );
+
+// ── Featured Product Tabs ──────────────────────────────────
+export const featuredProductTabs = pgTable(
+  'featured_product_tabs',
+  {
+    id: bigserial({ mode: 'bigint' }).primaryKey().notNull(),
+    name: varchar({ length: 100 }).notNull(),
+    slug: varchar({ length: 50 }).notNull(),
+    position: integer().default(0).notNull(),
+    isActive: boolean('is_active').default(true).notNull(),
+    queryOnSale: boolean('query_on_sale'),
+    querySort: varchar('query_sort', { length: 50 }),
+    isDefault: boolean('is_default').default(false).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'string' })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    unique('featured_product_tabs_slug_key').on(table.slug),
+    index('idx_featured_tabs_position').using(
+      'btree',
+      table.position.asc().nullsLast().op('int4_ops'),
+    ),
+  ],
+);
+
+// ── Featured Product Assignments ───────────────────────────
+export const featuredProductAssignments = pgTable(
+  'featured_product_assignments',
+  {
+    id: bigserial({ mode: 'bigint' }).primaryKey().notNull(),
+    tabId: bigint('tab_id', { mode: 'number' }).notNull(),
+    productId: bigint('product_id', { mode: 'number' }).notNull(),
+    position: integer().default(0).notNull(),
+    isActive: boolean('is_active').default(true).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'string' })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    unique('featured_assignments_unique').on(table.tabId, table.productId),
+    index('idx_featured_assignments_tab').using(
+      'btree',
+      table.tabId.asc().nullsLast().op('int8_ops'),
+    ),
+    foreignKey({
+      columns: [table.tabId],
+      foreignColumns: [featuredProductTabs.id],
+      name: 'featured_assignments_tab_id_fkey',
+    }).onDelete('cascade'),
+    foreignKey({
+      columns: [table.productId],
+      foreignColumns: [products.id],
+      name: 'featured_assignments_product_id_fkey',
+    }).onDelete('cascade'),
+  ],
+);

@@ -10,6 +10,13 @@ import { SucursalesSection } from "../../components/SucursalesSection";
 import { BenefitsSection } from "../../components/BenefitsSection";
 import { NewsletterSection } from "../../components/NewsletterSection";
 
+export type FeaturedTab = {
+  id: number;
+  name: string;
+  slug: string;
+  position: number;
+};
+
 interface LandingViewProps {
   categories: CatalogCategory[];
   products: Product[];
@@ -19,6 +26,7 @@ interface LandingViewProps {
   cartItems: CartItem[];
   branches: Branch[];
   productTypes: { id: number; code: string; name: string; count: number }[];
+  featuredTabs?: FeaturedTab[];
   onTabChange: (tab: string) => void;
   onAdd: (product: Product, quantity?: number) => void;
   onRemove: (id: number) => void;
@@ -50,6 +58,7 @@ export function LandingView({
   onBrandClick,
   productTypes,
   onProductTypeClick,
+  featuredTabs = [],
 }: LandingViewProps) {
   return (
     <>
@@ -65,6 +74,7 @@ export function LandingView({
         products={products}
         loading={loading}
         activeTab={activeTab}
+        tabs={featuredTabs}
         cartItems={cartItems}
         onTabChange={onTabChange}
         onAdd={onAdd}

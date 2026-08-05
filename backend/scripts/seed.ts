@@ -199,6 +199,114 @@ async function seed() {
         manager_phone = EXCLUDED.manager_phone, email = EXCLUDED.email
     `);
 
+    // 5. Hero banners (slides del carrusel principal)
+    console.log('📦 Insertando hero banners...');
+
+    // Solo insertar si no existen banners hero
+    const existingHeroes = await db.execute(sql`
+      SELECT COUNT(*)::int as cnt FROM banners WHERE banner_type = 'hero'
+    `);
+    if (Number(existingHeroes.rows[0].cnt) === 0) {
+      // Insertar media para cada banner (idempotente por checksum)
+      const heroMedia = [
+        {
+          path: 'https://images.unsplash.com/photo-1729622493745-03ca9590c64a?w=1200&h=600&fit=crop&auto=format',
+          fileName: 'hero-frutas-verduras.jpg',
+          checksum: 'seed_hero_frutas_verduras',
+        },
+        {
+          path: 'https://images.unsplash.com/photo-1607623814075-e51df1bdc82f?w=1200&h=600&fit=crop&auto=format',
+          fileName: 'hero-carnes-premium.jpg',
+          checksum: 'seed_hero_carnes_premium',
+        },
+        {
+          path: 'https://images.unsplash.com/photo-1628088062854-d1870b4553da?w=1200&h=600&fit=crop&auto=format',
+          fileName: 'hero-lacteos-huevos.jpg',
+          checksum: 'seed_hero_lacteos_huevos',
+        },
+      ];
+
+      const mediaIds: number[] = [];
+      for (const m of heroMedia) {
+        const result = await db.execute(sql`
+          INSERT INTO media (media_type, provider, path, file_name, mime_type, status, size_bytes, checksum)
+          VALUES ('image', 'external', ${m.path}, ${m.fileName}, 'image/jpeg', 'active', 0, ${m.checksum})
+          ON CONFLICT (checksum) DO UPDATE SET
+            path = EXCLUDED.path,
+            file_name = EXCLUDED.file_name,
+            updated_at = NOW()
+          RETURNING id
+        `);
+        mediaIds.push(Number(result.rows[0].id));
+      }
+
+      const heroBanners = [
+        {
+          title: 'Frutas y Verduras\nFrescas del Día',
+          subtitle: 'Directo de los mejores cultivadores de la región. Frescura garantizada en cada entrega.',
+          description: 'Selección diaria de frutas y verduras frescas del campo a tu mesa.',
+          ctaText: 'Ver Frutas y Verduras',
+          bgColor: '#1A1A2E',
+          accentColor: '#FFF200',
+          position: 0,
+        },
+        {
+          title: 'Carnes y Pollos\nCalidad Premium',
+          subtitle: 'Cortes seleccionados, frescura y sabor inigualable en cada preparación.',
+          description: 'Las mejores carnes y pollos para tus recetas favoritas.',
+          ctaText: 'Ver Carnicería',
+          bgColor: '#2D1B0E',
+          accentColor: '#E85D04',
+          position: 1,
+        },
+        {
+          title: 'Lácteos y Huevos\nDel Campo a tu Mesa',
+          subtitle: 'Productos lácteos frescos y huevos de granja directamente hasta tu hogar.',
+          description: 'Lácteos, quesos y huevos de la mejor calidad para tu familia.',
+          ctaText: 'Ver Lácteos',
+          bgColor: '#0B3D2E',
+          accentColor: '#80ED99',
+          position: 2,
+        },
+      ];
+
+      for (let i = 0; i < heroBanners.length; i++) {
+        const b = heroBanners[i];
+        await db.execute(sql`
+          INSERT INTO banners (title, subtitle, description, media_id, mobile_image_id,
+            banner_type, cta_text, bg_color, accent_color, position, is_active)
+          SELECT ${b.title}, ${b.subtitle}, ${b.description}, ${mediaIds[i]}, ${mediaIds[i]},
+            'hero', ${b.ctaText}, ${b.bgColor}, ${b.accentColor}, ${b.position}, true
+          WHERE NOT EXISTS (
+            SELECT 1 FROM banners WHERE title = ${b.title} AND banner_type = 'hero'
+          )
+        `);
+      }
+      console.log('   🎠 Hero banners: 3 slides insertados');
+    } else {
+      console.log('   🎠 Hero banners: ya existen, omitiendo');
+    }
+
+    // 6. Featured product tabs (pestañas de productos destacados)
+    console.log('📦 Insertando pestañas de productos destacados...');
+    const featuredTabs = [
+      { name: 'Más Vendidos', slug: 'vendidos', querySort: null, isDefault: true },
+      { name: 'Promociones', slug: 'promociones', queryOnSale: true, querySort: 'descuento', isDefault: false },
+      { name: 'Recomendados', slug: 'recomendados', querySort: 'relevancia', isDefault: false },
+      { name: 'Novedades', slug: 'novedades', querySort: null, isDefault: false },
+    ];
+    for (let i = 0; i < featuredTabs.length; i++) {
+      const t = featuredTabs[i];
+      await db.execute(sql`
+        INSERT INTO featured_product_tabs (name, slug, position, is_active, query_on_sale, query_sort, is_default)
+        SELECT ${t.name}, ${t.slug}, ${i}, true, ${t.queryOnSale ?? null}, ${t.querySort}, ${t.isDefault}
+        WHERE NOT EXISTS (
+          SELECT 1 FROM featured_product_tabs WHERE slug = ${t.slug}
+        )
+      `);
+    }
+    console.log('   🏷️  Featured tabs: 4 pestañas por defecto');
+
     console.log('✅ Seed base completado exitosamente');
     console.log('   👤 Admin: admin@mercaldas.com.co');
     console.log('   👤 Cliente: cliente@mercaldas.com.co');

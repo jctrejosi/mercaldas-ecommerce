@@ -16,6 +16,7 @@ import { BannersModule } from './modules/banners/banners.module';
 import { FiltersModule } from './modules/filters/filters.module';
 import { BranchesModule } from './modules/branches/branches.module';
 import { LandingModule } from './modules/landing/landing.module';
+import { FeaturedProductsModule } from './modules/featured-products/featured-products.module';
 import {
   appConfig,
   databaseConfig,
@@ -56,6 +57,7 @@ import {
     FiltersModule,
     BranchesModule,
     LandingModule,
+    FeaturedProductsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
