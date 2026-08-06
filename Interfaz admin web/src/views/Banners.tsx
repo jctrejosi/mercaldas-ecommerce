@@ -1,9 +1,9 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import {
-  Plus, Edit, Trash2, X, Loader2, Filter, GripVertical,
+  Plus, Edit, SquarePen, Trash2, X, Loader2, Filter, GripVertical,
   Image, Type, Palette, Link, Calendar, Eye, ChevronLeft, ChevronRight,
   LayoutTemplate, SlidersHorizontal, Zap, Truck, ShieldCheck, Clock, Megaphone,
-  Layers, Search, Package, ArrowUp, ArrowDown, Check, Save,
+  Layers, Search, Package, ArrowUp, ArrowDown, Check, Save, AlertTriangle,
 } from "lucide-react";
 import {
   bannersService,
@@ -867,6 +867,24 @@ function BenefitsInlineEditor({
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [editing, setEditing] = useState(false);
+
+  const startEditing = () => {
+    setItems(
+      benefits.length > 0
+        ? [...benefits]
+            .sort((a, b) => a.position - b.position)
+            .map((b) => ({ id: b.id, icon: b.subtitle || "zap", text: b.title || "" }))
+        : BENEFIT_DEFAULTS.map((d, i) => ({ id: -(i + 1), icon: d.icon, text: d.text })),
+    );
+    setError("");
+    setEditing(true);
+  };
+
+  const cancelEdit = () => {
+    setError("");
+    setEditing(false);
+  };
 
   const addItem = () => {
     setItems((prev) => [...prev, { id: -Date.now(), icon: "zap", text: "" }]);
@@ -880,35 +898,40 @@ function BenefitsInlineEditor({
     setItems((prev) => prev.map((item, i) => (i === idx ? { ...item, [field]: value } : item)));
   };
 
-  const resetItems = () => {
-    setItems(
-      benefits.length > 0
-        ? [...benefits]
-            .sort((a, b) => a.position - b.position)
-            .map((b) => ({ id: b.id, icon: b.subtitle || "zap", text: b.title || "" }))
-        : BENEFIT_DEFAULTS.map((d, i) => ({ id: -(i + 1), icon: d.icon, text: d.text })),
-    );
-  };
-
   const handleSave = async () => {
     setSaving(true);
     setError("");
     try {
-      // Delete existing benefits
-      for (const b of benefits) {
-        await bannersService.remove(b.id).catch(() => {});
-      }
-      // Create new ones
+      // 1. Crear/actualizar primero: nunca borrar antes de guardar
+      const savedIds: number[] = [];
       for (let i = 0; i < items.length; i++) {
         const item = items[i];
         if (!item.text.trim()) continue;
-        await bannersService.create({
-          title: item.text.trim(),
-          subtitle: item.icon,
-          bannerType: "benefits" as any,
-          mediaId: await createMediaFromUrl("https://images.unsplash.com/photo-1?w=1&h=1&fit=crop").catch(() => 1),
-          position: i,
-        });
+        if (item.id > 0) {
+          await bannersService.update(item.id, {
+            title: item.text.trim(),
+            subtitle: item.icon,
+          });
+          savedIds.push(item.id);
+        } else {
+          const mediaId = await createMediaFromUrl(
+            "https://images.unsplash.com/photo-1?w=1&h=1&fit=crop",
+          );
+          const created = await bannersService.create({
+            title: item.text.trim(),
+            subtitle: item.icon,
+            bannerType: "benefits" as any,
+            mediaId,
+            position: i,
+          });
+          savedIds.push(created.id);
+        }
+      }
+      // 2. Solo después de guardar, eliminar los ítems removidos
+      for (const b of benefits) {
+        if (!savedIds.includes(b.id)) {
+          await bannersService.remove(b.id).catch(() => {});
+        }
       }
       onSaved();
     } catch (e: any) {
@@ -920,72 +943,106 @@ function BenefitsInlineEditor({
 
   return (
     <div>
-      {/* Barra: mismo render que el PromoBanner de la tienda, pero editable */}
-      <div className="rounded-xl overflow-hidden" style={{ background: "#FFF200" }}>
-        <div
-          className="px-4 py-3 flex flex-wrap items-center justify-center gap-x-4 md:gap-x-8 gap-y-2 text-xs md:text-sm font-bold"
-          style={{ color: "#1A1A2E" }}
-        >
-          {items.map((item, i) => {
-            const Icon = BENEFIT_ICONS[item.icon] || Zap;
-            return (
-              <span
-                key={item.id}
-                className="flex items-center gap-1.5 rounded-lg px-1.5 py-1 hover:bg-white/40 transition-colors group/item"
-              >
-                <select
-                  value={item.icon}
-                  onChange={(e) => updateItem(i, "icon", e.target.value)}
-                  title="Cambiar icono"
-                  className="w-6 bg-transparent text-xs cursor-pointer outline-none"
-                >
-                  <option value="truck">🚚</option>
-                  <option value="shield">🛡️</option>
-                  <option value="clock">⏱️</option>
-                  <option value="zap">⚡</option>
-                </select>
-                <input
-                  value={item.text}
-                  onChange={(e) => updateItem(i, "text", e.target.value)}
-                  placeholder="Texto del beneficio"
-                  className="w-40 md:w-52 bg-transparent text-xs md:text-sm font-bold outline-none border-b border-dashed border-black/20 focus:border-black/50 placeholder:text-black/40"
-                />
-                <button
-                  onClick={() => removeItem(i)}
-                  title="Quitar beneficio"
-                  className="w-5 h-5 flex items-center justify-center rounded-full text-black/40 hover:text-red-500 hover:bg-white/60 opacity-0 group-hover/item:opacity-100 transition-all shrink-0"
-                >
-                  <X size={11} />
-                </button>
-              </span>
-            );
-          })}
-          {items.length === 0 && (
-            <span className="text-black/50 font-normal">Sin beneficios configurados</span>
-          )}
-        </div>
-      </div>
+      {!editing ? (
+        <>
+          {/* Barra de solo lectura: idéntica al PromoBanner de Interfaz web */}
+          <div className="rounded-none" style={{ background: "#FFF200" }}>
+            <div
+              className="max-w-7xl mx-auto px-4 py-4 flex flex-wrap items-center justify-center gap-6 md:gap-12 text-sm font-bold"
+              style={{ color: "#1A1A2E" }}
+            >
+              {[...benefits]
+                .sort((a, b) => a.position - b.position)
+                .map((b) => {
+                  const Icon = BENEFIT_ICONS[b.subtitle || "zap"] || Zap;
+                  return (
+                    <span key={b.id} className="flex items-center gap-2">
+                      <Icon className="w-4 h-4" /> {b.title}
+                    </span>
+                  );
+                })}
+              {benefits.length === 0 && (
+                <span className="text-sm font-normal text-black/40">Sin beneficios configurados</span>
+              )}
+            </div>
+          </div>
+          <button
+            onClick={startEditing}
+            className="mt-3 flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-gray-500 border border-gray-200 rounded-lg hover:border-amber-300 hover:text-amber-600 transition-colors"
+          >
+            <SquarePen size={13} /> Editar
+          </button>
+        </>
+      ) : (
+        <>
+          {/* Modo edición: mismas proporciones que el modo lectura */}
+          <div className="rounded-none" style={{ background: "#FFF200" }}>
+            <div
+              className="max-w-7xl mx-auto px-4 py-4 flex flex-wrap items-center justify-center gap-6 md:gap-12 text-sm font-bold"
+              style={{ color: "#1A1A2E" }}
+            >
+              {items.map((item, i) => {
+                const Icon = BENEFIT_ICONS[item.icon] || Zap;
+                return (
+                  <span key={item.id} className="flex items-center gap-2 group/item">
+                    <span className="relative inline-flex" title="Cambiar icono">
+                      <Icon className="w-4 h-4" />
+                      <select
+                        value={item.icon}
+                        onChange={(e) => updateItem(i, "icon", e.target.value)}
+                        aria-label="Cambiar icono"
+                        className="absolute inset-0 opacity-0 cursor-pointer appearance-none"
+                      >
+                        <option value="truck">🚚</option>
+                        <option value="shield">🛡️</option>
+                        <option value="clock">⏱️</option>
+                        <option value="zap">⚡</option>
+                      </select>
+                    </span>
+                    <input
+                      value={item.text}
+                      onChange={(e) => updateItem(i, "text", e.target.value)}
+                      placeholder="Texto del beneficio"
+                      className="w-44 md:w-56 appearance-none rounded-none bg-transparent text-sm font-bold outline-none border-b border-dashed border-black/25 focus:border-black/50 placeholder:text-black/40"
+                    />
+                    <button
+                      onClick={() => removeItem(i)}
+                      title="Quitar beneficio"
+                      className="w-4 h-4 flex items-center justify-center text-black/40 hover:text-red-500 transition-colors shrink-0"
+                    >
+                      <X size={11} />
+                    </button>
+                  </span>
+                );
+              })}
+              {items.length === 0 && (
+                <span className="text-sm font-normal text-black/40">Sin beneficios configurados</span>
+              )}
+            </div>
+          </div>
 
-      {/* Acciones */}
-      <div className="mt-3 flex flex-wrap items-center gap-2">
-        <button
-          onClick={addItem}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-gray-500 border border-dashed border-gray-300 rounded-lg hover:border-amber-300 hover:text-amber-600 transition-colors"
-        >
-          <Plus size={13} /> Añadir beneficio
-        </button>
-        <button
-          onClick={handleSave}
-          disabled={saving}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-amber-900 bg-amber-400 hover:bg-amber-500 rounded-lg transition-colors disabled:opacity-50"
-        >
-          {saving && <Loader2 size={12} className="animate-spin" />} Guardar cambios
-        </button>
-        <button onClick={resetItems} disabled={saving} className="px-3 py-1.5 text-xs text-gray-400 hover:text-gray-600">
-          Descartar
-        </button>
-        {error && <span className="text-xs text-red-500">{error}</span>}
-      </div>
+          {/* Acciones */}
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <button
+              onClick={addItem}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-gray-500 border border-dashed border-gray-300 rounded-lg hover:border-amber-300 hover:text-amber-600 transition-colors"
+            >
+              <Plus size={13} /> Añadir beneficio
+            </button>
+            <button
+              onClick={handleSave}
+              disabled={saving}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-amber-900 bg-amber-400 hover:bg-amber-500 rounded-lg transition-colors disabled:opacity-50"
+            >
+              {saving && <Loader2 size={12} className="animate-spin" />} Guardar cambios
+            </button>
+            <button onClick={cancelEdit} disabled={saving} className="px-3 py-1.5 text-xs text-gray-400 hover:text-gray-600">
+              Cancelar
+            </button>
+            {error && <span className="text-xs text-red-500">{error}</span>}
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -1008,6 +1065,8 @@ function ProductTypeEditor({
   const [sortKey, setSortKey] = useState<"name" | "count">("name");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive">("all");
+  const [batchBusy, setBatchBusy] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState(false);
   const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:3000";
 
   const toggleSelected = (code: string) => {
@@ -1026,6 +1085,46 @@ function ProductTypeEditor({
     } catch (e) { console.error(e); }
   };
 
+  const allSelected = items.length > 0 && items.every((t) => t.selected);
+  const selectedItems = items.filter((t) => t.selected);
+
+  const toggleSelectAll = () => {
+    setItems((prev) => prev.map((t) => ({ ...t, selected: !allSelected })));
+  };
+
+  const setSelectedActive = async (isActive: boolean) => {
+    const targets = items.filter((t) => t.selected);
+    if (targets.length === 0) return;
+    setBatchBusy(true);
+    try {
+      for (const pt of targets) {
+        await fetch(`${API_BASE}/admin/landing/product-types/${pt.id}/active`, {
+          method: "PATCH", credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ isActive }),
+        });
+        setItems((prev) => prev.map((t) => (t.id === pt.id ? { ...t, isActive } : t)));
+      }
+    } catch (e) { console.error(e); }
+    finally { setBatchBusy(false); }
+  };
+
+  const deleteSelected = async () => {
+    const targets = items.filter((t) => t.selected);
+    if (targets.length === 0) return;
+    setBatchBusy(true);
+    try {
+      for (const pt of targets) {
+        await fetch(`${API_BASE}/admin/catalog/product-types/${pt.id}`, {
+          method: "DELETE", credentials: "include",
+        });
+      }
+      setItems((prev) => prev.filter((t) => !t.selected));
+      setDeleteConfirm(false);
+    } catch (e) { console.error(e); }
+    finally { setBatchBusy(false); }
+  };
+
   const handleSave = async () => {
     setSaving(true);
     try {
@@ -1041,8 +1140,8 @@ function ProductTypeEditor({
     finally { setSaving(false); }
   };
 
-  const selectedCount = items.filter((t) => t.selected).length;
   const activeCount = items.filter((t) => t.isActive).length;
+  const inactiveCount = items.length - activeCount;
 
   const q = search.trim().toLowerCase();
   const filtered = items
@@ -1068,7 +1167,7 @@ function ProductTypeEditor({
           <div>
             <h2 className="font-bold text-gray-900">Tipos de Producto en Home</h2>
             <p className="text-xs text-gray-400 mt-0.5">
-              {selectedCount} visibles · {activeCount} activos de {items.length} totales
+              {activeCount} activos · {inactiveCount} inactivos de {items.length} totales
             </p>
           </div>
           <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-500"><X size={16} /></button>
@@ -1108,6 +1207,20 @@ function ProductTypeEditor({
             </select>
           </div>
         </div>
+        <div className="flex items-center justify-between px-6 py-2 border-t border-gray-100 shrink-0">
+          <label className="flex items-center gap-2 text-xs text-gray-500 cursor-pointer select-none">
+            <input type="checkbox" checked={allSelected} onChange={toggleSelectAll} className="w-3.5 h-3.5 rounded border-gray-300 text-amber-500" />
+            Seleccionar todos
+          </label>
+          {selectedItems.length > 0 && (
+            <div className="flex items-center gap-1.5">
+              <span className="text-[10px] font-semibold text-amber-700 mr-1">{selectedItems.length} seleccionados</span>
+              <button onClick={() => setSelectedActive(true)} disabled={batchBusy} className="px-2 py-1 text-[11px] font-semibold text-green-700 bg-green-50 border border-green-200 rounded-lg hover:bg-green-100 disabled:opacity-50">Activar</button>
+              <button onClick={() => setSelectedActive(false)} disabled={batchBusy} className="px-2 py-1 text-[11px] font-semibold text-gray-600 bg-gray-100 border border-gray-200 rounded-lg hover:bg-gray-200 disabled:opacity-50">Inactivar</button>
+              <button onClick={() => setDeleteConfirm(true)} disabled={batchBusy} className="px-2 py-1 text-[11px] font-semibold text-red-600 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 disabled:opacity-50">Eliminar</button>
+            </div>
+          )}
+        </div>
         <div className="flex-1 overflow-y-auto p-6 space-y-1">
           {filtered.map((t) => (
             <div key={t.code} className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-gray-50 transition-colors">
@@ -1136,6 +1249,33 @@ function ProductTypeEditor({
           </button>
         </div>
       </div>
+
+      {/* Confirmación de eliminación masiva */}
+      {deleteConfirm && (
+        <>
+          <div className="fixed inset-0 z-[60] bg-black/40" onClick={() => setDeleteConfirm(false)} />
+          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+            <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 rounded-full bg-amber-50 flex items-center justify-center">
+                  <AlertTriangle size={18} className="text-amber-500" />
+                </div>
+                <div><h3 className="font-bold text-sm text-gray-900">Eliminar tipos seleccionados</h3></div>
+              </div>
+              <p className="text-sm text-gray-600 mb-2">
+                ¿Eliminar <span className="font-semibold">{selectedItems.length}</span> tipo(s) de producto?
+              </p>
+              <p className="text-xs text-gray-500 mb-5">
+                Los productos asociados quedarán sin tipo asignado. Esta acción no se puede deshacer.
+              </p>
+              <div className="flex gap-2">
+                <button onClick={() => setDeleteConfirm(false)} disabled={batchBusy} className="flex-1 py-2.5 rounded-xl text-sm font-semibold border border-gray-200 hover:bg-gray-50 transition-colors text-gray-500">Cancelar</button>
+                <button onClick={deleteSelected} disabled={batchBusy} className="flex-1 py-2.5 rounded-xl text-sm font-bold bg-red-500 text-white hover:bg-red-600 transition-colors disabled:opacity-50">Eliminar</button>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -1532,7 +1672,6 @@ export default function Banners() {
 
   const activeCount = slides.filter((s) => s.status === "activo").length;
   const promosActive = promos.filter((p) => p.status === "activo").length;
-  const benefitsActive = benefits.filter((b) => b.isActive).length;
 
   return (
     <>
@@ -1593,8 +1732,9 @@ export default function Banners() {
                 </div>
               </div>
               <div className="flex gap-6 text-sm">
-                <div><span className="font-bold text-gray-900">{landingTypes.length}</span> <span className="text-gray-400 text-xs">tipos totales</span></div>
-                <div><span className="font-bold text-green-600">{landingTypes.filter((t) => t.selected).length}</span> <span className="text-gray-400 text-xs">visibles</span></div>
+                <div><span className="font-bold text-gray-900">{landingTypes.length}</span> <span className="text-gray-400 text-xs">tipos</span></div>
+                <div><span className="font-bold text-green-600">{landingTypes.filter((t) => t.isActive).length}</span> <span className="text-gray-400 text-xs">activos</span></div>
+                <div><span className="font-bold text-red-500">{landingTypes.filter((t) => !t.isActive).length}</span> <span className="text-gray-400 text-xs">inactivos</span></div>
               </div>
             </div>
 
@@ -1609,11 +1749,24 @@ export default function Banners() {
                   <p className="text-xs text-gray-500">Textos promocionales debajo del carousel de tipos</p>
                 </div>
               </div>
-              <div className="flex gap-6 text-sm mb-3">
-                <div><span className="font-bold text-gray-900">{benefits.length}</span> <span className="text-gray-400 text-xs">ítems</span></div>
-                <div><span className="font-bold text-green-600">{benefitsActive}</span> <span className="text-gray-400 text-xs">activos</span></div>
-              </div>
               <BenefitsInlineEditor benefits={benefits} onSaved={fetchData} />
+            </div>
+
+            {/* Featured Products card */}
+            <div
+              onClick={() => setFeaturedOpen(true)}
+              className="bg-white rounded-2xl border border-gray-100 p-5 cursor-pointer hover:shadow-md hover:border-amber-200 transition-all group"
+            >
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-10 h-10 rounded-xl bg-indigo-100 flex items-center justify-center group-hover:bg-indigo-200 transition-colors">
+                  <Package size={18} className="text-indigo-600" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-gray-900 text-sm">Productos Destacados</h3>
+                  <p className="text-xs text-gray-500">Pestañas (Más vendidos, Promociones...) y productos asignados</p>
+                </div>
+              </div>
+              <p className="text-xs text-gray-400">Administra las pestañas y adjunta productos a cada una</p>
             </div>
 
             {/* Promo/Advertising card */}
@@ -1644,23 +1797,6 @@ export default function Banners() {
                   {promos.length > 5 && <div className="w-20 h-12 rounded-lg bg-gray-100 flex items-center justify-center text-xs text-gray-400 shrink-0">+{promos.length - 5}</div>}
                 </div>
               )}
-            </div>
-
-            {/* Featured Products card */}
-            <div
-              onClick={() => setFeaturedOpen(true)}
-              className="bg-white rounded-2xl border border-gray-100 p-5 cursor-pointer hover:shadow-md hover:border-amber-200 transition-all group"
-            >
-              <div className="flex items-center gap-3 mb-3">
-                <div className="w-10 h-10 rounded-xl bg-indigo-100 flex items-center justify-center group-hover:bg-indigo-200 transition-colors">
-                  <Package size={18} className="text-indigo-600" />
-                </div>
-                <div>
-                  <h3 className="font-semibold text-gray-900 text-sm">Productos Destacados</h3>
-                  <p className="text-xs text-gray-500">Pestañas (Más vendidos, Promociones...) y productos asignados</p>
-                </div>
-              </div>
-              <p className="text-xs text-gray-400">Administra las pestañas y adjunta productos a cada una</p>
             </div>
 
           </>
