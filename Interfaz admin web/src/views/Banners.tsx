@@ -127,26 +127,57 @@ function SlideEditor({
   const [isActive, setIsActive] = useState(slide?.isActive ?? true);
   const [startDate, setStartDate] = useState(slide?.startDate ? new Date(slide.startDate).toISOString().slice(0, 16) : "");
   const [endDate, setEndDate] = useState(slide?.endDate ? new Date(slide.endDate).toISOString().slice(0, 16) : "");
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const [pendingMobileFile, setPendingMobileFile] = useState<File | null>(null);
+  const [uploading, setUploading] = useState(false);
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>, mobile: boolean) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (mobile) {
+      setPendingMobileFile(file);
+      setMobileImageUrl(URL.createObjectURL(file));
+    } else {
+      setPendingFile(file);
+      setImageUrl(URL.createObjectURL(file));
+    }
+  };
+
+  const uploadFile = async (file: File): Promise<string> => {
+    const fd = new FormData();
+    fd.append("file", file);
+    fd.append("code", `hero_${Date.now()}`);
+    const res = await fetch(
+      `${import.meta.env.VITE_API_URL || "http://localhost:3000"}/upload/image`,
+      { method: "POST", body: fd },
+    );
+    if (!res.ok) throw new Error("Error al subir imagen");
+    const data = await res.json();
+    return data.url;
+  };
 
   // Filter config in content tab is read-only — managed in Filter tab
   const filterId = slide?.filterId?.toString() ?? "";
   const savedFilter = slide?.filter;
 
   const handleSave = async () => {
-    if (!title.trim()) { setError("El título es obligatorio"); return; }
     if (!imageUrl.trim()) { setError("La imagen es obligatoria"); return; }
     setError(""); setSaving(true);
     try {
-      const imageMediaId = await createMediaFromUrl(imageUrl.trim());
-      const mobileMediaId = mobileImageUrl.trim() ? await createMediaFromUrl(mobileImageUrl.trim()) : undefined;
+      let finalImageUrl = imageUrl.trim();
+      let finalMobileUrl = mobileImageUrl.trim();
+      if (pendingFile) finalImageUrl = await uploadFile(pendingFile);
+      if (pendingMobileFile) finalMobileUrl = await uploadFile(pendingMobileFile);
+      const imageMediaId = await createMediaFromUrl(finalImageUrl);
+      const mobileMediaId = finalMobileUrl ? await createMediaFromUrl(finalMobileUrl) : undefined;
       const data: CreateBannerData = {
         title: title.trim(),
-        subtitle: subtitle.trim() || undefined,
-        description: description.trim() || undefined,
+        subtitle: subtitle.trim(),
+        description: description.trim(),
         mediaId: imageMediaId,
         mobileImageId: mobileMediaId,
         bannerType: "hero",
-        ctaText: ctaText.trim() || undefined,
+        ctaText: ctaText.trim(),
         bgColor: bgColor.trim() || undefined,
         accentColor: accentColor.trim() || undefined,
         position: parseInt(position) || 0,
@@ -158,7 +189,7 @@ function SlideEditor({
       else await bannersService.create(data);
       onSaved();
     } catch (e: any) { setError(e.message || "Error al guardar"); }
-    finally { setSaving(false); }
+    finally { setSaving(false); setUploading(false); }
   };
 
   return (
@@ -192,12 +223,25 @@ function SlideEditor({
             <div className="flex items-center gap-2 text-xs font-semibold text-gray-400 uppercase tracking-wider"><Image size={12} /> Imágenes</div>
             <div>
               <label className="block text-xs font-semibold text-gray-600 mb-1.5">Imagen escritorio *</label>
-              <input value={imageUrl} onChange={(e) => setImageUrl(e.target.value)} className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-300 font-mono" placeholder="https://..." />
+              <div className="flex items-center gap-2">
+                <input value={imageUrl} onChange={(e) => { setImageUrl(e.target.value); setPendingFile(null); }} className="flex-1 px-3 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-300 font-mono" placeholder="https://... o sube una imagen" />
+                <label className="px-3 py-2.5 text-xs font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-xl cursor-pointer shrink-0 transition-colors">
+                  {pendingFile ? "✓ Imagen lista" : "Subir archivo"}
+                  <input type="file" accept="image/*" className="hidden" onChange={(e) => handleFileSelect(e, false)} />
+                </label>
+              </div>
               {imageUrl && <div className="mt-2 rounded-xl overflow-hidden bg-gray-100 h-28"><img src={imageUrl} alt="" className="w-full h-full object-cover" /></div>}
             </div>
             <div>
               <label className="block text-xs font-semibold text-gray-600 mb-1.5">Imagen móvil</label>
-              <input value={mobileImageUrl} onChange={(e) => setMobileImageUrl(e.target.value)} className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-300 font-mono" placeholder="https://..." />
+              <div className="flex items-center gap-2">
+                <input value={mobileImageUrl} onChange={(e) => { setMobileImageUrl(e.target.value); setPendingMobileFile(null); }} className="flex-1 px-3 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-300 font-mono" placeholder="https://... o sube una imagen" />
+                <label className="px-3 py-2.5 text-xs font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-xl cursor-pointer shrink-0 transition-colors">
+                  {pendingMobileFile ? "✓ Imagen lista" : "Subir archivo"}
+                  <input type="file" accept="image/*" className="hidden" onChange={(e) => handleFileSelect(e, true)} />
+                </label>
+              </div>
+              {mobileImageUrl && <div className="mt-2 rounded-xl overflow-hidden bg-gray-100 h-24"><img src={mobileImageUrl} alt="" className="w-full h-full object-cover" /></div>}
             </div>
           </div>
 
@@ -394,29 +438,25 @@ function CarouselManager({
                           className="inline-block text-[10px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full mb-4"
                           style={{ background: s.accentColor || "#FFF200", color: s.bgColor || "#1A1A2E" }}
                         >
-                          Mercaldas · Manizales
+                          {s.subtitle || <span className="underline decoration-dotted">Sin texto</span>}
                         </span>
                         <h3 className="font-black text-xl md:text-2xl text-white whitespace-pre-line leading-tight mb-2">
-                          {s.title || "Sin título"}
+                          {s.title || <span className="underline decoration-dotted">Sin texto</span>}
                         </h3>
-                        {s.subtitle && (
-                          <p className="text-xs md:text-sm mb-5 max-w-xs" style={{ color: "rgba(255,255,255,0.7)" }}>
-                            {s.subtitle}
-                          </p>
-                        )}
-                        {s.ctaText && (
-                          <span
-                            className="inline-flex items-center gap-1.5 px-5 py-2 rounded-lg text-xs font-bold"
-                            style={{ background: s.accentColor || "#FFF200", color: s.bgColor || "#1A1A2E" }}
-                          >
-                            {s.ctaText}
-                            <ChevronRight size={13} />
-                          </span>
-                        )}
+                        <p className="text-xs md:text-sm mb-5 max-w-xs" style={{ color: "rgba(255,255,255,0.7)" }}>
+                          {s.description || <span className="underline decoration-dotted">Sin texto</span>}
+                        </p>
+                        <span
+                          className="inline-flex items-center gap-1.5 px-5 py-2 rounded-lg text-xs font-bold"
+                          style={{ background: s.accentColor || "#FFF200", color: s.bgColor || "#1A1A2E" }}
+                        >
+                          {s.ctaText || <span className="underline decoration-dotted">Sin texto</span>}
+                          <ChevronRight size={13} />
+                        </span>
                       </div>
 
-                      {/* Hover actions */}
-                      <div className="absolute top-3 right-3 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-20">
+                      {/* Actions */}
+                      <div className="absolute top-3 right-3 flex items-center gap-1 z-20">
                         <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${STATUS_BADGE[s.status]}`}>
                           {STATUS_LABEL[s.status]} · #{s.position}
                         </span>
@@ -454,8 +494,9 @@ function CarouselManager({
                       <div className="flex items-start gap-3 mb-3">
                         {s.image && <img src={s.image} alt="" className="w-16 h-10 rounded-lg object-cover shrink-0" />}
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm font-semibold text-gray-900 truncate">{s.title || "Sin título"}</p>
-                          {s.ctaText && <p className="text-xs text-gray-400 mt-0.5">Botón: {s.ctaText}</p>}
+                          <p className="text-sm font-semibold text-gray-900 truncate">{s.title || <span className="underline decoration-dotted">Sin texto</span>}</p>
+                          <p className="text-xs text-gray-400 mt-0.5 truncate">Slogan: {s.subtitle || <span className="underline decoration-dotted">Sin texto</span>}</p>
+                          <p className="text-xs text-gray-400 mt-0.5 truncate">Botón: {s.ctaText || <span className="underline decoration-dotted">Sin texto</span>}</p>
                         </div>
                       </div>
 
@@ -556,19 +597,41 @@ function PromoSlideEditor({
   const [isActive, setIsActive] = useState(slide?.isActive ?? true);
   const [startDate, setStartDate] = useState(slide?.startDate ? new Date(slide.startDate).toISOString().slice(0, 16) : "");
   const [endDate, setEndDate] = useState(slide?.endDate ? new Date(slide.endDate).toISOString().slice(0, 16) : "");
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setPendingFile(file);
+    setImageUrl(URL.createObjectURL(file));
+  };
+
+  const uploadFile = async (file: File): Promise<string> => {
+    const fd = new FormData();
+    fd.append("file", file);
+    fd.append("code", `promo_${Date.now()}`);
+    const res = await fetch(
+      `${import.meta.env.VITE_API_URL || "http://localhost:3000"}/upload/image`,
+      { method: "POST", body: fd },
+    );
+    if (!res.ok) throw new Error("Error al subir imagen");
+    const data = await res.json();
+    return data.url;
+  };
 
   const handleSave = async () => {
-    if (!title.trim()) { setError("El título es obligatorio"); return; }
     if (!imageUrl.trim()) { setError("La imagen es obligatoria"); return; }
     setError(""); setSaving(true);
     try {
-      const imageMediaId = await createMediaFromUrl(imageUrl.trim());
+      let finalImageUrl = imageUrl.trim();
+      if (pendingFile) finalImageUrl = await uploadFile(pendingFile);
+      const imageMediaId = await createMediaFromUrl(finalImageUrl);
       const data: CreateBannerData = {
         title: title.trim(),
-        subtitle: subtitle.trim() || undefined,
+        subtitle: subtitle.trim(),
         mediaId: imageMediaId,
         bannerType: "promo",
-        ctaText: ctaText.trim() || undefined,
+        ctaText: ctaText.trim(),
         bgColor: bgColor.trim() || undefined,
         accentColor: accentColor.trim() || undefined,
         position: parseInt(position) || 0,
@@ -612,7 +675,13 @@ function PromoSlideEditor({
             <div className="flex items-center gap-2 text-xs font-semibold text-gray-400 uppercase tracking-wider"><Image size={12} /> Imagen</div>
             <div>
               <label className="block text-xs font-semibold text-gray-600 mb-1.5">URL de imagen de fondo *</label>
-              <input value={imageUrl} onChange={(e) => setImageUrl(e.target.value)} className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-300 font-mono" placeholder="https://..." />
+              <div className="flex items-center gap-2">
+                <input value={imageUrl} onChange={(e) => { setImageUrl(e.target.value); setPendingFile(null); }} className="flex-1 px-3 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-300 font-mono" placeholder="https://... o sube una imagen" />
+                <label className="px-3 py-2.5 text-xs font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-xl cursor-pointer shrink-0 transition-colors">
+                  {pendingFile ? "✓ Imagen lista" : "Subir archivo"}
+                  <input type="file" accept="image/*" className="hidden" onChange={handleFileSelect} />
+                </label>
+              </div>
               {imageUrl && <div className="mt-2 rounded-xl overflow-hidden bg-gray-100 h-24"><img src={imageUrl} alt="" className="w-full h-full object-cover" /></div>}
             </div>
           </div>
@@ -771,14 +840,12 @@ function PromoManager({
                         <div className="relative z-10 p-5 flex items-center gap-5">
                           <div className="flex-1">
                             <span className="inline-block text-[9px] font-black tracking-widest px-2 py-1 rounded-full mb-2" style={{ background: s.accentColor || "#FFF200", color: s.bgColor || "#1A1A2E" }}>{badge}</span>
-                            <h3 className="font-black text-lg text-white leading-tight mb-1">{s.title || "Sin título"}</h3>
-                            {s.subtitle && <p className="text-xs text-white/60">{s.subtitle}</p>}
+                            <h3 className="font-black text-lg text-white leading-tight mb-1">{s.title || <span className="underline decoration-dotted">Sin texto</span>}</h3>
+                            <p className="text-xs text-white/60">{s.subtitle || <span className="underline decoration-dotted">Sin texto</span>}</p>
                           </div>
-                          {s.ctaText && (
-                            <span className="shrink-0 px-4 py-2 rounded-lg text-xs font-bold" style={{ background: s.accentColor || "#FFF200", color: s.bgColor || "#1A1A2E" }}>{s.ctaText}</span>
-                          )}
+                          <span className="shrink-0 px-4 py-2 rounded-lg text-xs font-bold" style={{ background: s.accentColor || "#FFF200", color: s.bgColor || "#1A1A2E" }}>{s.ctaText || <span className="underline decoration-dotted">Sin texto</span>}</span>
                         </div>
-                        <div className="absolute top-3 right-3 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-20">
+                        <div className="absolute top-3 right-3 flex items-center gap-1 z-20">
                           <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${STATUS_BADGE[s.status]}`}>{STATUS_LABEL[s.status]} · #{s.position}</span>
                           <button onClick={() => setSlideEditor(s)} className="w-7 h-7 flex items-center justify-center rounded-lg bg-white/90 hover:bg-white text-gray-600"><Edit size={12} /></button>
                           <button onClick={() => setDeleteConfirm(s)} className="w-7 h-7 flex items-center justify-center rounded-lg bg-white/90 hover:bg-red-50 text-gray-600 hover:text-red-500"><Trash2 size={12} /></button>
@@ -797,8 +864,9 @@ function PromoManager({
                   <div className="flex items-start gap-3 mb-3">
                     {s.image && <img src={s.image} alt="" className="w-16 h-10 rounded-lg object-cover shrink-0" />}
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-gray-900 truncate">{s.title || "Sin título"}</p>
-                      {s.ctaText && <p className="text-xs text-gray-400 mt-0.5">Botón: {s.ctaText}</p>}
+                      <p className="text-sm font-semibold text-gray-900 truncate">{s.title || <span className="underline decoration-dotted">Sin texto</span>}</p>
+                      <p className="text-xs text-gray-400 mt-0.5 truncate">Subtítulo: {s.subtitle || <span className="underline decoration-dotted">Sin texto</span>}</p>
+                      <p className="text-xs text-gray-400 mt-0.5 truncate">Botón: {s.ctaText || <span className="underline decoration-dotted">Sin texto</span>}</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
@@ -1494,7 +1562,8 @@ function BrandsLandingManager({
   const [search, setSearch] = useState("");
   const [sortKey, setSortKey] = useState<"name" | "count">("name");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
-  const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive">("all");
+  const [filterActive, setFilterActive] = useState(true);
+  const [filterInactive, setFilterInactive] = useState(true);
   const [batchBusy, setBatchBusy] = useState(false);
   const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:3000";
 
@@ -1561,8 +1630,9 @@ function BrandsLandingManager({
       const matchesSearch =
         !q || b.name.toLowerCase().includes(q) || (b.code ?? "").toLowerCase().includes(q);
       const matchesStatus =
-        statusFilter === "all" ||
-        (statusFilter === "active" ? b.isActive : !b.isActive);
+        (!filterActive && !filterInactive) ||
+        (filterActive && b.isActive) ||
+        (filterInactive && !b.isActive);
       return matchesSearch && matchesStatus;
     })
     .sort((a, b) => {
@@ -1609,15 +1679,26 @@ function BrandsLandingManager({
               <option value="count-desc">Más productos primero</option>
               <option value="count-asc">Menos productos primero</option>
             </select>
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value as "all" | "active" | "inactive")}
-              className="flex-1 px-3 py-2 text-xs border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-amber-300"
-            >
-              <option value="all">Todas</option>
-              <option value="active">Solo activas</option>
-              <option value="inactive">Solo inactivas</option>
-            </select>
+            <div className="flex items-center gap-3 px-3 py-2 bg-white border border-gray-200 rounded-lg shrink-0">
+              <label className="flex items-center gap-1.5 text-xs text-gray-600 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={filterActive}
+                  onChange={(e) => setFilterActive(e.target.checked)}
+                  className="w-3.5 h-3.5 rounded border-gray-300 accent-green-500"
+                />
+                Activas
+              </label>
+              <label className="flex items-center gap-1.5 text-xs text-gray-600 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={filterInactive}
+                  onChange={(e) => setFilterInactive(e.target.checked)}
+                  className="w-3.5 h-3.5 rounded border-gray-300 accent-red-500"
+                />
+                Inactivas
+              </label>
+            </div>
           </div>
         </div>
         <div className="flex items-center justify-between px-6 py-2 border-t border-gray-100 shrink-0">
@@ -1651,7 +1732,7 @@ function BrandsLandingManager({
               </label>
               <button
                 onClick={(e) => { e.stopPropagation(); toggleActive(b); }}
-                className={`relative w-9 h-5 rounded-full transition-colors flex-shrink-0 cursor-pointer ${b.isActive ? "bg-green-500" : "bg-gray-300"}`}
+                className={`relative w-9 h-5 rounded-full transition-colors flex-shrink-0 cursor-pointer ${b.isActive ? "bg-green-500" : "bg-red-400"}`}
               >
                 <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${b.isActive ? "left-4" : "left-0.5"}`} />
               </button>
@@ -2170,7 +2251,7 @@ function BenefitsLandingManager({ onClose }: { onClose: () => void }) {
 interface FooterSocial { platform: string; url: string }
 interface FooterHelpLink { label: string; url: string }
 interface FooterContact { address: string; phone: string; whatsapp: string; email: string }
-interface FooterCategoryOption { code: string; name: string }
+interface FooterCategoryOption { code: string; name: string; isActive: boolean }
 
 function FooterLandingManager({ onClose }: { onClose: () => void }) {
   const [loading, setLoading] = useState(true);
@@ -2183,6 +2264,9 @@ function FooterLandingManager({ onClose }: { onClose: () => void }) {
   const [helpLinks, setHelpLinks] = useState<FooterHelpLink[]>([]);
   const [contact, setContact] = useState<FooterContact>({ address: "", phone: "", whatsapp: "", email: "" });
   const [hours, setHours] = useState("");
+  // Category search + filter
+  const [catSearch, setCatSearch] = useState("");
+  const [catFilter, setCatFilter] = useState<"all" | "active" | "inactive">("all");
   const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:3000";
 
   const load = useCallback(async () => {
@@ -2204,8 +2288,8 @@ function FooterLandingManager({ onClose }: { onClose: () => void }) {
         const cats = await catRes.json();
         const list: FooterCategoryOption[] = [];
         (Array.isArray(cats) ? cats : []).forEach((c: any) => {
-          if (c.code) list.push({ code: c.code, name: c.name ?? c.code });
-          if (c.children && Array.isArray(c.children)) c.children.forEach((ch: any) => { if (ch.code) list.push({ code: ch.code, name: ch.name ?? ch.code }); });
+          if (c.code) list.push({ code: c.code, name: c.name ?? c.code, isActive: c.isActive ?? true });
+          if (c.children && Array.isArray(c.children)) c.children.forEach((ch: any) => { if (ch.code) list.push({ code: ch.code, name: ch.name ?? ch.code, isActive: ch.isActive ?? true }); });
         });
         setAllCategories(list);
       }
@@ -2289,13 +2373,47 @@ function FooterLandingManager({ onClose }: { onClose: () => void }) {
             {/* Categorías */}
             <div>
               <h4 className="text-sm font-bold text-gray-900 mb-2">Categorías del footer</h4>
-              <div className="max-h-40 overflow-y-auto grid grid-cols-2 gap-1">
-                {allCategories.map((c) => (
-                  <label key={c.code} className="flex items-center gap-2 text-xs cursor-pointer hover:bg-gray-50 rounded px-2 py-1">
-                    <input type="checkbox" checked={selectedCategories.includes(c.code)} onChange={() => toggleCategory(c.code)} className="w-3.5 h-3.5 rounded border-gray-300 text-amber-500" />
-                    <span className="truncate">{c.name}</span>
-                  </label>
-                ))}
+              <div className="flex items-center gap-2 mb-2">
+                <div className="relative flex-1">
+                  <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <input
+                    value={catSearch}
+                    onChange={(e) => setCatSearch(e.target.value)}
+                    placeholder="Buscar categoría..."
+                    className="w-full pl-8 pr-3 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-300"
+                  />
+                </div>
+                <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1 shrink-0">
+                  {([
+                    { key: "all", label: "Todas" },
+                    { key: "active", label: "Activas" },
+                    { key: "inactive", label: "Inactivas" },
+                  ] as const).map((f) => (
+                    <button
+                      key={f.key}
+                      onClick={() => setCatFilter(f.key)}
+                      className={`px-2 py-1 text-[11px] font-semibold rounded-md transition-all ${catFilter === f.key ? "bg-white text-gray-800 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
+                    >
+                      {f.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="max-h-44 overflow-y-auto grid grid-cols-2 gap-1">
+                {allCategories
+                  .filter((c) => !catSearch || c.name.toLowerCase().includes(catSearch.toLowerCase()))
+                  .filter((c) => (catFilter === "active" ? c.isActive : catFilter === "inactive" ? !c.isActive : true))
+                  .map((c) => (
+                    <label key={c.code} className="flex items-center gap-2 text-xs cursor-pointer hover:bg-gray-50 rounded px-2 py-1">
+                      <input type="checkbox" checked={selectedCategories.includes(c.code)} onChange={() => toggleCategory(c.code)} className="w-3.5 h-3.5 rounded border-gray-300 text-amber-500" />
+                      <span className={`truncate ${c.isActive ? "" : "text-gray-400 line-through"}`}>{c.name}</span>
+                      {!c.isActive && <span className="text-[9px] text-red-400 uppercase shrink-0">Inactiva</span>}
+                    </label>
+                  ))}
+                {allCategories.filter((c) => !catSearch || c.name.toLowerCase().includes(catSearch.toLowerCase()))
+                  .filter((c) => (catFilter === "active" ? c.isActive : catFilter === "inactive" ? !c.isActive : true)).length === 0 && (
+                  <p className="col-span-2 text-xs text-gray-400 py-2 text-center">Sin resultados</p>
+                )}
               </div>
             </div>
 
@@ -2303,11 +2421,25 @@ function FooterLandingManager({ onClose }: { onClose: () => void }) {
             <div>
               <h4 className="text-sm font-bold text-gray-900 mb-2">Links de ayuda</h4>
               <div className="space-y-2">
+                {helpLinks.length === 0 && (
+                  <p className="text-xs text-gray-400">No hay links de ayuda configurados.</p>
+                )}
                 {helpLinks.map((h, i) => (
-                  <div key={i} className="flex items-center gap-2">
-                    <input value={h.label} onChange={(e) => updateHelp(i, "label", e.target.value)} placeholder="Título" className={`${inputCls} w-40`} />
-                    <input value={h.url} onChange={(e) => updateHelp(i, "url", e.target.value)} placeholder="https://..." className={`${inputCls} flex-1 font-mono text-xs`} />
-                    <button onClick={() => removeHelp(i)} className="w-6 h-6 flex items-center justify-center rounded hover:bg-red-50 text-gray-400 hover:text-red-500 shrink-0"><X size={12} /></button>
+                  <div key={i} className="border border-gray-200 rounded-lg p-2.5 space-y-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] font-semibold text-gray-400 uppercase w-14 shrink-0">Nombre</span>
+                      <input value={h.label} onChange={(e) => updateHelp(i, "label", e.target.value)} placeholder="Ej: Preguntas frecuentes" className={`${inputCls} flex-1`} />
+                      <button onClick={() => removeHelp(i)} className="w-6 h-6 flex items-center justify-center rounded hover:bg-red-50 text-gray-400 hover:text-red-500 shrink-0"><X size={12} /></button>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] font-semibold text-gray-400 uppercase w-14 shrink-0">URL</span>
+                      <input value={h.url} onChange={(e) => updateHelp(i, "url", e.target.value)} placeholder="https://..." className={`${inputCls} flex-1 font-mono text-xs`} />
+                    </div>
+                    {h.label && h.url && (
+                      <p className="text-[11px] text-gray-400 truncate">
+                        → <span className="text-gray-600 font-medium">{h.label}</span> · {h.url}
+                      </p>
+                    )}
                   </div>
                 ))}
                 <button onClick={addHelp} className="flex items-center gap-1 text-xs text-gray-500 hover:text-amber-600"><Plus size={12} /> Añadir link</button>
@@ -2373,7 +2505,8 @@ function ProductTypeEditor({
   const [search, setSearch] = useState("");
   const [sortKey, setSortKey] = useState<"name" | "count">("name");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
-  const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive">("all");
+  const [filterActive, setFilterActive] = useState(true);
+  const [filterInactive, setFilterInactive] = useState(true);
   const [batchBusy, setBatchBusy] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:3000";
@@ -2457,8 +2590,9 @@ function ProductTypeEditor({
     .filter((t) => {
       const matchesSearch = !q || t.name.toLowerCase().includes(q) || t.code.toLowerCase().includes(q);
       const matchesStatus =
-        statusFilter === "all" ||
-        (statusFilter === "active" ? t.isActive : !t.isActive);
+        (!filterActive && !filterInactive) ||
+        (filterActive && t.isActive) ||
+        (filterInactive && !t.isActive);
       return matchesSearch && matchesStatus;
     })
     .sort((a, b) => {
@@ -2505,15 +2639,26 @@ function ProductTypeEditor({
               <option value="count-desc">Más productos primero</option>
               <option value="count-asc">Menos productos primero</option>
             </select>
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value as "all" | "active" | "inactive")}
-              className="flex-1 px-3 py-2 text-xs border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-amber-300"
-            >
-              <option value="all">Todos</option>
-              <option value="active">Solo activos</option>
-              <option value="inactive">Solo inactivos</option>
-            </select>
+            <div className="flex items-center gap-3 px-3 py-2 bg-white border border-gray-200 rounded-lg shrink-0">
+              <label className="flex items-center gap-1.5 text-xs text-gray-600 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={filterActive}
+                  onChange={(e) => setFilterActive(e.target.checked)}
+                  className="w-3.5 h-3.5 rounded border-gray-300 accent-green-500"
+                />
+                Activos
+              </label>
+              <label className="flex items-center gap-1.5 text-xs text-gray-600 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={filterInactive}
+                  onChange={(e) => setFilterInactive(e.target.checked)}
+                  className="w-3.5 h-3.5 rounded border-gray-300 accent-red-500"
+                />
+                Inactivos
+              </label>
+            </div>
           </div>
         </div>
         <div className="flex items-center justify-between px-6 py-2 border-t border-gray-100 shrink-0">
@@ -2541,7 +2686,7 @@ function ProductTypeEditor({
               {/* isActive toggle switch */}
               <button
                 onClick={(e) => { e.stopPropagation(); toggleActive(t); }}
-                className={`relative w-9 h-5 rounded-full transition-colors flex-shrink-0 cursor-pointer ${t.isActive ? 'bg-green-500' : 'bg-gray-300'}`}
+                className={`relative w-9 h-5 rounded-full transition-colors flex-shrink-0 cursor-pointer ${t.isActive ? 'bg-green-500' : 'bg-red-400'}`}
               >
                 <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${t.isActive ? 'left-4' : 'left-0.5'}`} />
               </button>
@@ -2820,7 +2965,7 @@ function FeaturedProductsManager({
                           </span>
                           <span className="text-[10px] text-gray-400 font-medium">{tab.productCount}</span>
                         </div>
-                        <div className="flex items-center gap-0.5 mt-1 opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center gap-0.5 mt-1" onClick={(e) => e.stopPropagation()}>
                           <button onClick={() => handleMove(i, -1)} disabled={i === 0} className="p-1 rounded hover:bg-gray-200 text-gray-500 disabled:opacity-30"><ArrowUp size={11} /></button>
                           <button onClick={() => handleMove(i, 1)} disabled={i === tabs.length - 1} className="p-1 rounded hover:bg-gray-200 text-gray-500 disabled:opacity-30"><ArrowDown size={11} /></button>
                           <button onClick={() => { setRenamingId(tab.id); setRenameValue(tab.name); }} className="p-1 rounded hover:bg-gray-200 text-gray-500"><Edit size={11} /></button>

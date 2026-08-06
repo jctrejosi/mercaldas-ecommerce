@@ -329,7 +329,7 @@ export class LandingService {
     if (selected.length > 0) {
       const all = await this.db
         .select({
-          id: brands.id,
+          id: sql<number>`${brands.id}`,
           code: brands.code,
           name: brands.name,
           slug: brands.slug,
@@ -350,7 +350,7 @@ export class LandingService {
     // Fallback: marcas destacadas (comportamiento original)
     return this.db
       .select({
-        id: brands.id,
+        id: sql<number>`${brands.id}`,
         code: brands.code,
         name: brands.name,
         slug: brands.slug,

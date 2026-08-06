@@ -1,3 +1,4 @@
+import { Type } from 'class-transformer';
 import {
   IsString,
   IsOptional,
@@ -103,11 +104,13 @@ export class QuerySubscribersDto {
 
   @ApiPropertyOptional({ description: 'Página (1-based)' })
   @IsOptional()
+  @Type(() => Number)
   @IsInt()
   page?: number;
 
   @ApiPropertyOptional({ description: 'Tamaño de página' })
   @IsOptional()
+  @Type(() => Number)
   @IsInt()
   limit?: number;
 }

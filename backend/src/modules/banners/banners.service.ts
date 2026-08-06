@@ -181,7 +181,7 @@ export class BannersService {
     const [newBanner] = await this.db
       .insert(banners)
       .values({
-        title: dto.title,
+        title: dto.title ?? '',
         subtitle: dto.subtitle ?? null,
         description: dto.description ?? null,
         mediaId: dto.mediaId,

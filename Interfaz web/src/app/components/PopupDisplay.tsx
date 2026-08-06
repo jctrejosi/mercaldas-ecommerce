@@ -136,35 +136,40 @@ export function PopupDisplay({ onApplyFilter }: PopupDisplayProps) {
         const isHorizontal = p.position === "header" || p.position === "footer";
         const isPanel = p.position === "left" || p.position === "right";
 
-        // Position styles
-        const positionStyles: React.CSSProperties = {};
-        const panelStyles: React.CSSProperties = {};
+        // Position styles (siempre fixed)
+        const positionStyles: React.CSSProperties = { position: "fixed" };
+        const cardStyles: React.CSSProperties = {};
 
         if (p.position === "header") {
-          positionStyles.top = "72px"; // below navbar
+          positionStyles.top = 0;
           positionStyles.left = 0;
           positionStyles.right = 0;
         } else if (p.position === "footer") {
-          positionStyles.bottom = "64px"; // above footer bottom
+          positionStyles.bottom = 0;
           positionStyles.left = 0;
           positionStyles.right = 0;
         } else if (p.position === "left") {
-          positionStyles.top = "72px";
-          positionStyles.left = 0;
-          positionStyles.bottom = 0;
-          panelStyles.maxWidth = "420px";
-          panelStyles.width = "90vw";
+          // Tarjeta a la izquierda, centrada en el eje Y
+          positionStyles.top = "50%";
+          positionStyles.left = "16px";
+          positionStyles.transform = "translateY(-50%)";
+          cardStyles.width = "min(88vw, 380px)";
+          cardStyles.maxHeight = "480px";
         } else if (p.position === "right") {
-          positionStyles.top = "72px";
-          positionStyles.right = 0;
-          positionStyles.bottom = 0;
-          panelStyles.maxWidth = "420px";
-          panelStyles.width = "90vw";
+          // Tarjeta a la derecha, centrada en el eje Y
+          positionStyles.top = "50%";
+          positionStyles.right = "16px";
+          positionStyles.transform = "translateY(-50%)";
+          cardStyles.width = "min(88vw, 380px)";
+          cardStyles.maxHeight = "480px";
         }
 
+        // Header: por encima del navbar (z-50); footer: sobre el contenido
         const containerClass = isHorizontal
-          ? "fixed left-0 right-0 z-40 cursor-pointer animate-slide-down"
-          : `fixed z-40 cursor-pointer ${p.position === "left" ? "animate-slide-in-left" : "animate-slide-in-right"}`;
+          ? `cursor-pointer animate-slide-down ${p.position === "header" ? "z-[60]" : "z-40"}`
+          : p.position === "left"
+            ? "cursor-pointer z-[70] animate-popup-in-left"
+            : "cursor-pointer z-[70] animate-popup-in-right";
 
         return (
           <div
@@ -174,8 +179,12 @@ export function PopupDisplay({ onApplyFilter }: PopupDisplayProps) {
             onClick={() => handleClick(p)}
           >
             <div
-              className="relative"
-              style={isPanel ? panelStyles : undefined}
+              className={
+                isPanel
+                  ? "relative bg-white rounded-3xl overflow-hidden shadow-lg border border-black/5"
+                  : "relative"
+              }
+              style={isPanel ? cardStyles : undefined}
             >
               {/* Image */}
               {isHorizontal ? (
@@ -186,8 +195,14 @@ export function PopupDisplay({ onApplyFilter }: PopupDisplayProps) {
                     className="w-full h-full object-cover"
                   />
                 </div>
+              ) : isPanel ? (
+                <img
+                  src={p.image!}
+                  alt={p.title}
+                  className="w-full max-h-[480px] object-contain"
+                />
               ) : (
-                <div className="h-full overflow-hidden rounded-r-2xl shadow-2xl">
+                <div className="h-full overflow-hidden shadow-2xl">
                   <img
                     src={p.image!}
                     alt={p.title}

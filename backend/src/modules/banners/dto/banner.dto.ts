@@ -9,10 +9,11 @@ export enum BannerType {
 }
 
 export class CreateBannerDto {
-  @ApiProperty({ description: 'Título del banner', example: 'Oferta Semanal' })
+  @ApiPropertyOptional({ description: 'Título del banner', example: 'Oferta Semanal' })
+  @IsOptional()
   @IsString()
   @MaxLength(100)
-  title: string;
+  title?: string;
 
   @ApiPropertyOptional({ description: 'Subtítulo (para hero slides)' })
   @IsOptional()

@@ -137,6 +137,27 @@ function PopupEditor({
   const [isActive, setIsActive] = useState(popup?.isActive ?? true);
   const [startDate, setStartDate] = useState(popup?.startDate ? new Date(popup.startDate).toISOString().slice(0, 16) : "");
   const [endDate, setEndDate] = useState(popup?.endDate ? new Date(popup.endDate).toISOString().slice(0, 16) : "");
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setPendingFile(file);
+    setImageUrl(URL.createObjectURL(file));
+  };
+
+  const uploadFile = async (file: File): Promise<string> => {
+    const fd = new FormData();
+    fd.append("file", file);
+    fd.append("code", `popup_${Date.now()}`);
+    const res = await fetch(
+      `${import.meta.env.VITE_API_URL || "http://localhost:3000"}/upload/image`,
+      { method: "POST", body: fd },
+    );
+    if (!res.ok) throw new Error("Error al subir imagen");
+    const data = await res.json();
+    return data.url;
+  };
 
   // Filter state from popup's filterConfig
   const [filterCategoryIds, setFilterCategoryIds] = useState(
@@ -153,7 +174,9 @@ function PopupEditor({
     if (!imageUrl.trim()) { setError("La imagen es obligatoria"); return; }
     setError(""); setSaving(true);
     try {
-      const imageMediaId = await createMediaFromUrl(imageUrl.trim());
+      let finalImageUrl = imageUrl.trim();
+      if (pendingFile) finalImageUrl = await uploadFile(pendingFile);
+      const imageMediaId = await createMediaFromUrl(finalImageUrl);
       const filterConfig: Record<string, unknown> = {
         categoryIds: filterCategoryIds ? filterCategoryIds.split(",").map((s) => parseInt(s.trim())).filter((n) => !isNaN(n)) : [],
         brandId: filterBrandId ? parseInt(filterBrandId) : null,
@@ -205,7 +228,13 @@ function PopupEditor({
             <div className="flex items-center gap-2 text-xs font-semibold text-gray-400 uppercase tracking-wider"><Image size={12} /> Imagen</div>
             <div>
               <label className="block text-xs font-semibold text-gray-600 mb-1.5">URL de la imagen *</label>
-              <input value={imageUrl} onChange={(e) => setImageUrl(e.target.value)} className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-300 font-mono" placeholder="https://..." />
+              <div className="flex items-center gap-2">
+                <input value={imageUrl} onChange={(e) => { setImageUrl(e.target.value); setPendingFile(null); }} className="flex-1 px-3 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-300 font-mono" placeholder="https://... o sube una imagen" />
+                <label className="px-3 py-2.5 text-xs font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-xl cursor-pointer shrink-0 transition-colors">
+                  {pendingFile ? "✓ Imagen lista" : "Subir archivo"}
+                  <input type="file" accept="image/*" className="hidden" onChange={handleFileSelect} />
+                </label>
+              </div>
               {imageUrl && <div className="mt-2 rounded-xl overflow-hidden bg-gray-100 h-28"><img src={imageUrl} alt="" className="w-full h-full object-cover" /></div>}
             </div>
           </div>
@@ -411,7 +440,11 @@ export default function Popups() {
         <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
           <div className="divide-y divide-gray-100">
             {popups.map((p) => (
-              <div key={p.id} className="flex items-center gap-4 px-5 py-4 hover:bg-gray-50 transition-colors">
+              <div
+                key={p.id}
+                onClick={() => { setSelectedPopup(p); setEditorOpen(true); }}
+                className="flex items-center gap-4 px-5 py-4 hover:bg-gray-50 transition-colors cursor-pointer"
+              >
                 {/* Image preview */}
                 <div className="w-14 h-14 rounded-xl bg-gray-100 overflow-hidden shrink-0">
                   {p.image ? (
@@ -438,14 +471,14 @@ export default function Popups() {
                 {/* Actions */}
                 <div className="flex items-center gap-1 shrink-0">
                   <button
-                    onClick={() => { setSelectedPopup(p); setEditorOpen(true); }}
+                    onClick={(e) => { e.stopPropagation(); setSelectedPopup(p); setEditorOpen(true); }}
                     className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-500 hover:text-amber-600 transition-colors"
                     title="Editar"
                   >
                     <Edit size={15} />
                   </button>
                   <button
-                    onClick={() => setDeleteTarget(p)}
+                    onClick={(e) => { e.stopPropagation(); setDeleteTarget(p); }}
                     className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-red-50 text-gray-500 hover:text-red-600 transition-colors"
                     title="Eliminar"
                   >

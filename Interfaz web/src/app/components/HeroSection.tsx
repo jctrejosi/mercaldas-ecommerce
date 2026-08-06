@@ -6,7 +6,8 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:3000";
 interface HeroSlide {
   id: number;
   title: string;
-  subtitle: string;
+  slogan: string;
+  description: string;
   cta: string;
   ctaText: string;
   image: string;
@@ -32,10 +33,11 @@ async function fetchHeroSlides(): Promise<HeroSlide[]> {
     const banners = await res.json();
     return banners.map((b: any) => ({
       id: b.id,
-      title: b.title || "",
-      subtitle: b.subtitle || b.description || "",
+      title: (b.title || "").replace(/\\n/g, "\n"),
+      slogan: (b.subtitle || "").replace(/\\n/g, "\n"),
+      description: (b.description || "").replace(/\\n/g, "\n"),
       cta: b.linkUrl || "",
-      ctaText: b.ctaText || "Ver más",
+      ctaText: b.ctaText || "",
       image: b.image || "",
       mobileImage: b.mobileImage || b.image || "",
       bg: b.bgColor || "#1A1A2E",
@@ -51,7 +53,8 @@ const FALLBACK_SLIDES: HeroSlide[] = [
   {
     id: 0,
     title: "Configura tus slides\ndesde el panel admin",
-    subtitle:
+    slogan: "Mercaldas · Manizales",
+    description:
       "Ve a Contenido → Home en el panel de administración para añadir banners hero con imágenes, textos y colores personalizados.",
     cta: "",
     ctaText: "Ir al panel admin",
@@ -133,6 +136,7 @@ export function HeroSection({
   if (slides.length === 0) return null;
 
   const slide = slides[currentIndex];
+  const hasText = !!(slide.slogan || slide.title || slide.description || slide.ctaText);
 
   return (
     <section className="relative overflow-hidden" style={{ background: slide.bg, transition: "background 0.6s ease" }}>
@@ -140,31 +144,50 @@ export function HeroSection({
 
       <div className="max-w-7xl mx-auto px-4">
         <div className="relative flex items-center h-[340px] md:h-[420px]">
-          {/* Content */}
-          <div key={animKey} className="relative z-10 flex-1 py-8 max-w-xl">
-            <div
-              className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-widest px-3 py-1 rounded-full mb-5"
-              style={{
-                background: slide.accent,
-                color: "#1A1A2E",
-                animation: "heroFadeIn 0.5s ease both",
-                animationDelay: "0ms",
-              }}
-            >
-              <Sparkles className="w-3 h-3" />
-              Mercaldas · Manizales
+          {/* Full-bleed image when there is no text content */}
+          {!hasText && slide.image && (
+            <div className="absolute inset-0">
+              <img
+                key={`full-${currentIndex}`}
+                src={slide.image}
+                alt=""
+                className="w-full h-full object-contain"
+                style={{ animation: "heroBgShift 0.7s ease both" }}
+              />
+              <div className="absolute inset-0" style={{ background: "rgba(26,26,46,0.35)" }} />
             </div>
-            <h1
-              className="font-black text-3xl md:text-5xl leading-[1.1] mb-4 text-white whitespace-pre-line"
-              style={{
-                fontFamily: "'Bricolage Grotesque', sans-serif",
-                animation: "heroFadeIn 0.5s ease both",
-                animationDelay: "100ms",
-              }}
-            >
-              {slide.title}
-            </h1>
-            {slide.subtitle && (
+          )}
+
+          {/* Content */}
+          {hasText && (
+          <div key={animKey} className="relative z-10 flex-1 py-8 max-w-xl">
+            {slide.slogan && (
+              <div
+                className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-widest px-3 py-1 rounded-full mb-5"
+                style={{
+                  background: slide.accent,
+                  color: "#1A1A2E",
+                  animation: "heroFadeIn 0.5s ease both",
+                  animationDelay: "0ms",
+                }}
+              >
+                <Sparkles className="w-3 h-3" />
+                {slide.slogan}
+              </div>
+            )}
+            {slide.title && (
+              <h1
+                className="font-black text-3xl md:text-5xl leading-[1.1] mb-4 text-white whitespace-pre-line"
+                style={{
+                  fontFamily: "'Bricolage Grotesque', sans-serif",
+                  animation: "heroFadeIn 0.5s ease both",
+                  animationDelay: "100ms",
+                }}
+              >
+                {slide.title}
+              </h1>
+            )}
+            {slide.description && (
               <p
                 className="text-sm md:text-base mb-7 max-w-sm line-clamp-2"
                 style={{
@@ -173,7 +196,7 @@ export function HeroSection({
                   animationDelay: "200ms",
                 }}
               >
-                {slide.subtitle}
+                {slide.description}
               </p>
             )}
             {slide.ctaText && (
@@ -194,15 +217,16 @@ export function HeroSection({
               </button>
             )}
           </div>
+          )}
 
           {/* Background image with crossfade */}
-          {slide.image && (
+          {hasText && slide.image && (
             <div className="absolute right-0 top-0 h-full w-1/2 md:w-5/12">
               <img
                 key={`img-${currentIndex}`}
                 src={slide.image}
                 alt={slide.title}
-                className="w-full h-full object-cover"
+                className="w-full h-full object-contain"
                 style={{ opacity: 0.45, animation: "heroImageIn 0.7s ease both" }}
               />
               <div
@@ -226,7 +250,7 @@ export function HeroSection({
               </button>
               <button
                 onClick={() => goSlide(1)}
-                className="absolute right-2 md:right-[42%] top-1/2 -translate-y-1/2 z-20 w-9 h-9 rounded-full flex items-center justify-center transition-all hover:scale-110"
+                className={`absolute right-2 top-1/2 -translate-y-1/2 z-20 w-9 h-9 rounded-full flex items-center justify-center transition-all hover:scale-110 ${hasText ? "md:right-[42%]" : ""}`}
                 style={{ background: "rgba(255,255,255,0.2)", backdropFilter: "blur(4px)" }}
               >
                 <ChevronRight className="w-4 h-4 text-white" />

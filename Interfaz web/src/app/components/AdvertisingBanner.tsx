@@ -29,11 +29,11 @@ async function fetchPromoBanners(): Promise<AdBanner[]> {
     const res = await fetch(`${API_BASE_URL}/banners?bannerType=promo`);
     if (!res.ok) return [];
     const data = await res.json();
-    return data.map((b: any) => ({
+    return (Array.isArray(data) ? data : []).map((b: any) => ({
       id: b.id,
       title: b.title || "",
       subtitle: b.subtitle || b.description || "",
-      ctaText: b.ctaText || "Ver más",
+      ctaText: b.ctaText || "",
       image: b.image || "",
       badge: b.title ? b.title.split(" ").slice(0, 2).join(" ").toUpperCase() : "OFERTA",
       bg: b.bgColor
@@ -126,6 +126,7 @@ export function AdvertisingBanner({
 
   if (banners.length === 0) return null;
   const banner = banners[current];
+  const hasText = !!(banner.title || banner.subtitle || banner.ctaText);
 
   return (
     <section className="py-6 bg-background">
@@ -138,71 +139,81 @@ export function AdvertisingBanner({
             transition: "background 0.6s ease",
           }}
         >
-          {/* BG image with crossfade */}
-          <div className="absolute right-0 top-0 h-full w-1/2 md:w-2/5">
+          {/* BG image — ancho completo cuando no hay texto */}
+          <div className={`absolute top-0 h-full ${hasText ? "right-0 w-1/2 md:w-2/5" : "inset-0 w-full"}`}>
             {banner.image && (
               <img
                 key={`promo-img-${current}`}
                 src={banner.image}
                 alt=""
-                className="w-full h-full object-cover opacity-25"
+                className={`w-full h-full object-contain ${hasText ? "opacity-25" : ""}`}
                 style={{ animation: "promoBgFade 0.7s ease both" }}
               />
             )}
-            <div
-              className="absolute inset-0"
-              style={{ background: `linear-gradient(to right, transparent 0%, rgba(0,0,0,0.1) 100%)` }}
-            />
+            {hasText && (
+              <div
+                className="absolute inset-0"
+                style={{ background: `linear-gradient(to right, transparent 0%, rgba(0,0,0,0.1) 100%)` }}
+              />
+            )}
           </div>
 
           {/* Content */}
           <div key={animKey} className="relative z-10 px-7 py-6 flex flex-col md:flex-row md:items-center gap-4 h-full">
             <div className="flex-1 min-w-0">
-              <span
-                className="inline-block text-[10px] font-black tracking-widest px-2.5 py-1 rounded-full mb-2"
+              {(banner.title || banner.subtitle) && (
+                <span
+                  className="inline-block text-[10px] font-black tracking-widest px-2.5 py-1 rounded-full mb-2"
+                  style={{
+                    background: banner.accent,
+                    color: "#1A1A2E",
+                    animation: "promoFadeIn 0.5s ease both",
+                    animationDelay: "0ms",
+                  }}
+                >
+                  {banner.badge}
+                </span>
+              )}
+              {banner.title && (
+                <h2
+                  className="text-xl md:text-2xl font-black text-white leading-tight mb-1 truncate"
+                  style={{
+                    fontFamily: "'Bricolage Grotesque', sans-serif",
+                    animation: "promoFadeIn 0.5s ease both",
+                    animationDelay: "80ms",
+                  }}
+                >
+                  {banner.title}
+                </h2>
+              )}
+              {banner.subtitle && (
+                <p
+                  className="text-sm max-w-sm line-clamp-2"
+                  style={{
+                    color: "rgba(255,255,255,0.7)",
+                    animation: "promoFadeIn 0.5s ease both",
+                    animationDelay: "160ms",
+                  }}
+                >
+                  {banner.subtitle}
+                </p>
+              )}
+            </div>
+            {banner.ctaText && (
+              <button
+                onClick={handleClick}
+                className="flex-shrink-0 flex items-center gap-2 px-6 py-3 rounded-xl font-bold text-sm transition-all hover:brightness-95 active:scale-95 self-start md:self-auto"
                 style={{
                   background: banner.accent,
                   color: "#1A1A2E",
                   animation: "promoFadeIn 0.5s ease both",
-                  animationDelay: "0ms",
+                  animationDelay: "240ms",
                 }}
               >
-                {banner.badge}
-              </span>
-              <h2
-                className="text-xl md:text-2xl font-black text-white leading-tight mb-1 truncate"
-                style={{
-                  fontFamily: "'Bricolage Grotesque', sans-serif",
-                  animation: "promoFadeIn 0.5s ease both",
-                  animationDelay: "80ms",
-                }}
-              >
-                {banner.title}
-              </h2>
-              <p
-                className="text-sm max-w-sm line-clamp-2"
-                style={{
-                  color: "rgba(255,255,255,0.7)",
-                  animation: "promoFadeIn 0.5s ease both",
-                  animationDelay: "160ms",
-                }}
-              >
-                {banner.subtitle}
-              </p>
-            </div>
-            <button
-              onClick={handleClick}
-              className="flex-shrink-0 flex items-center gap-2 px-6 py-3 rounded-xl font-bold text-sm transition-all hover:brightness-95 active:scale-95 self-start md:self-auto"
-              style={{
-                background: banner.accent,
-                color: "#1A1A2E",
-                animation: "promoFadeIn 0.5s ease both",
-                animationDelay: "240ms",
-              }}
-            >
-              {banner.ctaText}
-              <ChevronRight className="w-4 h-4" />
-            </button>
+                {banner.ctaText}
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            )}
           </div>
 
           {/* Arrows */}
