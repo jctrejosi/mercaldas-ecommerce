@@ -47,6 +47,7 @@ import Reports from "./views/Reports";
 import Customers from "./views/Customers";
 import Categories from "./views/Categories";
 import Brands from "./views/Brands";
+import ProductTypes from "./views/ProductTypes";
 import Suppliers from "./views/Suppliers";
 import Promotions from "./views/Promotions";
 import Marketplace from "./views/Marketplace";
@@ -60,6 +61,7 @@ export type ViewId =
   | "dashboard"
   | "products"
   | "categories"
+  | "productTypes"
   | "brands"
   | "suppliers"
   | "orders"
@@ -97,6 +99,7 @@ const NAV: NavSection[] = [
     items: [
       { id: "products", label: "Productos", icon: Package },
       { id: "categories", label: "Categorías", icon: FolderTree },
+      { id: "productTypes", label: "Tipos de Producto", icon: Layers },
       { id: "brands", label: "Marcas", icon: Tag },
       { id: "suppliers", label: "Proveedores", icon: Building2 },
     ],
@@ -143,6 +146,7 @@ const VIEW_PATHS: Record<string, ViewId> = {
   dashboard: "dashboard",
   products: "products",
   categories: "categories",
+  "product-types": "productTypes",
   brands: "brands",
   suppliers: "suppliers",
   orders: "orders",
@@ -163,6 +167,7 @@ const VIEW_SLUGS: Record<ViewId, string> = {
   dashboard: "dashboard",
   products: "products",
   categories: "categories",
+  productTypes: "product-types",
   brands: "brands",
   suppliers: "suppliers",
   orders: "orders",
@@ -210,6 +215,7 @@ const LABELS: Record<ViewId, string> = {
   dashboard: "Dashboard",
   products: "Productos",
   categories: "Categorías",
+  productTypes: "Tipos de Producto",
   brands: "Marcas",
   suppliers: "Proveedores",
   orders: "Pedidos",
@@ -667,6 +673,8 @@ function ViewRenderer({ view, user }: { view: ViewId; user: UserProfile | null }
       return <Customers />;
     case "categories":
       return <Categories />;
+    case "productTypes":
+      return <ProductTypes />;
     case "brands":
       return <Brands />;
     case "suppliers":

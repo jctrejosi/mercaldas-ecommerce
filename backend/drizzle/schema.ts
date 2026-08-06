@@ -3195,6 +3195,7 @@ export const productTypes = pgTable(
     code: varchar({ length: 10 }).notNull(),
     name: varchar({ length: 100 }).notNull(),
     description: text(),
+    imageMediaId: bigint('image_media_id', { mode: 'number' }),
     isActive: boolean('is_active').default(true).notNull(),
     createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' })
       .defaultNow()
@@ -3203,7 +3204,14 @@ export const productTypes = pgTable(
       .defaultNow()
       .notNull(),
   },
-  (table) => [unique('product_types_code_key').on(table.code)],
+  (table) => [
+    unique('product_types_code_key').on(table.code),
+    foreignKey({
+      columns: [table.imageMediaId],
+      foreignColumns: [media.id],
+      name: 'product_types_image_media_id_fkey',
+    }).onDelete('set null'),
+  ],
 );
 
 export const productTypeAssignments = pgTable(

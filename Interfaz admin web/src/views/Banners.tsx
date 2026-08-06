@@ -334,7 +334,7 @@ function CarouselManager({
         {/* Header with tabs */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 shrink-0">
           <div className="flex items-center gap-6">
-            <h2 className="font-bold text-gray-900">Carousel Hero — Landing Page</h2>
+            <h2 className="font-bold text-gray-900">Carousel Hero</h2>
             <div className="flex gap-1 bg-gray-100 rounded-lg p-1">
               <button
                 onClick={() => setActiveTab("contenido")}
@@ -733,7 +733,7 @@ function PromoManager({
       <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col mx-4 overflow-hidden">
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 shrink-0">
           <div className="flex items-center gap-6">
-            <h2 className="font-bold text-gray-900">Banners Promocionales — Landing Page</h2>
+            <h2 className="font-bold text-gray-900">Banners Promocionales</h2>
             <div className="flex gap-1 bg-gray-100 rounded-lg p-1">
               <button onClick={() => setActiveTab("contenido")} className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-md transition-all ${activeTab === "contenido" ? "bg-white text-gray-800 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>
                 <LayoutTemplate size={13} /> Contenido
@@ -848,39 +848,51 @@ const BENEFIT_DEFAULTS = [
   { icon: "clock", text: "Entrega en 2 horas" },
 ];
 
-function BenefitsEditor({
+type BenefitDraft = { id: number; icon: string; text: string };
+
+function BenefitsInlineEditor({
   benefits,
-  onClose,
   onSaved,
 }: {
   benefits: Banner[];
-  onClose: () => void;
   onSaved: () => void;
 }) {
-  const [items, setItems] = useState(() => {
+  const [items, setItems] = useState<BenefitDraft[]>(() => {
     if (benefits.length > 0) {
-      return benefits
+      return [...benefits]
         .sort((a, b) => a.position - b.position)
         .map((b) => ({ id: b.id, icon: b.subtitle || "zap", text: b.title || "" }));
     }
     return BENEFIT_DEFAULTS.map((d, i) => ({ id: -(i + 1), icon: d.icon, text: d.text }));
   });
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
 
   const addItem = () => {
-    setItems([...items, { id: -Date.now(), icon: "zap", text: "" }]);
+    setItems((prev) => [...prev, { id: -Date.now(), icon: "zap", text: "" }]);
   };
 
   const removeItem = (idx: number) => {
-    setItems(items.filter((_, i) => i !== idx));
+    setItems((prev) => prev.filter((_, i) => i !== idx));
   };
 
   const updateItem = (idx: number, field: "icon" | "text", value: string) => {
-    setItems(items.map((item, i) => (i === idx ? { ...item, [field]: value } : item)));
+    setItems((prev) => prev.map((item, i) => (i === idx ? { ...item, [field]: value } : item)));
+  };
+
+  const resetItems = () => {
+    setItems(
+      benefits.length > 0
+        ? [...benefits]
+            .sort((a, b) => a.position - b.position)
+            .map((b) => ({ id: b.id, icon: b.subtitle || "zap", text: b.title || "" }))
+        : BENEFIT_DEFAULTS.map((d, i) => ({ id: -(i + 1), icon: d.icon, text: d.text })),
+    );
   };
 
   const handleSave = async () => {
     setSaving(true);
+    setError("");
     try {
       // Delete existing benefits
       for (const b of benefits) {
@@ -899,82 +911,80 @@ function BenefitsEditor({
         });
       }
       onSaved();
-    } catch (e) { console.error(e); }
-    finally { setSaving(false); }
+    } catch (e: any) {
+      setError(e.message || "Error al guardar");
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
-      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[85vh] flex flex-col mx-4 overflow-hidden">
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 shrink-0">
-          <div>
-            <h2 className="font-bold text-gray-900">Barra de Beneficios</h2>
-            <p className="text-xs text-gray-400 mt-0.5">Landing Page — textos promocionales</p>
-          </div>
-          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-500"><X size={16} /></button>
-        </div>
-
-        {/* Preview */}
-        <div className="mx-6 mt-5 rounded-xl p-4" style={{ background: "#FFF200" }}>
-          <div className="flex flex-wrap items-center justify-center gap-6 text-sm font-bold" style={{ color: "#1A1A2E" }}>
-            {items.map((item, i) => {
-              const Icon = BENEFIT_ICONS[item.icon] || Zap;
-              return (
-                <span key={i} className="flex items-center gap-2">
-                  <Icon className="w-4 h-4" /> {item.text || "(vacío)"}
-                </span>
-              );
-            })}
-            {items.length === 0 && <span className="opacity-50">Sin beneficios configurados</span>}
-          </div>
-        </div>
-
-        {/* Items */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-3">
-          {items.map((item, i) => (
-            <div key={item.id} className="flex items-center gap-3 bg-gray-50 rounded-xl p-3">
-              <select
-                value={item.icon}
-                onChange={(e) => updateItem(i, "icon", e.target.value)}
-                className="w-24 px-2.5 py-2 text-xs border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-amber-300"
+    <div>
+      {/* Barra: mismo render que el PromoBanner de la tienda, pero editable */}
+      <div className="rounded-xl overflow-hidden" style={{ background: "#FFF200" }}>
+        <div
+          className="px-4 py-3 flex flex-wrap items-center justify-center gap-x-4 md:gap-x-8 gap-y-2 text-xs md:text-sm font-bold"
+          style={{ color: "#1A1A2E" }}
+        >
+          {items.map((item, i) => {
+            const Icon = BENEFIT_ICONS[item.icon] || Zap;
+            return (
+              <span
+                key={item.id}
+                className="flex items-center gap-1.5 rounded-lg px-1.5 py-1 hover:bg-white/40 transition-colors group/item"
               >
-                <option value="truck">🚚 Envío</option>
-                <option value="shield">🛡 Seguro</option>
-                <option value="clock">⏱ Rapidez</option>
-                <option value="zap">⚡ Promo</option>
-              </select>
-              <input
-                value={item.text}
-                onChange={(e) => updateItem(i, "text", e.target.value)}
-                placeholder="Texto del beneficio"
-                className="flex-1 px-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-300"
-              />
-              <button
-                onClick={() => removeItem(i)}
-                className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500 shrink-0"
-              >
-                <Trash2 size={13} />
-              </button>
-            </div>
-          ))}
-          <button
-            onClick={addItem}
-            className="w-full flex items-center justify-center gap-1.5 py-2.5 text-xs font-semibold text-gray-500 border border-dashed border-gray-300 rounded-xl hover:border-amber-300 hover:text-amber-600 transition-colors"
-          >
-            <Plus size={13} /> Añadir beneficio
-          </button>
+                <select
+                  value={item.icon}
+                  onChange={(e) => updateItem(i, "icon", e.target.value)}
+                  title="Cambiar icono"
+                  className="w-6 bg-transparent text-xs cursor-pointer outline-none"
+                >
+                  <option value="truck">🚚</option>
+                  <option value="shield">🛡️</option>
+                  <option value="clock">⏱️</option>
+                  <option value="zap">⚡</option>
+                </select>
+                <input
+                  value={item.text}
+                  onChange={(e) => updateItem(i, "text", e.target.value)}
+                  placeholder="Texto del beneficio"
+                  className="w-40 md:w-52 bg-transparent text-xs md:text-sm font-bold outline-none border-b border-dashed border-black/20 focus:border-black/50 placeholder:text-black/40"
+                />
+                <button
+                  onClick={() => removeItem(i)}
+                  title="Quitar beneficio"
+                  className="w-5 h-5 flex items-center justify-center rounded-full text-black/40 hover:text-red-500 hover:bg-white/60 opacity-0 group-hover/item:opacity-100 transition-all shrink-0"
+                >
+                  <X size={11} />
+                </button>
+              </span>
+            );
+          })}
+          {items.length === 0 && (
+            <span className="text-black/50 font-normal">Sin beneficios configurados</span>
+          )}
         </div>
+      </div>
 
-        {/* Footer */}
-        <div className="flex items-center justify-between px-6 py-4 border-t border-gray-100 bg-gray-50 shrink-0">
-          <button onClick={onClose} className="px-4 py-2 text-sm text-gray-600">Cancelar</button>
-          <button onClick={handleSave} disabled={saving} className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-amber-900 bg-amber-400 hover:bg-amber-500 disabled:opacity-50 rounded-xl">
-            {saving && <Loader2 size={14} className="animate-spin" />}
-            Guardar cambios
-          </button>
-        </div>
+      {/* Acciones */}
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <button
+          onClick={addItem}
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-gray-500 border border-dashed border-gray-300 rounded-lg hover:border-amber-300 hover:text-amber-600 transition-colors"
+        >
+          <Plus size={13} /> Añadir beneficio
+        </button>
+        <button
+          onClick={handleSave}
+          disabled={saving}
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-amber-900 bg-amber-400 hover:bg-amber-500 rounded-lg transition-colors disabled:opacity-50"
+        >
+          {saving && <Loader2 size={12} className="animate-spin" />} Guardar cambios
+        </button>
+        <button onClick={resetItems} disabled={saving} className="px-3 py-1.5 text-xs text-gray-400 hover:text-gray-600">
+          Descartar
+        </button>
+        {error && <span className="text-xs text-red-500">{error}</span>}
       </div>
     </div>
   );
@@ -994,6 +1004,10 @@ function ProductTypeEditor({
 }) {
   const [items, setItems] = useState(productTypes);
   const [saving, setSaving] = useState(false);
+  const [search, setSearch] = useState("");
+  const [sortKey, setSortKey] = useState<"name" | "count">("name");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+  const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive">("all");
   const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:3000";
 
   const toggleSelected = (code: string) => {
@@ -1030,6 +1044,22 @@ function ProductTypeEditor({
   const selectedCount = items.filter((t) => t.selected).length;
   const activeCount = items.filter((t) => t.isActive).length;
 
+  const q = search.trim().toLowerCase();
+  const filtered = items
+    .filter((t) => {
+      const matchesSearch = !q || t.name.toLowerCase().includes(q) || t.code.toLowerCase().includes(q);
+      const matchesStatus =
+        statusFilter === "all" ||
+        (statusFilter === "active" ? t.isActive : !t.isActive);
+      return matchesSearch && matchesStatus;
+    })
+    .sort((a, b) => {
+      if (sortKey === "count") {
+        return sortDir === "desc" ? b.count - a.count : a.count - b.count;
+      }
+      return a.name.localeCompare(b.name, "es");
+    });
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/50" onClick={onClose} />
@@ -1043,8 +1073,43 @@ function ProductTypeEditor({
           </div>
           <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-500"><X size={16} /></button>
         </div>
+        <div className="px-6 pt-4 pb-1 space-y-3 shrink-0">
+          <div className="relative">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Buscar tipo de producto..."
+              className="w-full pl-9 pr-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-300"
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <select
+              value={`${sortKey}-${sortDir}`}
+              onChange={(e) => {
+                const [k, d] = e.target.value.split("-");
+                setSortKey(k as "name" | "count");
+                setSortDir(d as "asc" | "desc");
+              }}
+              className="flex-1 px-3 py-2 text-xs border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-amber-300"
+            >
+              <option value="name-asc">Orden: Nombre (A–Z)</option>
+              <option value="count-desc">Más productos primero</option>
+              <option value="count-asc">Menos productos primero</option>
+            </select>
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value as "all" | "active" | "inactive")}
+              className="flex-1 px-3 py-2 text-xs border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-amber-300"
+            >
+              <option value="all">Todos</option>
+              <option value="active">Solo activos</option>
+              <option value="inactive">Solo inactivos</option>
+            </select>
+          </div>
+        </div>
         <div className="flex-1 overflow-y-auto p-6 space-y-1">
-          {items.map((t) => (
+          {filtered.map((t) => (
             <div key={t.code} className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-gray-50 transition-colors">
               <label className="flex items-center gap-3 flex-1 cursor-pointer">
                 <input type="checkbox" checked={t.selected} onChange={() => toggleSelected(t.code)} className="w-4 h-4 rounded border-gray-300 text-amber-500 focus:ring-amber-300" />
@@ -1060,6 +1125,9 @@ function ProductTypeEditor({
               </button>
             </div>
           ))}
+          {filtered.length === 0 && (
+            <p className="text-center text-xs text-gray-400 py-8">Sin resultados</p>
+          )}
         </div>
         <div className="flex items-center justify-between px-6 py-4 border-t border-gray-100 bg-gray-50 shrink-0">
           <button onClick={onClose} className="px-4 py-2 text-sm text-gray-600">Cancelar</button>
@@ -1241,7 +1309,7 @@ function FeaturedProductsManager({
       <div className="w-full max-w-5xl bg-white flex flex-col shadow-2xl">
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
           <div>
-            <h2 className="font-bold text-gray-900">Productos Destacados — Landing Page</h2>
+            <h2 className="font-bold text-gray-900">Productos Destacados</h2>
             <p className="text-xs text-gray-400 mt-0.5">Pestañas y productos que aparecen en la sección de destacados</p>
           </div>
           <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-500"><X size={16} /></button>
@@ -1434,7 +1502,6 @@ export default function Banners() {
   const [loading, setLoading] = useState(true);
   const [managerOpen, setManagerOpen] = useState(false);
   const [promoManagerOpen, setPromoManagerOpen] = useState(false);
-  const [benefitsOpen, setBenefitsOpen] = useState(false);
   const [prodTypesOpen, setProdTypesOpen] = useState(false);
   const [featuredOpen, setFeaturedOpen] = useState(false);
   const [landingTypes, setLandingTypes] = useState<LandingProductType[]>([]);
@@ -1489,7 +1556,7 @@ export default function Banners() {
                   <LayoutTemplate size={18} className="text-amber-600" />
                 </div>
                 <div>
-                  <h3 className="font-semibold text-gray-900 text-sm">Carousel Hero — Landing Page</h3>
+                  <h3 className="font-semibold text-gray-900 text-sm">Carousel Hero</h3>
                   <p className="text-xs text-gray-500">Sección principal del sitio · 1920×600px</p>
                 </div>
               </div>
@@ -1521,7 +1588,7 @@ export default function Banners() {
                   <Layers size={18} className="text-purple-600" />
                 </div>
                 <div>
-                  <h3 className="font-semibold text-gray-900 text-sm">Tipos de Producto — Home</h3>
+                  <h3 className="font-semibold text-gray-900 text-sm">Tipos de Producto</h3>
                   <p className="text-xs text-gray-500">Selecciona cuáles mostrar en la landing</p>
                 </div>
               </div>
@@ -1532,37 +1599,21 @@ export default function Banners() {
             </div>
 
             {/* Benefits card */}
-            <div
-              onClick={() => setBenefitsOpen(true)}
-              className="bg-white rounded-2xl border border-gray-100 p-5 cursor-pointer hover:shadow-md hover:border-amber-200 transition-all group"
-            >
+            <div className="bg-white rounded-2xl border border-gray-100 p-5">
               <div className="flex items-center gap-3 mb-3">
-                <div className="w-10 h-10 rounded-xl bg-green-100 flex items-center justify-center group-hover:bg-green-200 transition-colors">
+                <div className="w-10 h-10 rounded-xl bg-green-100 flex items-center justify-center">
                   <Zap size={18} className="text-green-600" />
                 </div>
                 <div>
-                  <h3 className="font-semibold text-gray-900 text-sm">Barra de Beneficios — Landing Page</h3>
+                  <h3 className="font-semibold text-gray-900 text-sm">Barra de Beneficios</h3>
                   <p className="text-xs text-gray-500">Textos promocionales debajo del carousel de tipos</p>
                 </div>
               </div>
-              <div className="flex gap-6 text-sm">
+              <div className="flex gap-6 text-sm mb-3">
                 <div><span className="font-bold text-gray-900">{benefits.length}</span> <span className="text-gray-400 text-xs">ítems</span></div>
                 <div><span className="font-bold text-green-600">{benefitsActive}</span> <span className="text-gray-400 text-xs">activos</span></div>
               </div>
-              {benefits.length > 0 && (
-                <div className="mt-3 rounded-lg p-3" style={{ background: "#FFF200" }}>
-                  <div className="flex flex-wrap items-center gap-4 text-xs font-bold" style={{ color: "#1A1A2E" }}>
-                    {benefits.sort((a, b) => a.position - b.position).map((b) => {
-                      const Icon = BENEFIT_ICONS[b.subtitle || "zap"] || Zap;
-                      return (
-                        <span key={b.id} className="flex items-center gap-1.5">
-                          <Icon size={13} /> {b.title}
-                        </span>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
+              <BenefitsInlineEditor benefits={benefits} onSaved={fetchData} />
             </div>
 
             {/* Promo/Advertising card */}
@@ -1575,7 +1626,7 @@ export default function Banners() {
                   <Megaphone size={18} className="text-blue-600" />
                 </div>
                 <div>
-                  <h3 className="font-semibold text-gray-900 text-sm">Banners Promocionales — Landing Page</h3>
+                  <h3 className="font-semibold text-gray-900 text-sm">Banners Promocionales</h3>
                   <p className="text-xs text-gray-500">Sección debajo de productos destacados</p>
                 </div>
               </div>
@@ -1605,7 +1656,7 @@ export default function Banners() {
                   <Package size={18} className="text-indigo-600" />
                 </div>
                 <div>
-                  <h3 className="font-semibold text-gray-900 text-sm">Productos Destacados — Landing Page</h3>
+                  <h3 className="font-semibold text-gray-900 text-sm">Productos Destacados</h3>
                   <p className="text-xs text-gray-500">Pestañas (Más vendidos, Promociones...) y productos asignados</p>
                 </div>
               </div>
@@ -1633,15 +1684,6 @@ export default function Banners() {
           filters={filters}
           onClose={() => { setPromoManagerOpen(false); fetchData(); }}
           onSaved={fetchData}
-        />
-      )}
-
-      {/* Benefits editor */}
-      {benefitsOpen && (
-        <BenefitsEditor
-          benefits={benefits}
-          onClose={() => { setBenefitsOpen(false); fetchData(); }}
-          onSaved={() => { setBenefitsOpen(false); fetchData(); }}
         />
       )}
 

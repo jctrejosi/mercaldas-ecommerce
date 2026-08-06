@@ -506,6 +506,200 @@ export class CatalogService {
       );
   }
 
+  // ── Admin Product Type CRUD ──
+
+  async getAllProductTypesAdmin() {
+    const rows = await this.drizzleService.db
+      .select({
+        id: productTypes.id,
+        code: productTypes.code,
+        name: productTypes.name,
+        description: productTypes.description,
+        isActive: productTypes.isActive,
+        imagePath: media.path,
+      })
+      .from(productTypes)
+      .leftJoin(media, eq(productTypes.imageMediaId, media.id))
+      .orderBy(asc(productTypes.name));
+
+    const counts = await this.drizzleService.db
+      .select({
+        productTypeId: productTypeAssignments.productTypeId,
+        count: sql<number>`count(DISTINCT ${products.id})`,
+      })
+      .from(productTypeAssignments)
+      .innerJoin(products, eq(products.id, productTypeAssignments.productId))
+      .where(isNull(products.deletedAt))
+      .groupBy(productTypeAssignments.productTypeId);
+
+    const countMap = new Map<number, number>();
+    for (const c of counts) {
+      countMap.set(Number(c.productTypeId), Number(c.count));
+    }
+
+    return rows.map((row) => ({
+      id: Number(row.id),
+      code: row.code,
+      name: row.name,
+      description: row.description,
+      isActive: row.isActive,
+      imagePath: row.imagePath,
+      productCount: countMap.get(Number(row.id)) ?? 0,
+    }));
+  }
+
+  async createProductType(data: {
+    name: string;
+    code?: string;
+    description?: string;
+  }) {
+    let code = (data.code ?? data.name)
+      .trim()
+      .toUpperCase()
+      .replace(/\s+/g, '_')
+      .substring(0, 10);
+
+    const existing = await this.drizzleService.db
+      .select({ id: productTypes.id })
+      .from(productTypes)
+      .where(eq(productTypes.code, code));
+    if (existing.length > 0) {
+      code = `${code}_${Date.now().toString(36).toUpperCase().substring(0, 4)}`.substring(
+        0,
+        10,
+      );
+    }
+
+    const [inserted] = await this.drizzleService.db
+      .insert(productTypes)
+      .values({
+        name: data.name,
+        code,
+        description: data.description ?? null,
+        isActive: true,
+      })
+      .returning({ id: productTypes.id });
+
+    return { id: Number(inserted.id), code };
+  }
+
+  async updateProductType(
+    id: number,
+    data: {
+      name?: string;
+      code?: string;
+      description?: string | null;
+      isActive?: boolean;
+      imageUrl?: string;
+    },
+  ) {
+    const updates: Record<string, any> = {};
+
+    if (data.name !== undefined) updates.name = data.name;
+    if (data.code !== undefined) updates.code = data.code;
+    if (data.description !== undefined) updates.description = data.description;
+    if (data.isActive !== undefined) updates.isActive = data.isActive;
+
+    if (data.imageUrl) {
+      const [inserted] = await this.drizzleService.db
+        .insert(media)
+        .values({
+          path: data.imageUrl,
+          fileName:
+            data.imageUrl.split('/').pop()?.substring(0, 50) ??
+            'product_type_image',
+          mimeType: 'image/jpeg',
+          mediaType: 'image',
+          provider: 'cloudinary',
+          sizeBytes: 0,
+          checksum: `type_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+          status: 'active',
+          isPublic: true,
+        })
+        .returning({ id: media.id });
+      updates.imageMediaId = Number(inserted.id);
+    }
+
+    if (Object.keys(updates).length === 0) return { id };
+
+    const [updated] = await this.drizzleService.db
+      .update(productTypes)
+      .set(updates)
+      .where(eq(productTypes.id, BigInt(id)))
+      .returning({ id: productTypes.id });
+
+    if (!updated) throw new NotFoundException('Tipo de producto no encontrado');
+    return { id };
+  }
+
+  async deleteProductType(id: number) {
+    const [deleted] = await this.drizzleService.db
+      .delete(productTypes)
+      .where(eq(productTypes.id, BigInt(id)))
+      .returning({ id: productTypes.id });
+
+    if (!deleted) throw new NotFoundException('Tipo de producto no encontrado');
+  }
+
+  // ── Product Type-Product relations ──
+
+  async getProductTypeProducts(productTypeId: number) {
+    const rows = await this.drizzleService.db
+      .select({
+        id: products.id,
+        name: products.name,
+        slug: products.slug,
+        price: productVariants.currentPrice,
+        image: media.path,
+        productTypeCode: productTypes.code,
+      })
+      .from(productTypeAssignments)
+      .innerJoin(products, eq(products.id, productTypeAssignments.productId))
+      .innerJoin(productVariants, eq(productVariants.productId, products.id))
+      .leftJoin(
+        productImages,
+        and(
+          eq(productImages.productId, products.id),
+          eq(productImages.isCover, true),
+        ),
+      )
+      .leftJoin(media, eq(media.id, productImages.mediaId))
+      .where(
+        and(
+          eq(productTypeAssignments.productTypeId, productTypeId),
+          isNull(products.deletedAt),
+        ),
+      )
+      .orderBy(asc(products.name));
+
+    return rows.map((row) => ({
+      id: Number(row.id),
+      name: row.name,
+      slug: row.slug,
+      price: Number(row.price ?? 0),
+      image: row.image,
+      productTypeCode: row.productTypeCode,
+    }));
+  }
+
+  async addProductToType(productTypeId: number, productId: number) {
+    await this.drizzleService.db
+      .insert(productTypeAssignments)
+      .values({ productTypeId, productId })
+      .onConflictDoNothing();
+  }
+
+  async removeProductFromType(productTypeId: number, productId: number) {
+    await this.drizzleService.db
+      .delete(productTypeAssignments)
+      .where(
+        and(
+          eq(productTypeAssignments.productTypeId, productTypeId),
+          eq(productTypeAssignments.productId, productId),
+        ),
+      );
+  }
+
   async replaceProductCategory(productId: number, newCategoryId: number) {
     // Remove all existing category assignments for this product
     await this.drizzleService.db

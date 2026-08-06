@@ -90,6 +90,89 @@ export class AdminCatalogController {
     return { success: true };
   }
 
+  // ── Product Types ──
+
+  @Public()
+  @Get('product-types')
+  @ApiOperation({ summary: 'Obtener todos los tipos de producto (admin)' })
+  async getAllProductTypes() {
+    return this.catalogService.getAllProductTypesAdmin();
+  }
+
+  @Public()
+  @Post('product-types')
+  @ApiOperation({ summary: 'Crear tipo de producto' })
+  async createProductType(
+    @Body()
+    body: {
+      name: string;
+      code?: string;
+      description?: string;
+    },
+  ) {
+    return this.catalogService.createProductType(body);
+  }
+
+  @Public()
+  @Post('product-types/:id')
+  @ApiOperation({ summary: 'Actualizar tipo de producto' })
+  async updateProductType(
+    @Param('id') id: string,
+    @Body()
+    body: {
+      name?: string;
+      code?: string;
+      description?: string | null;
+      isActive?: boolean;
+      imageUrl?: string;
+    },
+  ) {
+    return this.catalogService.updateProductType(Number(id), body);
+  }
+
+  @Public()
+  @Delete('product-types/:id')
+  @ApiOperation({ summary: 'Eliminar tipo de producto' })
+  async deleteProductType(@Param('id') id: string) {
+    await this.catalogService.deleteProductType(Number(id));
+    return { success: true };
+  }
+
+  // ── Product Type Products ──
+
+  @Public()
+  @Get('product-types/:id/products')
+  @ApiOperation({ summary: 'Obtener productos de un tipo de producto' })
+  async getProductTypeProducts(@Param('id') id: string) {
+    return this.catalogService.getProductTypeProducts(Number(id));
+  }
+
+  @Public()
+  @Post('product-types/:id/products')
+  @ApiOperation({ summary: 'Asignar producto a tipo de producto' })
+  async addProductToType(
+    @Param('id') id: string,
+    @Body() body: { productId: number },
+  ) {
+    await this.catalogService.addProductToType(Number(id), body.productId);
+    return { success: true };
+  }
+
+  @Public()
+  @Delete('product-types/:id/products/:productId')
+  @ApiOperation({ summary: 'Quitar producto de tipo de producto' })
+  async removeProductFromType(
+    @Param('id') id: string,
+    @Param('productId') productId: string,
+  ) {
+    await this.catalogService.removeProductFromType(
+      Number(id),
+      Number(productId),
+    );
+    return { success: true };
+  }
+
+  // ── Products ──
   @Public()
   @Post('products/:productId/replace-category')
   @ApiOperation({ summary: 'Reemplazar categoría de un producto' })

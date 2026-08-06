@@ -1,7 +1,12 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { eq } from 'drizzle-orm';
+import { and, asc, eq, isNull, sql } from 'drizzle-orm';
 import { DrizzleService } from '../../database/drizzle.service';
-import { settings, productTypes } from '../../../drizzle/schema';
+import {
+  products,
+  productTypeAssignments,
+  productTypes,
+  settings,
+} from '../../../drizzle/schema';
 
 @Injectable()
 export class LandingService {
@@ -11,12 +16,42 @@ export class LandingService {
   private get db() { return this.drizzle.db; }
 
   async getProductTypes() {
-    const allTypes = await this.db.select().from(productTypes).orderBy(productTypes.name as any);
+    const rows = await this.db
+      .select({
+        id: productTypes.id,
+        code: productTypes.code,
+        name: productTypes.name,
+        isActive: productTypes.isActive,
+        count: sql<number>`count(DISTINCT ${products.id})`,
+      })
+      .from(productTypes)
+      .leftJoin(
+        productTypeAssignments,
+        eq(productTypeAssignments.productTypeId, productTypes.id),
+      )
+      .leftJoin(
+        products,
+        and(
+          eq(products.id, productTypeAssignments.productId),
+          isNull(products.deletedAt),
+        ),
+      )
+      .groupBy(
+        productTypes.id,
+        productTypes.code,
+        productTypes.name,
+        productTypes.isActive,
+      )
+      .orderBy(asc(productTypes.name));
+
     const selected = await this.getSelectedCodes();
-    return allTypes.map((t: any) => ({
-      id: Number(t.id), code: t.code, name: t.name, count: t.productCount ?? 0,
-      isActive: t.isActive,
-      selected: selected.includes(t.code),
+    return rows.map((row) => ({
+      id: Number(row.id),
+      code: row.code,
+      name: row.name,
+      count: Number(row.count ?? 0),
+      isActive: row.isActive,
+      selected: selected.includes(row.code),
     }));
   }
 
@@ -50,26 +85,43 @@ export class LandingService {
 
   async getFeaturedProductTypes() {
     const selected = await this.getSelectedCodes();
-    if (selected.length === 0) {
-      return this.db.select().from(productTypes)
-        .where(eq(productTypes.isActive, true) as any)
-        .orderBy(productTypes.name as any)
-        .then((rows: any[]) =>
-          rows.map((t) => ({ id: Number(t.id), code: t.code, name: t.name, count: t.productCount ?? 0 }))
-        );
-    }
-    const types: any[] = [];
-    for (const code of selected) {
-      const rows = await this.db.select().from(productTypes)
-        .where(eq(productTypes.code, code) as any)
-        .limit(1);
-      if (rows.length) {
-        const t = rows[0] as any;
-        if (t.isActive) {
-          types.push({ id: Number(t.id), code: t.code, name: t.name, count: t.productCount ?? 0 });
-        }
-      }
-    }
-    return types;
+
+    const all = await this.db
+      .select({
+        id: productTypes.id,
+        code: productTypes.code,
+        name: productTypes.name,
+        count: sql<number>`count(DISTINCT ${products.id})`,
+      })
+      .from(productTypes)
+      .leftJoin(
+        productTypeAssignments,
+        eq(productTypeAssignments.productTypeId, productTypes.id),
+      )
+      .leftJoin(
+        products,
+        and(
+          eq(products.id, productTypeAssignments.productId),
+          isNull(products.deletedAt),
+        ),
+      )
+      .where(eq(productTypes.isActive, true))
+      .groupBy(productTypes.id, productTypes.code, productTypes.name)
+      .orderBy(asc(productTypes.name));
+
+    const byCode = new Map(all.map((r) => [r.code, r]));
+    const ordered =
+      selected.length > 0
+        ? selected
+            .map((code) => byCode.get(code))
+            .filter((r): r is NonNullable<typeof r> => !!r)
+        : all;
+
+    return ordered.map((t) => ({
+      id: Number(t.id),
+      code: t.code,
+      name: t.name,
+      count: Number(t.count ?? 0),
+    }));
   }
 }
