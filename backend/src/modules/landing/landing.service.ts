@@ -326,33 +326,38 @@ export class LandingService {
   async getPublicBrands() {
     const selected = await this.getSelectedBrandCodes();
 
-    const selectShape = {
-      id: brands.id,
-      code: brands.code,
-      name: brands.name,
-      slug: brands.slug,
-      description: brands.description,
-      image: media.path,
-      website: brands.website,
-    };
-
-    const base = this.db
-      .select(selectShape)
-      .from(brands)
-      .leftJoin(media, eq(brands.logoMediaId, media.id))
-      .where(and(eq(brands.isActive, true), isNull(brands.deletedAt)))
-      .orderBy(asc(brands.name));
-
     if (selected.length > 0) {
-      const all = await base;
+      const all = await this.db
+        .select({
+          id: brands.id,
+          code: brands.code,
+          name: brands.name,
+          slug: brands.slug,
+          description: brands.description,
+          image: media.path,
+          website: brands.website,
+        })
+        .from(brands)
+        .leftJoin(media, eq(brands.logoMediaId, media.id))
+        .where(and(eq(brands.isActive, true), isNull(brands.deletedAt)))
+        .orderBy(asc(brands.name));
       const byCode = new Map(all.map((r) => [r.code, r]));
       return selected
         .map((code) => byCode.get(code))
         .filter((r): r is NonNullable<typeof r> => !!r);
     }
 
+    // Fallback: marcas destacadas (comportamiento original)
     return this.db
-      .select(selectShape)
+      .select({
+        id: brands.id,
+        code: brands.code,
+        name: brands.name,
+        slug: brands.slug,
+        description: brands.description,
+        image: media.path,
+        website: brands.website,
+      })
       .from(brands)
       .leftJoin(media, eq(brands.logoMediaId, media.id))
       .where(
@@ -439,5 +444,58 @@ export class LandingService {
       } as any);
     }
     return this.getGeneralLogo();
+  }
+
+  // ── Footer ──
+
+  async getFooterConfig() {
+    const row = await this.db
+      .select()
+      .from(settings)
+      .where(eq(settings.key, 'footer_config'))
+      .limit(1);
+    const config = row.length ? (row[0].value as any) : null;
+    return config ?? {};
+  }
+
+  async updateFooterConfig(body: any) {
+    const row = await this.db
+      .select()
+      .from(settings)
+      .where(eq(settings.key, 'footer_config'))
+      .limit(1);
+    if (row.length) {
+      await this.db
+        .update(settings)
+        .set({ value: body as any })
+        .where(eq(settings.key, 'footer_config'));
+    } else {
+      await this.db.insert(settings).values({
+        key: 'footer_config',
+        value: body as any,
+        dataType: 'json',
+        module: 'landing',
+        description: 'Configuración del footer',
+        isPublic: true,
+      } as any);
+    }
+    return this.getFooterConfig();
+  }
+
+  async getPublicFooterConfig() {
+    const config = await this.getFooterConfig();
+    // Resolver categorías del footer si tiene categoryCodes
+    const codes: string[] = Array.isArray(config?.categoryCodes)
+      ? config.categoryCodes
+      : [];
+    let resolvedCategories: { code: string; name: string }[] = [];
+    if (codes.length > 0) {
+      const rows = await this.db
+        .select({ code: categories.code, name: categories.name })
+        .from(categories)
+        .where(inArray(categories.code, codes));
+      resolvedCategories = rows.map((r) => ({ code: r.code ?? '', name: r.name }));
+    }
+    return { ...config, resolvedCategories };
   }
 }

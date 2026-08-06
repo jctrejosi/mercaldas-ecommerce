@@ -1,4 +1,9 @@
-export function Logo({ dark = true }: { dark?: boolean }) {
+export function Logo({ dark = true, logoSrc }: { dark?: boolean; logoSrc?: string | null }) {
+  if (logoSrc) {
+    return (
+      <img src={logoSrc} alt="MercAldas" className="h-8 w-auto object-contain" />
+    );
+  }
   return (
     <div className="flex items-center gap-1 select-none">
       <div

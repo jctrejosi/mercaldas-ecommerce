@@ -2166,6 +2166,196 @@ function BenefitsLandingManager({ onClose }: { onClose: () => void }) {
   );
 }
 
+// ── Footer Manager ──
+interface FooterSocial { platform: string; url: string }
+interface FooterHelpLink { label: string; url: string }
+interface FooterContact { address: string; phone: string; whatsapp: string; email: string }
+interface FooterCategoryOption { code: string; name: string }
+
+function FooterLandingManager({ onClose }: { onClose: () => void }) {
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [description, setDescription] = useState("");
+  const [socialLinks, setSocialLinks] = useState<FooterSocial[]>([]);
+  const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
+  const [allCategories, setAllCategories] = useState<FooterCategoryOption[]>([]);
+  const [helpLinks, setHelpLinks] = useState<FooterHelpLink[]>([]);
+  const [contact, setContact] = useState<FooterContact>({ address: "", phone: "", whatsapp: "", email: "" });
+  const [hours, setHours] = useState("");
+  const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:3000";
+
+  const load = useCallback(async () => {
+    try {
+      const [fRes, catRes] = await Promise.all([
+        fetch(`${API_BASE}/admin/landing/footer`, { credentials: "include" }),
+        fetch(`${API_BASE}/admin/catalog/categories`, { credentials: "include" }),
+      ]);
+      if (fRes.ok) {
+        const fc = await fRes.json();
+        setDescription(fc.description ?? "");
+        setSocialLinks(Array.isArray(fc.socialLinks) ? fc.socialLinks : []);
+        setSelectedCategories(Array.isArray(fc.categoryCodes) ? fc.categoryCodes : []);
+        setHelpLinks(Array.isArray(fc.helpLinks) ? fc.helpLinks : []);
+        setContact(fc.contact ?? { address: "", phone: "", whatsapp: "", email: "" });
+        setHours(fc.hours ?? "");
+      }
+      if (catRes.ok) {
+        const cats = await catRes.json();
+        const list: FooterCategoryOption[] = [];
+        (Array.isArray(cats) ? cats : []).forEach((c: any) => {
+          if (c.code) list.push({ code: c.code, name: c.name ?? c.code });
+          if (c.children && Array.isArray(c.children)) c.children.forEach((ch: any) => { if (ch.code) list.push({ code: ch.code, name: ch.name ?? ch.code }); });
+        });
+        setAllCategories(list);
+      }
+    } catch (e) { console.error(e); }
+    finally { setLoading(false); }
+  }, [API_BASE]);
+
+  useEffect(() => { void load(); }, [load]);
+
+  const addSocial = () => setSocialLinks((p) => [...p, { platform: "instagram", url: "" }]);
+  const updateSocial = (i: number, f: keyof FooterSocial, v: string) => setSocialLinks((p) => p.map((x, idx) => idx === i ? { ...x, [f]: v } : x));
+  const removeSocial = (i: number) => setSocialLinks((p) => p.filter((_, idx) => idx !== i));
+
+  const addHelp = () => setHelpLinks((p) => [...p, { label: "", url: "" }]);
+  const updateHelp = (i: number, f: keyof FooterHelpLink, v: string) => setHelpLinks((p) => p.map((x, idx) => idx === i ? { ...x, [f]: v } : x));
+  const removeHelp = (i: number) => setHelpLinks((p) => p.filter((_, idx) => idx !== i));
+
+  const toggleCategory = (code: string) => {
+    setSelectedCategories((p) => (p.includes(code) ? p.filter((c) => c !== code) : [...p, code]));
+  };
+
+  const handleSave = async () => {
+    setSaving(true); setError("");
+    try {
+      const res = await fetch(`${API_BASE}/admin/landing/footer`, {
+        method: "PUT", credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          description,
+          socialLinks: socialLinks.filter((s) => s.platform && s.url),
+          categoryCodes: selectedCategories,
+          helpLinks: helpLinks.filter((h) => h.label),
+          contact,
+          hours,
+        }),
+      });
+      if (!res.ok) throw new Error("Error al guardar");
+      onClose();
+    } catch (e: any) { setError(e.message || "Error al guardar"); }
+    finally { setSaving(false); }
+  };
+
+  const inputCls = "w-full text-xs border border-gray-200 rounded-lg px-2.5 py-2 focus:outline-none focus:ring-2 focus:ring-amber-300";
+  const labelCls = "text-[11px] font-semibold text-gray-500 uppercase tracking-wider block mb-1";
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col mx-4 overflow-hidden">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 shrink-0">
+          <div><h2 className="font-bold text-gray-900">Footer</h2><p className="text-xs text-gray-400 mt-0.5">Configuración del pie de página</p></div>
+          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-500"><X size={16} /></button>
+        </div>
+        {loading ? (
+          <div className="flex items-center justify-center py-16"><div className="w-6 h-6 border-2 border-gray-300 border-t-amber-400 rounded-full animate-spin" /></div>
+        ) : (
+          <div className="flex-1 overflow-y-auto p-6 space-y-6">
+            {/* Descripción */}
+            <div>
+              <h4 className="text-sm font-bold text-gray-900 mb-2">Descripción</h4>
+              <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={2} className={inputCls} />
+            </div>
+
+            {/* Redes sociales */}
+            <div>
+              <h4 className="text-sm font-bold text-gray-900 mb-2">Redes sociales</h4>
+              <div className="space-y-2">
+                {socialLinks.map((s, i) => (
+                  <div key={i} className="flex items-center gap-2">
+                    <select value={s.platform} onChange={(e) => updateSocial(i, "platform", e.target.value)} className="w-28 text-xs border border-gray-200 rounded-lg px-2 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-amber-300">
+                      <option value="facebook">Facebook</option><option value="instagram">Instagram</option><option value="twitter">X (Twitter)</option><option value="youtube">YouTube</option>
+                    </select>
+                    <input value={s.url} onChange={(e) => updateSocial(i, "url", e.target.value)} placeholder="https://..." className={`${inputCls} flex-1 font-mono text-xs`} />
+                    <button onClick={() => removeSocial(i)} className="w-6 h-6 flex items-center justify-center rounded hover:bg-red-50 text-gray-400 hover:text-red-500 shrink-0"><X size={12} /></button>
+                  </div>
+                ))}
+                <button onClick={addSocial} className="flex items-center gap-1 text-xs text-gray-500 hover:text-amber-600"><Plus size={12} /> Añadir red social</button>
+              </div>
+            </div>
+
+            {/* Categorías */}
+            <div>
+              <h4 className="text-sm font-bold text-gray-900 mb-2">Categorías del footer</h4>
+              <div className="max-h-40 overflow-y-auto grid grid-cols-2 gap-1">
+                {allCategories.map((c) => (
+                  <label key={c.code} className="flex items-center gap-2 text-xs cursor-pointer hover:bg-gray-50 rounded px-2 py-1">
+                    <input type="checkbox" checked={selectedCategories.includes(c.code)} onChange={() => toggleCategory(c.code)} className="w-3.5 h-3.5 rounded border-gray-300 text-amber-500" />
+                    <span className="truncate">{c.name}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            {/* Ayuda */}
+            <div>
+              <h4 className="text-sm font-bold text-gray-900 mb-2">Links de ayuda</h4>
+              <div className="space-y-2">
+                {helpLinks.map((h, i) => (
+                  <div key={i} className="flex items-center gap-2">
+                    <input value={h.label} onChange={(e) => updateHelp(i, "label", e.target.value)} placeholder="Título" className={`${inputCls} w-40`} />
+                    <input value={h.url} onChange={(e) => updateHelp(i, "url", e.target.value)} placeholder="https://..." className={`${inputCls} flex-1 font-mono text-xs`} />
+                    <button onClick={() => removeHelp(i)} className="w-6 h-6 flex items-center justify-center rounded hover:bg-red-50 text-gray-400 hover:text-red-500 shrink-0"><X size={12} /></button>
+                  </div>
+                ))}
+                <button onClick={addHelp} className="flex items-center gap-1 text-xs text-gray-500 hover:text-amber-600"><Plus size={12} /> Añadir link</button>
+              </div>
+            </div>
+
+            {/* Contacto */}
+            <div>
+              <h4 className="text-sm font-bold text-gray-900 mb-2">Contacto</h4>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className={labelCls}>Dirección</label>
+                  <input value={contact.address} onChange={(e) => setContact((p) => ({ ...p, address: e.target.value }))} className={inputCls} />
+                </div>
+                <div>
+                  <label className={labelCls}>Teléfono</label>
+                  <input value={contact.phone} onChange={(e) => setContact((p) => ({ ...p, phone: e.target.value }))} className={inputCls} />
+                </div>
+                <div>
+                  <label className={labelCls}>WhatsApp</label>
+                  <input value={contact.whatsapp} onChange={(e) => setContact((p) => ({ ...p, whatsapp: e.target.value }))} className={inputCls} />
+                </div>
+                <div>
+                  <label className={labelCls}>Email</label>
+                  <input value={contact.email} onChange={(e) => setContact((p) => ({ ...p, email: e.target.value }))} className={inputCls} />
+                </div>
+              </div>
+            </div>
+
+            {/* Horario */}
+            <div>
+              <h4 className="text-sm font-bold text-gray-900 mb-2">Horario de atención</h4>
+              <input value={hours} onChange={(e) => setHours(e.target.value)} className={inputCls} placeholder="Lun–Dom · 6am – 10pm" />
+            </div>
+          </div>
+        )}
+        <div className="flex items-center justify-between px-6 py-4 border-t border-gray-100 bg-gray-50 shrink-0">
+          <button onClick={onClose} className="px-4 py-2 text-sm text-gray-600">Cancelar</button>
+          {error && <span className="text-xs text-red-500">{error}</span>}
+          <button onClick={handleSave} disabled={saving} className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-amber-900 bg-amber-400 hover:bg-amber-500 disabled:opacity-50 rounded-xl">
+            {saving && <Loader2 size={14} className="animate-spin" />} Guardar footer
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Product Types Selector ──
 interface LandingProductType { id: number; code: string; name: string; count: number; isActive: boolean; selected: boolean; }
 
@@ -2770,6 +2960,7 @@ export default function Banners() {
   const [landingBranches, setLandingBranches] = useState<LandingBranchItem[]>([]);
   const [branchesOpen, setBranchesOpen] = useState(false);
   const [benefitsOpen, setBenefitsOpen] = useState(false);
+  const [footerOpen, setFooterOpen] = useState(false);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -2978,6 +3169,23 @@ export default function Banners() {
               <p className="text-xs text-gray-400">Administra los beneficios (icono, título y descripción)</p>
             </div>
 
+            {/* Footer card */}
+            <div
+              onClick={() => setFooterOpen(true)}
+              className="bg-white rounded-2xl border border-gray-100 p-5 cursor-pointer hover:shadow-md hover:border-amber-200 transition-all group"
+            >
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-10 h-10 rounded-xl bg-violet-100 flex items-center justify-center group-hover:bg-violet-200 transition-colors">
+                  <LayoutTemplate size={18} className="text-violet-600" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-gray-900 text-sm">Footer</h3>
+                  <p className="text-xs text-gray-500">Configuración del pie de página del sitio</p>
+                </div>
+              </div>
+              <p className="text-xs text-gray-400">Descripción, redes sociales, categorías, ayuda, contacto y horarios</p>
+            </div>
+
             {/* Promo/Advertising card */}
             <div
               onClick={() => setPromoManagerOpen(true)}
@@ -3068,6 +3276,9 @@ export default function Banners() {
 
       {/* Landing benefits manager */}
       {benefitsOpen && <BenefitsLandingManager onClose={() => setBenefitsOpen(false)} />}
+
+      {/* Footer manager */}
+      {footerOpen && <FooterLandingManager onClose={() => setFooterOpen(false)} />}
     </>
   );
 }

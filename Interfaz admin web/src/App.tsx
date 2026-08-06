@@ -47,6 +47,7 @@ import Reports from "./views/Reports";
 import Customers from "./views/Customers";
 import Categories from "./views/Categories";
 import Brands from "./views/Brands";
+import General from "./views/General";
 import ProductTypes from "./views/ProductTypes";
 import Suppliers from "./views/Suppliers";
 import Promotions from "./views/Promotions";
@@ -56,6 +57,7 @@ import Delivery from "./views/Delivery";
 import UsersView from "./views/Users";
 import SettingsView from "./views/Settings";
 import Branches from "./views/Branches";
+import Popups from "./views/Popups";
 
 export type ViewId =
   | "dashboard"
@@ -75,7 +77,9 @@ export type ViewId =
   | "reports"
   | "users"
   | "settings"
-  | "branches";
+  | "branches"
+  | "general"
+  | "popups";
 
 interface NavItem {
   id: ViewId;
@@ -113,11 +117,16 @@ const NAV: NavSection[] = [
     ],
   },
   {
+    title: "Marketing",
+    items: [{ id: "popups", label: "Popups", icon: Megaphone }],
+  },
+  {
     title: "Contenido",
     items: [
       // { id: "homepage", label: "Editor de Inicio", icon: LayoutTemplate }, // Oculto por ahora
       // { id: "marketplace", label: "Publicidad", icon: Megaphone }, // Oculto por ahora
       { id: "banners", label: "Home", icon: LayoutTemplate },
+      { id: "general", label: "General", icon: Settings },
     ],
   },
   {
@@ -161,6 +170,8 @@ const VIEW_PATHS: Record<string, ViewId> = {
   reports: "reports",
   users: "users",
   settings: "settings",
+  general: "general",
+  popups: "popups",
 };
 
 const VIEW_SLUGS: Record<ViewId, string> = {
@@ -182,6 +193,8 @@ const VIEW_SLUGS: Record<ViewId, string> = {
   reports: "reports",
   users: "users",
   settings: "settings",
+  general: "general",
+  popups: "popups",
 };
 
 function useViewFromUrl(): [ViewId, (v: ViewId) => void] {
@@ -230,6 +243,8 @@ const LABELS: Record<ViewId, string> = {
   reports: "Reportes",
   users: "Usuarios y Permisos",
   settings: "Configuración",
+  general: "General",
+  popups: "Popups",
 };
 
 const QUICK_COMMANDS = [
@@ -693,6 +708,10 @@ function ViewRenderer({ view, user }: { view: ViewId; user: UserProfile | null }
       return <Delivery />;
     case "branches":
       return <Branches />;
+    case "general":
+      return <General />;
+    case "popups":
+      return <Popups />;
     case "reports":
       return <Reports />;
     case "users":

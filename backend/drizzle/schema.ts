@@ -3475,3 +3475,48 @@ export const featuredProductAssignments = pgTable(
     }).onDelete('cascade'),
   ],
 );
+
+export const popupPositionEnum = pgEnum('popup_position_enum', [
+  'header',
+  'footer',
+  'left',
+  'right',
+]);
+
+export const popups = pgTable(
+  'popups',
+  {
+    id: bigserial({ mode: 'bigint' }).primaryKey().notNull(),
+    title: varchar({ length: 200 }).notNull(),
+    imageMediaId: bigint('image_media_id', { mode: 'number' }).notNull(),
+    position: popupPositionEnum('position').default('header').notNull(),
+    filterConfig: jsonb('filter_config').default({}),
+    durationMs: integer('duration_ms').default(7000).notNull(),
+    delayMs: integer('delay_ms').default(1500).notNull(),
+    isActive: boolean('is_active').default(true).notNull(),
+    startDate: timestamp('start_date', { withTimezone: true, mode: 'string' }),
+    endDate: timestamp('end_date', { withTimezone: true, mode: 'string' }),
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'string' })
+      .defaultNow()
+      .notNull(),
+    deletedAt: timestamp('deleted_at', { withTimezone: true, mode: 'string' }),
+  },
+  (table) => [
+    foreignKey({
+      columns: [table.imageMediaId],
+      foreignColumns: [media.id],
+      name: 'popups_image_media_id_fkey',
+    }).onDelete('cascade'),
+    index('idx_popups_position').using(
+      'btree',
+      table.position.asc().nullsLast().op('enum_ops'),
+    ),
+    index('idx_popups_active').using(
+      'btree',
+      table.isActive.asc().nullsLast().op('bool_ops'),
+    ),
+  ],
+);

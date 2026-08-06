@@ -49,7 +49,7 @@ export function QuickCategoriesSection({
   const [searchQuery, setSearchQuery] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // Auto-scroll
+  // Auto-scroll infinito
   useEffect(() => {
     const el = scrollRef.current;
     if (!el || productTypes.length === 0 || expanded) return;
@@ -57,7 +57,7 @@ export function QuickCategoriesSection({
     const step = () => {
       if (!el) return;
       el.scrollLeft += 0.5;
-      if (el.scrollLeft >= el.scrollWidth - el.clientWidth) {
+      if (el.scrollLeft >= el.scrollWidth / 2) {
         el.scrollLeft = 0;
       }
       animId = requestAnimationFrame(step);
@@ -118,14 +118,15 @@ export function QuickCategoriesSection({
             className="flex gap-4 overflow-x-auto pb-2"
             style={{ scrollbarWidth: "none" }}
           >
-            {productTypes.map((pt, i) => (
-              <ProductTypeButton
-                key={pt.id}
-                pt={pt}
-                index={i}
-                onClick={() => onProductTypeClick(pt.code)}
-              />
-            ))}
+              {/* Duplicamos para el loop infinito: el reset a 0 queda invisible porque el usuario ve la copia */}
+              {[...productTypes, ...productTypes].map((pt, i) => (
+                <ProductTypeButton
+                  key={`${pt.id}-${i >= productTypes.length ? 'b' : 'a'}`}
+                  pt={pt}
+                  index={i % productTypes.length}
+                  onClick={() => onProductTypeClick(pt.code)}
+                />
+              ))}
           </div>
         </div>
       </div>

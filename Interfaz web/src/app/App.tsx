@@ -28,6 +28,7 @@ import { AuthModal } from "./components/AuthModal";
 import { CheckoutModal } from "./components/CheckoutModal";
 import { ErrorPage } from "./components/ErrorPage";
 import { OrdersPanel } from "./components/OrdersPanel";
+import { PopupDisplay } from "./components/PopupDisplay";
 
 const fmt = (n: number) =>
   new Intl.NumberFormat("es-CO", {
@@ -73,7 +74,7 @@ export default function App() {
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [cartHydrated, setCartHydrated] = useState(false);
   const [cartOpen, setCartOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState("vendidos");
+  const [activeTab, setActiveTab] = useState("");
   const [catalogCategory, setCatalogCategory] = useState<number[]>([]);
   const [catalogOnSale, setCatalogOnSale] = useState(false);
   const [catalogPriceRange, setCatalogPriceRange] = useState<string>("all");
@@ -191,6 +192,7 @@ export default function App() {
     featuredItems: any[];
     carousel: Product[];
   } | null>(null);
+  const [generalLogo, setGeneralLogo] = useState<{ url?: string } | null>(null);
   const [featuredBrands, setFeaturedBrands] = useState<Brand[]>([]);
   const [landingBranches, setLandingBranches] = useState<Branch[]>([]);
   const [landingProductTypes, setLandingProductTypes] = useState<
@@ -248,6 +250,10 @@ export default function App() {
           .then((r) => (r.ok ? r.json() : null))
           .then(setDailyDeals)
           .catch(() => setDailyDeals(null));
+        void fetch(`${import.meta.env.VITE_API_URL || "http://localhost:3000"}/landing/general`)
+          .then((r) => (r.ok ? r.json() : null))
+          .then(setGeneralLogo)
+          .catch(() => setGeneralLogo(null));
         // Marcas de la landing (configuradas en admin; fallback: destacadas)
         void fetch(`${import.meta.env.VITE_API_URL || "http://localhost:3000"}/landing/brands`)
           .then((r) => (r.ok ? r.json() : Promise.reject()))
@@ -670,6 +676,7 @@ export default function App() {
     unreadNotifCount: unreadCount,
     onMarkNotifRead: markAsRead,
     fmt,
+    generalLogo,
   };
 
   // Health check -- must be AFTER all hooks
@@ -792,9 +799,11 @@ export default function App() {
         />
       </main>
 
+      <PopupDisplay onApplyFilter={handleApplyFilter} />
       <Footer
         categories={landingCategories}
         onCategoryClick={handleCategoryClick}
+        generalLogo={generalLogo}
       />
       <CartDrawer
         cartOpen={cartOpen}

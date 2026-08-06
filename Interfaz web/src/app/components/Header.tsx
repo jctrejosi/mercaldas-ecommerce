@@ -47,8 +47,9 @@ interface HeaderProps {
   notifications?: AppNotification[];
   unreadNotifCount?: number;
   onMarkNotifRead?: (id: number) => void;
-  onNavigateNotifs?: () => void;
-  onAddressClick?: () => void;
+  onNavigateNotifs: () => void;
+  onAddressClick: () => void;
+  generalLogo?: { url?: string } | null;
   fmt: (n: number) => string;
 }
 
@@ -83,6 +84,7 @@ export function Header({
   onMarkNotifRead,
   onNavigateNotifs,
   onAddressClick,
+  generalLogo,
   fmt,
 }: HeaderProps) {
   const [searchQuery, setSearchQuery] = useState("");
@@ -348,7 +350,7 @@ export function Header({
             onHome();
           }}
         >
-          <Logo dark={true} />
+          <Logo dark={true} logoSrc={generalLogo?.url} />
         </a>
 
         <div className="flex-1 max-w-2xl mx-auto" ref={searchRef}>

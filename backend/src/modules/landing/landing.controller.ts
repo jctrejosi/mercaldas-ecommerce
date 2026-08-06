@@ -80,6 +80,19 @@ export class AdminLandingController {
   updateGeneralLogo(@Body() body: { url: string }) {
     return this.landingService.updateGeneralLogo(body);
   }
+
+  @Get('footer')
+  @ApiOperation({ summary: 'Obtener configuración del footer (admin)' })
+  getFooterConfig() {
+    return this.landingService.getFooterConfig();
+  }
+
+  @Put('footer')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Guardar configuración del footer' })
+  updateFooterConfig(@Body() body: any) {
+    return this.landingService.updateFooterConfig(body);
+  }
 }
 
 @ApiTags('Landing')
@@ -112,5 +125,12 @@ export class LandingPublicController {
   @ApiOperation({ summary: 'Configuración general (logo)' })
   getGeneral() {
     return this.landingService.getGeneralLogo();
+  }
+
+  @Public()
+  @Get('footer')
+  @ApiOperation({ summary: 'Configuración del footer (público)' })
+  getFooter() {
+    return this.landingService.getPublicFooterConfig();
   }
 }
