@@ -130,4 +130,23 @@ export const newsletterService = {
       method: "DELETE",
     });
   },
+
+  // ── Welcome ──
+  async getWelcome(): Promise<{ subject: string; content: string } | null> {
+    const res = await fetch(`${API_BASE_URL}/admin/newsletter/welcome`, { credentials: "include" });
+    if (!res.ok) return null;
+    const data = await res.json();
+    // Backend returns {} when no config exists
+    if (!data || !data.subject) return null;
+    return data;
+  },
+
+  async updateWelcome(data: { subject: string; content: string }): Promise<void> {
+    const res = await fetch(`${API_BASE_URL}/admin/newsletter/welcome`, {
+      method: "PUT", credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) throw new Error(`API error: ${res.status}`);
+  },
 };

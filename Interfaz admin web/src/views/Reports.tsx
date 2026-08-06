@@ -72,7 +72,16 @@ export default function Reports() {
   const [period, setPeriod] = useState("7d");
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="relative">
+      <div className="absolute inset-0 z-10 bg-gray-300/40 backdrop-blur-[3px] flex items-start justify-center pointer-events-none" style={{ minHeight: "60vh" }}>
+        <div className="mt-20 flex flex-col items-center gap-3 bg-white/80 rounded-3xl px-10 py-7 shadow-lg">
+          <span className="text-5xl select-none">🚧</span>
+          <p className="text-sm font-bold text-gray-500 uppercase tracking-widest">En Construcción</p>
+          <p className="text-xs text-gray-400">Próximamente disponible</p>
+        </div>
+      </div>
+      <div className="pointer-events-none opacity-35 select-none">
+        <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Reportes</h1>
@@ -219,6 +228,8 @@ export default function Reports() {
             })}
           </div>
         </div>
+      </div>
+    </div>
       </div>
     </div>
   );

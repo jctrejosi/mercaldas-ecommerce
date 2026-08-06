@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import {
   Plus, Edit, Trash2, X, Loader2, Mail, Send, Calendar, Users,
-  Check, Save, AlertTriangle, FileText, Search, Eye, Megaphone,
+  Check, Save, AlertTriangle, FileText, Search, Eye, Megaphone, Gift,
 } from "lucide-react";
 import {
   newsletterService,
@@ -518,9 +518,113 @@ function CampaignsTab() {
   );
 }
 
+// ── Welcome Config Tab ──
+function WelcomeTab() {
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [error, setError] = useState("");
+  const [subject, setSubject] = useState("");
+  const [content, setContent] = useState("");
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      const cfg = await newsletterService.getWelcome();
+      if (cfg) {
+        setSubject(cfg.subject);
+        setContent(cfg.content);
+      } else {
+        // Default
+        setSubject("¡Bienvenido a Mercaldas! 🎁");
+        setContent(
+          `<div style="font-family:Arial,sans-serif;padding:16px;color:#333">\n  <h2 style="color:#1A1A2E">¡Hola {{name}}!</h2>\n  <p>Gracias por suscribirte al newsletter de <strong>Mercaldas</strong>.</p>\n  <p>Aquí tienes un regalo de bienvenida:</p>\n  <div style="background:#FFF200;padding:16px;border-radius:12px;text-align:center;margin:16px 0">\n    <span style="font-size:28px;font-weight:bold;color:#1A1A2E">10% OFF</span>\n    <p style="margin:4px 0;color:#1A1A2E">en tu primera compra</p>\n    <span style="font-size:14px;font-weight:bold;background:#1A1A2E;color:#FFF200;padding:4px 12px;border-radius:6px">CÓDIGO: BIENVENIDO10</span>\n  </div>\n  <p style="font-size:12px;color:#888;">Válido por 7 días en mercaldas.com</p>\n  <p style="font-size:12px;color:#888;">Si no deseas recibir más correos, puedes <a href="%UNSUBSCRIBE%" style="color:#888">cancelar la suscripción</a>.</p>\n</div>`,
+        );
+      }
+    } catch { setError("Error al cargar"); }
+    finally { setLoading(false); }
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const handleSave = async () => {
+    setError(""); setSaving(true);
+    try {
+      await newsletterService.updateWelcome({ subject: subject.trim(), content });
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } catch (e: any) {
+      setError(e.message || "Error al guardar");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const inputCls = "w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-300";
+
+  return (
+    <div className="space-y-4">
+      {loading ? (
+        <div className="flex items-center justify-center py-12"><Loader2 size={24} className="animate-spin text-amber-500" /></div>
+      ) : (
+        <>
+          {error && <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl px-4 py-3">{error}</div>}
+
+          <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-sm text-amber-800">
+            Este email se envía <strong>automáticamente</strong> a cada nuevo suscriptor. Puedes usar los placeholders{' '}
+            <code className="bg-amber-100 px-1 rounded">{"{{name}}"}</code> y{' '}
+            <code className="bg-amber-100 px-1 rounded">{"{{email}}"}</code>.
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-gray-600 mb-1.5">Asunto del email</label>
+            <input value={subject} onChange={(e) => setSubject(e.target.value)} className={inputCls} placeholder="¡Bienvenido!" />
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-gray-600 mb-1.5">Contenido HTML</label>
+            <textarea
+              value={content}
+              onChange={(e) => setContent(e.target.value)}
+              rows={12}
+              className={`${inputCls} font-mono text-xs resize-y`}
+            />
+          </div>
+
+          {/* Preview */}
+          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+            <div className="px-4 py-2 bg-gray-50 border-b border-gray-100 text-xs font-semibold text-gray-500">Vista previa</div>
+            <div className="p-4">
+              <p className="text-xs text-gray-400 mb-2">Asunto: <strong className="text-gray-700">{subject}</strong></p>
+              <div
+                className="prose prose-sm max-w-none text-sm"
+                dangerouslySetInnerHTML={{
+                  __html: content.replace(/{{name}}/g, "María").replace(/{{email}}/g, "maria@email.com"),
+                }}
+              />
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <button
+              onClick={handleSave}
+              disabled={saving}
+              className="flex items-center gap-2 px-5 py-2.5 text-sm font-bold text-amber-900 bg-amber-400 hover:bg-amber-500 disabled:opacity-50 rounded-xl transition-colors"
+            >
+              {saving ? <Loader2 size={14} className="animate-spin" /> : saved ? <Check size={14} /> : <Save size={14} />}
+              {saved ? "Guardado" : "Guardar"}
+            </button>
+            <button onClick={load} className="px-4 py-2.5 text-sm text-gray-600 hover:text-gray-800">Descartar cambios</button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 // ── Main View ──
 export default function Newsletter() {
-  const [tab, setTab] = useState<"campaigns" | "subscribers">("campaigns");
+  const [tab, setTab] = useState<"campaigns" | "subscribers" | "welcome">("campaigns");
   const [subscriberCount, setSubscriberCount] = useState(0);
 
   useEffect(() => {
@@ -560,9 +664,15 @@ export default function Newsletter() {
         >
           <Users size={14} /> Suscriptores
         </button>
+        <button
+          onClick={() => setTab("welcome")}
+          className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${tab === "welcome" ? "bg-white shadow text-gray-900" : "text-gray-500 hover:text-gray-700"}`}
+        >
+          <Gift size={14} /> Bienvenida
+        </button>
       </div>
 
-      {tab === "campaigns" ? <CampaignsTab /> : <SubscribersTab />}
+      {tab === "campaigns" ? <CampaignsTab /> : tab === "subscribers" ? <SubscribersTab /> : <WelcomeTab />}
     </div>
   );
 }
