@@ -432,6 +432,7 @@ export const branches = pgTable(
       .default('5.0')
       .notNull(),
     schedule: jsonb(),
+    imageMediaId: bigint('image_media_id', { mode: 'number' }),
     isActive: boolean('is_active').default(true).notNull(),
     createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' })
       .defaultNow()
@@ -451,6 +452,11 @@ export const branches = pgTable(
       foreignColumns: [store.id],
       name: 'branches_store_id_fkey',
     }),
+    foreignKey({
+      columns: [table.imageMediaId],
+      foreignColumns: [media.id],
+      name: 'branches_image_media_id_fkey',
+    }).onDelete('set null'),
     unique('branches_code_key').on(table.code),
     check(
       'branches_delivery_radius_km_check',

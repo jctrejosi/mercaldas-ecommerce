@@ -97,7 +97,7 @@ export function SucursalesSection({ branches = [] }: SucursalesSectionProps) {
               >
                 <div className="relative h-40 bg-muted overflow-hidden flex-shrink-0">
                   <img
-                    src={FALLBACK_IMAGES[idx % FALLBACK_IMAGES.length]}
+                    src={s.image || FALLBACK_IMAGES[idx % FALLBACK_IMAGES.length]}
                     alt={s.name}
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                   />

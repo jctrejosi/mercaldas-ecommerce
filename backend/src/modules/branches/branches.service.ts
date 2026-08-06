@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
-import { and, eq, desc, asc, isNull, sql, count } from 'drizzle-orm';
+import { and, eq, desc, asc, isNull, sql, count, inArray } from 'drizzle-orm';
 import { DrizzleService } from '../../database/drizzle.service';
 import {
   branches,
@@ -11,6 +11,7 @@ import {
   categories,
   brands,
   orders,
+  media,
 } from '../../../drizzle/schema';
 import { CreateBranchDto, UpdateBranchDto, CreateDeliveryZoneDto } from './dto/branch.dto';
 
@@ -32,6 +33,18 @@ export class BranchesService {
       .from(branches)
       .where(isNull(branches.deletedAt))
       .orderBy(asc(branches.priority), asc(branches.name));
+
+    const mediaIds = rows
+      .map((r: any) => r.imageMediaId)
+      .filter((x) => x != null);
+    const mediaMap = new Map<number, string>();
+    if (mediaIds.length > 0) {
+      const mediaRows = await this.db
+        .select({ id: media.id, path: media.path })
+        .from(media)
+        .where(inArray(media.id, mediaIds));
+      for (const m of mediaRows) mediaMap.set(Number(m.id), m.path);
+    }
 
     return Promise.all(
       rows.map(async (r: any) => {
@@ -59,6 +72,8 @@ export class BranchesService {
           maxDailyOrders: r.maxDailyOrders,
           schedule: r.schedule,
           isActive: r.isActive,
+          imagePath:
+            r.imageMediaId != null ? (mediaMap.get(Number(r.imageMediaId)) ?? null) : null,
           productCount: stats?.cnt ?? 0,
           createdAt: r.createdAt,
           updatedAt: r.updatedAt,
@@ -83,6 +98,14 @@ export class BranchesService {
       .select({ cnt: count(orders.id) })
       .from(orders)
       .where(eq(orders.branchId, id));
+    let imagePath: string | null = null;
+    if (r.imageMediaId != null) {
+      const [img] = await this.db
+        .select({ path: media.path })
+        .from(media)
+        .where(eq(media.id, r.imageMediaId));
+      imagePath = img?.path ?? null;
+    }
     return {
       id: Number(r.id),
       code: r.code,
@@ -101,6 +124,7 @@ export class BranchesService {
       maxDailyOrders: r.maxDailyOrders,
       schedule: r.schedule,
       isActive: r.isActive,
+      imagePath,
       productCount: stats?.cnt ?? 0,
       orderCount: orderCount?.cnt ?? 0,
       createdAt: r.createdAt,
@@ -143,9 +167,27 @@ export class BranchesService {
     await this.findOne(id);
     const data: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(dto)) {
-      if (v !== undefined) data[k] = v;
+      if (v !== undefined && k !== 'imageUrl') data[k] = v;
     }
     if (dto.deliveryRadiusKm !== undefined) data.deliveryRadiusKm = String(dto.deliveryRadiusKm);
+    if (dto.imageUrl) {
+      const [inserted] = await this.db
+        .insert(media)
+        .values({
+          path: dto.imageUrl,
+          fileName:
+            dto.imageUrl.split('/').pop()?.substring(0, 50) ?? 'branch_image',
+          mimeType: 'image/jpeg',
+          mediaType: 'image',
+          provider: 'cloudinary',
+          sizeBytes: 0,
+          checksum: `branch_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+          status: 'active',
+          isPublic: true,
+        })
+        .returning({ id: media.id });
+      data.imageMediaId = Number(inserted.id);
+    }
     if (Object.keys(data).length > 0) {
       await this.db.update(branches).set(data).where(eq(branches.id, BigInt(id)));
     }

@@ -2038,8 +2038,10 @@ export class CatalogService {
         location: branches.location,
         isActive: branches.isActive,
         priority: branches.priority,
+        image: media.path,
       })
       .from(branches)
+      .leftJoin(media, eq(branches.imageMediaId, media.id))
       .where(and(eq(branches.isActive, true), isNull(branches.deletedAt)))
       .orderBy(asc(branches.priority));
 
@@ -2054,6 +2056,7 @@ export class CatalogService {
       location: row.location,
       isActive: row.isActive,
       priority: Number(row.priority ?? 0),
+      image: row.image,
     }));
   }
 

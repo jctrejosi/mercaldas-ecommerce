@@ -106,6 +106,7 @@ export interface Branch {
   location?: string;
   priority?: number;
   isActive?: boolean;
+  image?: string | null;
 }
 
 export interface Order {

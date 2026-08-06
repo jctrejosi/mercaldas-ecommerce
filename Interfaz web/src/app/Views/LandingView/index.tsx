@@ -23,6 +23,10 @@ interface LandingViewProps {
   loading: boolean;
   activeTab: string;
   dealProducts: Product[];
+  dailyDeals?: {
+    featuredItems: any[];
+    carousel: Product[];
+  } | null;
   cartItems: CartItem[];
   branches: Branch[];
   productTypes: { id: number; code: string; name: string; count: number }[];
@@ -45,6 +49,7 @@ export function LandingView({
   loading,
   activeTab,
   dealProducts,
+  dailyDeals,
   cartItems,
   onTabChange,
   onAdd,
@@ -89,6 +94,7 @@ export function LandingView({
         onRemove={onRemove}
         onProductClick={onProductClick}
         dealProducts={dealProducts}
+        dailyDeals={dailyDeals}
       />
       <BrandsSection brands={featuredBrands} onBrandClick={onBrandClick} />
       <SucursalesSection branches={branches} />

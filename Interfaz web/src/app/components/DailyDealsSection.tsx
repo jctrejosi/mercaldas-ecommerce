@@ -2,7 +2,21 @@ import { useState, useEffect, useRef } from "react";
 import { ShoppingCart, Minus, Plus, ChevronLeft, ChevronRight } from "lucide-react";
 import type { Product, CartItem } from "../types";
 
-const DEAL_OF_DAY_ITEMS = [
+type DealFeaturedItem = {
+  id: number | string;
+  title: string;
+  subtitle: string;
+  discount: string;
+  price: number;
+  originalPrice: number;
+  unit: string;
+  image: string;
+  bgFrom: string;
+  bgTo: string;
+  endsAt: string;
+};
+
+const DEAL_OF_DAY_ITEMS: DealFeaturedItem[] = [
   {
     id: 1,
     title: "Papa Criolla\nLimpia",
@@ -12,7 +26,8 @@ const DEAL_OF_DAY_ITEMS = [
     originalPrice: 4800,
     unit: "x kg",
     image: "https://images.unsplash.com/photo-1589894308598-8ddba0593e91?w=600&h=600&fit=crop&auto=format",
-    bg: "linear-gradient(160deg, #1A4A2E 0%, #0D3B1F 100%)",
+    bgFrom: "#1A4A2E",
+    bgTo: "#0D3B1F",
     endsAt: "Hoy · Hasta agotar existencias",
   },
   {
@@ -24,7 +39,8 @@ const DEAL_OF_DAY_ITEMS = [
     originalPrice: 2800,
     unit: "x und",
     image: "https://images.unsplash.com/photo-1588196749597-9ff075ee6b5b?w=600&h=600&fit=crop&auto=format",
-    bg: "linear-gradient(160deg, #2D4A1A 0%, #1F3B0D 100%)",
+    bgFrom: "#2D4A1A",
+    bgTo: "#1F3B0D",
     endsAt: "Hoy · Oferta del día",
   },
   {
@@ -36,7 +52,8 @@ const DEAL_OF_DAY_ITEMS = [
     originalPrice: 7000,
     unit: "x 500 g",
     image: "https://images.unsplash.com/photo-1464965911861-746a04b4bca6?w=600&h=600&fit=crop&auto=format",
-    bg: "linear-gradient(160deg, #6B0D20 0%, #8B1428 100%)",
+    bgFrom: "#6B0D20",
+    bgTo: "#8B1428",
     endsAt: "Hoy · Temporada",
   },
 ];
@@ -54,11 +71,20 @@ interface DailyDealsSectionProps {
   onRemove: (id: number) => void;
   onProductClick: (product: Product) => void;
   dealProducts: Product[];
+  dailyDeals?: {
+    featuredItems: DealFeaturedItem[];
+    carousel: Product[];
+  } | null;
 }
 
 export function DailyDealsSection({
-  cartItems, onAdd, onRemove, onProductClick, dealProducts,
+  cartItems, onAdd, onRemove, onProductClick, dealProducts, dailyDeals,
 }: DailyDealsSectionProps) {
+  const featuredItems =
+    dailyDeals?.featuredItems?.length ? dailyDeals.featuredItems : DEAL_OF_DAY_ITEMS;
+  const carouselProducts =
+    dailyDeals?.carousel?.length ? dailyDeals.carousel : dealProducts;
+
   const [featuredIdx, setFeaturedIdx] = useState(0);
   const [carouselStart, setCarouselStart] = useState(0);
   const [localQtys, setLocalQtys] = useState<Record<number, number>>({});
@@ -66,24 +92,26 @@ export function DailyDealsSection({
 
   const VISIBLE = 3;
 
+  // Rotación del display izquierdo (más pausada y suave)
   useEffect(() => {
-    const t = setInterval(() => setFeaturedIdx((i) => (i + 1) % DEAL_OF_DAY_ITEMS.length), 6000);
+    if (featuredItems.length <= 1) return;
+    const t = setInterval(() => setFeaturedIdx((i) => (i + 1) % featuredItems.length), 8000);
     return () => clearInterval(t);
-  }, []);
+  }, [featuredItems.length]);
 
-  // Auto-scroll carrusel de ofertas
+  // Auto-scroll del carrusel derecho (más pausado)
   useEffect(() => {
-    const maxStart = Math.max(0, dealProducts.length - VISIBLE);
+    const maxStart = Math.max(0, carouselProducts.length - VISIBLE);
     if (maxStart <= 0) return;
     const interval = setInterval(() => {
       setCarouselStart((prev) => (prev + 1 > maxStart ? 0 : prev + 1));
-    }, 3000);
+    }, 5000);
     return () => clearInterval(interval);
-  }, [dealProducts.length]);
+  }, [carouselProducts.length]);
 
   const scrollCarousel = (dir: number) => {
     const next = carouselStart + dir;
-    if (next < 0 || next + VISIBLE > dealProducts.length) return;
+    if (next < 0 || next + VISIBLE > carouselProducts.length) return;
     setCarouselStart(next);
   };
 
@@ -98,10 +126,16 @@ export function DailyDealsSection({
     setLocalQtys((prev) => ({ ...prev, [p.id]: 1 }));
   };
 
-  const featured = DEAL_OF_DAY_ITEMS[featuredIdx];
+  const featured = featuredItems[featuredIdx % featuredItems.length];
 
   return (
     <section className="py-10 bg-muted/40">
+      <style>{`
+        @keyframes dealFadeUp {
+          from { opacity: 0; transform: translateY(16px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+      `}</style>
       <div className="max-w-7xl mx-auto px-4">
         {/* Section header */}
         <div className="flex items-center justify-between mb-6">
@@ -115,11 +149,11 @@ export function DailyDealsSection({
             </div>
           </div>
           <div className="flex items-center gap-1">
-            {DEAL_OF_DAY_ITEMS.map((_, i) => (
+            {featuredItems.map((_, i) => (
               <button
                 key={i}
                 onClick={() => setFeaturedIdx(i)}
-                className="w-2 h-2 rounded-full transition-all duration-300"
+                className="w-2 h-2 rounded-full transition-all duration-500"
                 style={{ background: i === featuredIdx ? "#1A1A2E" : "#D1D5DB", width: i === featuredIdx ? "20px" : "8px" }}
               />
             ))}
@@ -130,51 +164,54 @@ export function DailyDealsSection({
           {/* Left: featured deal of the day */}
           <div
             className="lg:w-72 flex-shrink-0 rounded-2xl overflow-hidden relative flex flex-col justify-between"
-            style={{ background: featured.bg, minHeight: "340px", transition: "background 0.6s ease" }}
+            style={{ background: `linear-gradient(160deg, ${featured.bgFrom} 0%, ${featured.bgTo} 100%)`, minHeight: "340px", transition: "background 1s ease" }}
           >
             <div className="p-6 z-10 relative">
-              <span
-                className="inline-block text-[10px] font-black tracking-widest px-2.5 py-1 rounded-full mb-4"
-                style={{ background: "#FFF200", color: "#1A1A2E" }}
-              >
-                {featured.discount}
-              </span>
-              <h3
-                className="text-2xl font-black text-white whitespace-pre-line leading-tight mb-1"
-                style={{ fontFamily: "'Bricolage Grotesque', sans-serif" }}
-              >
-                {featured.title}
-              </h3>
-              <p className="text-xs mb-4" style={{ color: "rgba(255,255,255,0.65)" }}>{featured.subtitle}</p>
-              <div className="flex items-baseline gap-2">
-                <span className="text-2xl font-black text-white" style={{ fontFamily: "'Bricolage Grotesque', sans-serif" }}>
-                  {fmt(featured.price)}
+              <div key={`content-${featured.id}-${featuredIdx}`} style={{ animation: "dealFadeUp 0.7s ease-out both" }}>
+                <span
+                  className="inline-block text-[10px] font-black tracking-widest px-2.5 py-1 rounded-full mb-4"
+                  style={{ background: "#FFF200", color: "#1A1A2E" }}
+                >
+                  {featured.discount}
                 </span>
-                <span className="text-sm line-through" style={{ color: "rgba(255,255,255,0.45)" }}>
-                  {fmt(featured.originalPrice)}
-                </span>
+                <h3
+                  className="text-2xl font-black text-white whitespace-pre-line leading-tight mb-1"
+                  style={{ fontFamily: "'Bricolage Grotesque', sans-serif" }}
+                >
+                  {featured.title}
+                </h3>
+                <p className="text-xs mb-4" style={{ color: "rgba(255,255,255,0.65)" }}>{featured.subtitle}</p>
+                <div className="flex items-baseline gap-2">
+                  <span className="text-2xl font-black text-white" style={{ fontFamily: "'Bricolage Grotesque', sans-serif" }}>
+                    {fmt(featured.price)}
+                  </span>
+                  <span className="text-sm line-through" style={{ color: "rgba(255,255,255,0.45)" }}>
+                    {fmt(featured.originalPrice)}
+                  </span>
+                </div>
+                <p className="text-xs mt-1.5" style={{ color: "rgba(255,255,255,0.5)" }}>{featured.unit}</p>
+                <p className="text-xs mt-3 font-semibold" style={{ color: "#FFF200" }}>⏱ {featured.endsAt}</p>
               </div>
-              <p className="text-xs mt-1.5" style={{ color: "rgba(255,255,255,0.5)" }}>{featured.unit}</p>
-              <p className="text-xs mt-3 font-semibold" style={{ color: "#FFF200" }}>⏱ {featured.endsAt}</p>
             </div>
 
             <div className="relative h-44 overflow-hidden flex-shrink-0">
               <img
+                key={`img-${featured.id}-${featuredIdx}`}
                 src={featured.image}
                 alt={featured.title}
                 className="w-full h-full object-cover"
-                style={{ transition: "opacity 0.4s ease", objectPosition: "center" }}
+                style={{ animation: "dealFadeUp 0.8s ease-out both", objectPosition: "center" }}
               />
               <div className="absolute inset-0" style={{ background: "linear-gradient(to bottom, rgba(0,0,0,0.35) 0%, transparent 50%)" }} />
             </div>
 
             {/* Nav dots bottom */}
             <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5 z-10">
-              {DEAL_OF_DAY_ITEMS.map((_, i) => (
+              {featuredItems.map((_, i) => (
                 <button
                   key={i}
                   onClick={() => setFeaturedIdx(i)}
-                  className="h-1 rounded-full transition-all duration-300"
+                  className="h-1 rounded-full transition-all duration-500"
                   style={{ width: i === featuredIdx ? "16px" : "5px", background: i === featuredIdx ? "#FFF200" : "rgba(255,255,255,0.4)" }}
                 />
               ))}
@@ -197,7 +234,7 @@ export function DailyDealsSection({
                 </button>
                 <button
                   onClick={() => scrollCarousel(1)}
-                  disabled={carouselStart + VISIBLE >= dealProducts.length}
+                  disabled={carouselStart + VISIBLE >= carouselProducts.length}
                   className="w-8 h-8 rounded-full flex items-center justify-center border border-border hover:bg-muted transition-colors disabled:opacity-30"
                 >
                   <ChevronRight className="w-3.5 h-3.5" />
@@ -207,16 +244,16 @@ export function DailyDealsSection({
 
             <div className="flex-1 rounded-xl">
               <div ref={carouselRef} className="grid grid-cols-2 md:grid-cols-3 gap-3">
-              {dealProducts.slice(carouselStart, carouselStart + VISIBLE).map((p, idx) => {
+              {carouselProducts.slice(carouselStart, carouselStart + VISIBLE).map((p, idx) => {
                 const qty = localQtys[p.id] || 1;
                 const discountPct = p.originalPrice ? Math.round((1 - p.price / p.originalPrice) * 100) : 0;
                 return (
-                  <div key={p.id} className="bg-card border border-border rounded-xl overflow-hidden flex flex-col hover:shadow-md transition-shadow animate-[fadeIn_0.3s_ease-out]" style={{ animationDelay: `${idx * 80}ms`, animationFillMode: 'backwards' }}>
+                  <div key={p.id} className="bg-card border border-border rounded-xl overflow-hidden flex flex-col hover:shadow-md transition-shadow" style={{ animation: "dealFadeUp 0.55s ease-out both", animationDelay: `${idx * 130}ms` }}>
                     <button
                       className="relative bg-muted aspect-square overflow-hidden"
                       onClick={() => onProductClick(p)}
                     >
-                      <img src={p.image} alt={p.name} className="w-full h-full object-cover hover:scale-105 transition-transform duration-300" />
+                      <img src={p.image} alt={p.name} className="w-full h-full object-cover hover:scale-105 transition-transform duration-500" />
                       <span
                         className="absolute top-2 left-2 text-xs font-black px-2 py-0.5 rounded-full text-white"
                         style={{ background: "#FF4444" }}

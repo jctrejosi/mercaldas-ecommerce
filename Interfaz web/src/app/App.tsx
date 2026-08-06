@@ -187,6 +187,10 @@ export default function App() {
   }, [checkoutPayment]);
   const [landingLoading, setLandingLoading] = useState(true);
   const [dealProducts, setDealProducts] = useState<Product[]>([]);
+  const [dailyDeals, setDailyDeals] = useState<{
+    featuredItems: any[];
+    carousel: Product[];
+  } | null>(null);
   const [featuredBrands, setFeaturedBrands] = useState<Brand[]>([]);
   const [landingBranches, setLandingBranches] = useState<Branch[]>([]);
   const [landingProductTypes, setLandingProductTypes] = useState<
@@ -239,10 +243,21 @@ export default function App() {
           .getProducts({ onSale: true, sort: "descuento", limit: 8 })
           .then(setDealProducts)
           .catch(() => {});
-        void catalogService
-          .getFeaturedBrands()
+        // Config de Ofertas del día (display rotativo + carousel administrados)
+        void fetch(`${import.meta.env.VITE_API_URL || "http://localhost:3000"}/landing/daily-deals`)
+          .then((r) => (r.ok ? r.json() : null))
+          .then(setDailyDeals)
+          .catch(() => setDailyDeals(null));
+        // Marcas de la landing (configuradas en admin; fallback: destacadas)
+        void fetch(`${import.meta.env.VITE_API_URL || "http://localhost:3000"}/landing/brands`)
+          .then((r) => (r.ok ? r.json() : Promise.reject()))
           .then(setFeaturedBrands)
-          .catch(() => {});
+          .catch(() =>
+            catalogService
+              .getFeaturedBrands()
+              .then(setFeaturedBrands)
+              .catch(() => {}),
+          );
         void catalogService
           .getBranches()
           .then(setLandingBranches)
@@ -759,6 +774,7 @@ export default function App() {
           loading={landingLoading}
           activeTab={activeTab}
           dealProducts={dealProducts}
+          dailyDeals={dailyDeals}
           cartItems={cartItems}
           onTabChange={setActiveTab}
           onAdd={addToCart}

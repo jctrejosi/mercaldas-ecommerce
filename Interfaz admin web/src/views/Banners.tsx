@@ -3,7 +3,7 @@ import {
   Plus, Edit, SquarePen, Trash2, X, Loader2, Filter, GripVertical,
   Image, Type, Palette, Link, Calendar, Eye, ChevronLeft, ChevronRight,
   LayoutTemplate, SlidersHorizontal, Zap, Truck, ShieldCheck, Clock, Megaphone,
-  Layers, Search, Package, ArrowUp, ArrowDown, Check, Save, AlertTriangle,
+  Layers, Search, Package, ArrowUp, ArrowDown, Check, Save, AlertTriangle, Tag, Store, Star,
 } from "lucide-react";
 import {
   bannersService,
@@ -1047,6 +1047,1125 @@ function BenefitsInlineEditor({
   );
 }
 
+// ── Daily Deals Manager ──
+interface DealItemForm {
+  id: string;
+  title: string;
+  subtitle: string;
+  discount: string;
+  price: string;
+  originalPrice: string;
+  unit: string;
+  image: string;
+  bgFrom: string;
+  bgTo: string;
+  endsAt: string;
+}
+
+interface DealCarouselProduct {
+  id: number;
+  name: string;
+  price: number;
+  originalPrice?: number;
+  image: string | null;
+  category?: string | null;
+}
+
+function DailyDealsManager({ onClose }: { onClose: () => void }) {
+  const [items, setItems] = useState<DealItemForm[]>([]);
+  const [carousel, setCarousel] = useState<DealCarouselProduct[]>([]);
+  const [tab, setTab] = useState<"display" | "carousel">("display");
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  const [showSearch, setShowSearch] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<DealCarouselProduct[]>([]);
+  const [searching, setSearching] = useState(false);
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:3000";
+
+  const load = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_BASE}/admin/landing/daily-deals`, {
+        credentials: "include",
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setItems(
+          (data.featuredItems ?? []).map((it: any, idx: number) => ({
+            id: String(it.id ?? idx),
+            title: it.title ?? "",
+            subtitle: it.subtitle ?? "",
+            discount: it.discount ?? "",
+            price: String(it.price ?? ""),
+            originalPrice: String(it.originalPrice ?? ""),
+            unit: it.unit ?? "",
+            image: it.image ?? "",
+            bgFrom: it.bgFrom ?? "#1A4A2E",
+            bgTo: it.bgTo ?? "#0D3B1F",
+            endsAt: it.endsAt ?? "",
+          })),
+        );
+        setCarousel(data.carousel ?? []);
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  }, [API_BASE]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const updateItem = (idx: number, field: keyof DealItemForm, value: string) => {
+    setItems((prev) => prev.map((it, i) => (i === idx ? { ...it, [field]: value } : it)));
+  };
+
+  const addItem = () => {
+    setItems((prev) => [
+      ...prev,
+      {
+        id: `n${Date.now()}`,
+        title: "",
+        subtitle: "",
+        discount: "",
+        price: "",
+        originalPrice: "",
+        unit: "",
+        image: "",
+        bgFrom: "#1A4A2E",
+        bgTo: "#0D3B1F",
+        endsAt: "",
+      },
+    ]);
+  };
+
+  const removeItem = (idx: number) =>
+    setItems((prev) => prev.filter((_, i) => i !== idx));
+
+  const handleProductSearch = (q: string) => {
+    setSearchQuery(q);
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+    searchTimer.current = setTimeout(async () => {
+      if (!q.trim()) {
+        setSearchResults([]);
+        return;
+      }
+      setSearching(true);
+      try {
+        const res = await fetch(
+          `${API_BASE}/admin/featured/products/search?q=${encodeURIComponent(q.trim())}&limit=20`,
+          { credentials: "include" },
+        );
+        if (res.ok) {
+          const data = await res.json();
+          const list = Array.isArray(data) ? data : data.products ?? [];
+          setSearchResults(
+            list.map((p: any) => ({
+              id: p.id,
+              name: p.name,
+              price: Number(p.price ?? 0),
+              originalPrice: p.originalPrice ? Number(p.originalPrice) : undefined,
+              image: p.image ?? null,
+              category: p.category ?? null,
+            })),
+          );
+        }
+      } catch {
+        /* noop */
+      } finally {
+        setSearching(false);
+      }
+    }, 350);
+  };
+
+  const addCarouselProduct = (p: DealCarouselProduct) => {
+    setCarousel((prev) => (prev.some((x) => x.id === p.id) ? prev : [...prev, p]));
+    setShowSearch(false);
+    setSearchQuery("");
+    setSearchResults([]);
+  };
+
+  const removeCarouselProduct = (id: number) => {
+    setCarousel((prev) => prev.filter((p) => p.id !== id));
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    setError("");
+    try {
+      const featuredItems = items
+        .filter((it) => it.title.trim() || it.image.trim())
+        .map((it, i) => ({
+          id: i,
+          title: it.title.trim(),
+          subtitle: it.subtitle.trim(),
+          discount: it.discount.trim(),
+          price: Number(it.price) || 0,
+          originalPrice: Number(it.originalPrice) || 0,
+          unit: it.unit.trim(),
+          image: it.image.trim(),
+          bgFrom: it.bgFrom,
+          bgTo: it.bgTo,
+          endsAt: it.endsAt.trim(),
+        }));
+      const res = await fetch(`${API_BASE}/admin/landing/daily-deals`, {
+        method: "PUT",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          featuredItems,
+          carouselProductIds: carousel.map((p) => p.id),
+        }),
+      });
+      if (!res.ok) throw new Error("Error al guardar");
+      onClose();
+    } catch (e: any) {
+      setError(e.message || "Error al guardar");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const currency = new Intl.NumberFormat("es-CO", {
+    style: "currency",
+    currency: "COP",
+    maximumFractionDigits: 0,
+  });
+
+  const inputCls =
+    "w-full text-xs border border-gray-200 rounded-lg px-2.5 py-2 focus:outline-none focus:ring-2 focus:ring-amber-300";
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col mx-4 overflow-hidden">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 shrink-0">
+          <div>
+            <h2 className="font-bold text-gray-900">Ofertas del Día</h2>
+            <p className="text-xs text-gray-400 mt-0.5">Display rotativo y carousel de productos</p>
+          </div>
+          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-500">
+            <X size={16} />
+          </button>
+        </div>
+
+        {/* Tabs */}
+        <div className="flex border-b border-gray-100 shrink-0">
+          <button
+            onClick={() => setTab("display")}
+            className={`flex-1 py-2.5 text-xs font-semibold transition-colors ${tab === "display" ? "text-amber-600 border-b-2 border-amber-400" : "text-gray-400 hover:text-gray-600"}`}
+          >
+            Display ({items.length})
+          </button>
+          <button
+            onClick={() => setTab("carousel")}
+            className={`flex-1 py-2.5 text-xs font-semibold transition-colors ${tab === "carousel" ? "text-amber-600 border-b-2 border-amber-400" : "text-gray-400 hover:text-gray-600"}`}
+          >
+            Carousel ({carousel.length})
+          </button>
+        </div>
+
+        {loading ? (
+          <div className="flex items-center justify-center py-16">
+            <div className="w-6 h-6 border-2 border-gray-300 border-t-amber-400 rounded-full animate-spin" />
+          </div>
+        ) : tab === "display" ? (
+          <div className="flex-1 overflow-y-auto p-6 space-y-4">
+            {items.length === 0 && (
+              <p className="text-center text-xs text-gray-400 py-8">
+                Sin items. Añade el primero.
+              </p>
+            )}
+            {items.map((it, i) => (
+              <div key={it.id} className="border border-gray-200 rounded-xl p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">
+                    Item #{i + 1}
+                  </p>
+                  <button
+                    onClick={() => removeItem(i)}
+                    className="w-6 h-6 rounded flex items-center justify-center hover:bg-red-50 text-gray-400 hover:text-red-500"
+                    title="Quitar item"
+                  >
+                    <X size={12} />
+                  </button>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="col-span-2">
+                    <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider block mb-1">
+                      Título <span className="text-gray-400">(\n para salto de línea)</span>
+                    </label>
+                    <input
+                      value={it.title}
+                      onChange={(e) => updateItem(i, "title", e.target.value)}
+                      className={inputCls}
+                      placeholder="Papa Criolla\nLimpia"
+                    />
+                  </div>
+                  <div className="col-span-2">
+                    <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider block mb-1">Subtítulo</label>
+                    <input value={it.subtitle} onChange={(e) => updateItem(i, "subtitle", e.target.value)} className={inputCls} placeholder="Fresca desde las fincas" />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider block mb-1">Descuento</label>
+                    <input value={it.discount} onChange={(e) => updateItem(i, "discount", e.target.value)} className={inputCls} placeholder="21% OFF" />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider block mb-1">Unidad</label>
+                    <input value={it.unit} onChange={(e) => updateItem(i, "unit", e.target.value)} className={inputCls} placeholder="x kg" />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider block mb-1">Precio</label>
+                    <input type="number" min="0" value={it.price} onChange={(e) => updateItem(i, "price", e.target.value)} className={inputCls} placeholder="3800" />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider block mb-1">Precio original</label>
+                    <input type="number" min="0" value={it.originalPrice} onChange={(e) => updateItem(i, "originalPrice", e.target.value)} className={inputCls} placeholder="4800" />
+                  </div>
+                  <div className="col-span-2">
+                    <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider block mb-1">Imagen (URL)</label>
+                    <input value={it.image} onChange={(e) => updateItem(i, "image", e.target.value)} className={`${inputCls} font-mono`} placeholder="https://..." />
+                    {it.image && (
+                      <img src={it.image} alt="" className="mt-2 h-20 w-full object-cover rounded-lg border border-gray-200" />
+                    )}
+                  </div>
+                  <div className="col-span-2 flex items-center gap-4">
+                    <div className="flex items-center gap-2">
+                      <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">Fondo</label>
+                      <input type="color" value={it.bgFrom} onChange={(e) => updateItem(i, "bgFrom", e.target.value)} className="w-8 h-8 rounded cursor-pointer border" />
+                      <input type="color" value={it.bgTo} onChange={(e) => updateItem(i, "bgTo", e.target.value)} className="w-8 h-8 rounded cursor-pointer border" />
+                    </div>
+                    <div className="flex-1">
+                      <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider block mb-1">Texto final (⏱)</label>
+                      <input value={it.endsAt} onChange={(e) => updateItem(i, "endsAt", e.target.value)} className={inputCls} placeholder="Hoy · Hasta agotar existencias" />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+            <button
+              onClick={addItem}
+              className="w-full flex items-center justify-center gap-1.5 py-2.5 text-xs font-semibold text-gray-500 border border-dashed border-gray-300 rounded-xl hover:border-amber-300 hover:text-amber-600 transition-colors"
+            >
+              <Plus size={13} /> Añadir item
+            </button>
+          </div>
+        ) : (
+          <div className="flex-1 overflow-y-auto p-6 space-y-3">
+            <button
+              onClick={() => setShowSearch(true)}
+              className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold bg-amber-400 text-amber-900 hover:bg-amber-500 transition-colors"
+            >
+              <Plus size={14} /> Añadir productos
+            </button>
+            {carousel.length === 0 ? (
+              <p className="text-xs text-gray-400 py-6 text-center">Sin productos en el carousel</p>
+            ) : (
+              <div className="flex flex-col gap-2 max-h-[50vh] overflow-y-auto">
+                {carousel.map((p) => (
+                  <div key={p.id} className="flex items-center gap-2 p-2 bg-gray-50 rounded-lg">
+                    <div className="w-10 h-10 rounded bg-gray-200 overflow-hidden shrink-0">
+                      {p.image && <img src={p.image} alt={p.name} className="w-full h-full object-cover" />}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs text-gray-700 truncate font-medium">{p.name}</p>
+                      <p className="text-[10px] text-gray-400">
+                        {currency.format(p.price)}
+                        {p.originalPrice ? (
+                          <span className="line-through ml-1.5">{currency.format(p.originalPrice)}</span>
+                        ) : null}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => removeCarouselProduct(p.id)}
+                      className="w-6 h-6 rounded flex items-center justify-center hover:bg-red-50 text-gray-400 hover:text-red-500 shrink-0"
+                      title="Quitar del carousel"
+                    >
+                      <X size={12} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        <div className="flex items-center justify-between px-6 py-4 border-t border-gray-100 bg-gray-50 shrink-0">
+          <button onClick={onClose} className="px-4 py-2 text-sm text-gray-600">
+            Cancelar
+          </button>
+          {error && <span className="text-xs text-red-500">{error}</span>}
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-amber-900 bg-amber-400 hover:bg-amber-500 disabled:opacity-50 rounded-xl"
+          >
+            {saving && <Loader2 size={14} className="animate-spin" />} Guardar cambios
+          </button>
+        </div>
+      </div>
+
+      {/* Buscador de productos del carousel */}
+      {showSearch && (
+        <>
+          <div className="fixed inset-0 z-[60] bg-black/40" onClick={() => setShowSearch(false)} />
+          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+            <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-bold text-sm text-gray-900">Añadir productos al carousel</h3>
+                <button onClick={() => setShowSearch(false)} className="p-1 rounded-lg hover:bg-gray-100 text-gray-400">
+                  <X size={16} />
+                </button>
+              </div>
+              <div className="relative mb-3">
+                <input
+                  value={searchQuery}
+                  onChange={(e) => handleProductSearch(e.target.value)}
+                  placeholder="Buscar producto..."
+                  className="w-full text-sm border border-gray-200 rounded-lg pl-9 pr-3 py-2 focus:outline-none focus:ring-2 focus:ring-amber-400"
+                />
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
+              </div>
+              {searching ? (
+                <div className="flex justify-center py-6">
+                  <div className="w-5 h-5 border-2 border-gray-300 border-t-amber-400 rounded-full animate-spin" />
+                </div>
+              ) : searchResults.length > 0 ? (
+                <div className="flex flex-col gap-1.5 max-h-80 overflow-y-auto">
+                  {searchResults.map((p) => (
+                    <button
+                      key={p.id}
+                      onClick={() => addCarouselProduct(p)}
+                      className="flex items-center gap-3 p-2 bg-gray-50 rounded-lg hover:bg-amber-50 transition-colors text-left"
+                    >
+                      <div className="w-9 h-9 rounded-lg bg-gray-200 overflow-hidden shrink-0">
+                        {p.image && <img src={p.image} alt={p.name} className="w-full h-full object-cover" />}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-medium text-gray-700 truncate">{p.name}</p>
+                        <p className="text-[10px] text-gray-400">{currency.format(p.price)}</p>
+                      </div>
+                      <Plus size={14} className="text-amber-500 shrink-0" />
+                    </button>
+                  ))}
+                </div>
+              ) : searchQuery.trim() ? (
+                <p className="text-xs text-gray-400 py-8 text-center">Sin resultados</p>
+              ) : (
+                <p className="text-xs text-gray-400 py-8 text-center">Escribe para buscar productos</p>
+              )}
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ── Landing Brands Manager ──
+interface LandingBrand {
+  id: number;
+  code: string | null;
+  name: string;
+  slug: string;
+  isActive: boolean;
+  imagePath: string | null;
+  productCount: number;
+  selected: boolean;
+}
+
+function BrandsLandingManager({
+  brands,
+  onClose,
+  onSaved,
+}: {
+  brands: LandingBrand[];
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [items, setItems] = useState(brands);
+  const [saving, setSaving] = useState(false);
+  const [search, setSearch] = useState("");
+  const [sortKey, setSortKey] = useState<"name" | "count">("name");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+  const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive">("all");
+  const [batchBusy, setBatchBusy] = useState(false);
+  const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:3000";
+
+  const toggleSelected = (id: number) => {
+    setItems((prev) => prev.map((b) => (b.id === id ? { ...b, selected: !b.selected } : b)));
+  };
+
+  const toggleActive = async (b: LandingBrand) => {
+    const newActive = !b.isActive;
+    try {
+      await fetch(`${API_BASE}/admin/landing/brands/${b.id}/active`, {
+        method: "PATCH", credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isActive: newActive }),
+      });
+      setItems((prev) => prev.map((x) => (x.id === b.id ? { ...x, isActive: newActive } : x)));
+    } catch (e) { console.error(e); }
+  };
+
+  const allSelected = items.length > 0 && items.every((b) => b.selected);
+  const selectedItems = items.filter((b) => b.selected);
+
+  const toggleSelectAll = () => {
+    setItems((prev) => prev.map((b) => ({ ...b, selected: !allSelected })));
+  };
+
+  const setSelectedActive = async (isActive: boolean) => {
+    const targets = items.filter((b) => b.selected);
+    if (targets.length === 0) return;
+    setBatchBusy(true);
+    try {
+      for (const b of targets) {
+        await fetch(`${API_BASE}/admin/landing/brands/${b.id}/active`, {
+          method: "PATCH", credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ isActive }),
+        });
+        setItems((prev) => prev.map((x) => (x.id === b.id ? { ...x, isActive } : x)));
+      }
+    } catch (e) { console.error(e); }
+    finally { setBatchBusy(false); }
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      const codes = items.filter((b) => b.selected && b.code).map((b) => b.code as string);
+      await fetch(`${API_BASE}/admin/landing/brands`, {
+        method: "PUT", credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ codes }),
+      });
+      onSaved();
+    } catch (e) { console.error(e); }
+    finally { setSaving(false); }
+  };
+
+  const activeCount = items.filter((b) => b.isActive).length;
+  const inactiveCount = items.length - activeCount;
+
+  const q = search.trim().toLowerCase();
+  const filtered = items
+    .filter((b) => {
+      const matchesSearch =
+        !q || b.name.toLowerCase().includes(q) || (b.code ?? "").toLowerCase().includes(q);
+      const matchesStatus =
+        statusFilter === "all" ||
+        (statusFilter === "active" ? b.isActive : !b.isActive);
+      return matchesSearch && matchesStatus;
+    })
+    .sort((a, b) => {
+      if (sortKey === "count") {
+        return sortDir === "desc" ? b.productCount - a.productCount : a.productCount - b.productCount;
+      }
+      return a.name.localeCompare(b.name, "es");
+    });
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[85vh] flex flex-col mx-4 overflow-hidden">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 shrink-0">
+          <div>
+            <h2 className="font-bold text-gray-900">Marcas en Home</h2>
+            <p className="text-xs text-gray-400 mt-0.5">
+              {activeCount} activas · {inactiveCount} inactivas de {items.length} totales
+            </p>
+          </div>
+          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-500"><X size={16} /></button>
+        </div>
+        <div className="px-6 pt-4 pb-1 space-y-3 shrink-0">
+          <div className="relative">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Buscar marca..."
+              className="w-full pl-9 pr-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-300"
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <select
+              value={`${sortKey}-${sortDir}`}
+              onChange={(e) => {
+                const [k, d] = e.target.value.split("-");
+                setSortKey(k as "name" | "count");
+                setSortDir(d as "asc" | "desc");
+              }}
+              className="flex-1 px-3 py-2 text-xs border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-amber-300"
+            >
+              <option value="name-asc">Orden: Nombre (A–Z)</option>
+              <option value="count-desc">Más productos primero</option>
+              <option value="count-asc">Menos productos primero</option>
+            </select>
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value as "all" | "active" | "inactive")}
+              className="flex-1 px-3 py-2 text-xs border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-amber-300"
+            >
+              <option value="all">Todas</option>
+              <option value="active">Solo activas</option>
+              <option value="inactive">Solo inactivas</option>
+            </select>
+          </div>
+        </div>
+        <div className="flex items-center justify-between px-6 py-2 border-t border-gray-100 shrink-0">
+          <label className="flex items-center gap-2 text-xs text-gray-500 cursor-pointer select-none">
+            <input type="checkbox" checked={allSelected} onChange={toggleSelectAll} className="w-3.5 h-3.5 rounded border-gray-300 text-amber-500" />
+            Seleccionar todas
+          </label>
+          {selectedItems.length > 0 && (
+            <div className="flex items-center gap-1.5">
+              <span className="text-[10px] font-semibold text-amber-700 mr-1">{selectedItems.length} seleccionadas</span>
+              <button onClick={() => setSelectedActive(true)} disabled={batchBusy} className="px-2 py-1 text-[11px] font-semibold text-green-700 bg-green-50 border border-green-200 rounded-lg hover:bg-green-100 disabled:opacity-50">Activar</button>
+              <button onClick={() => setSelectedActive(false)} disabled={batchBusy} className="px-2 py-1 text-[11px] font-semibold text-gray-600 bg-gray-100 border border-gray-200 rounded-lg hover:bg-gray-200 disabled:opacity-50">Inactivar</button>
+            </div>
+          )}
+        </div>
+        <div className="flex-1 overflow-y-auto p-6 space-y-1">
+          {filtered.map((b) => (
+            <div key={b.id} className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-gray-50 transition-colors">
+              <label className="flex items-center gap-3 flex-1 cursor-pointer">
+                <input type="checkbox" checked={b.selected} onChange={() => toggleSelected(b.id)} className="w-4 h-4 rounded border-gray-300 text-amber-500 focus:ring-amber-300" />
+                <div className="w-7 h-7 rounded-lg bg-gray-100 overflow-hidden shrink-0 flex items-center justify-center">
+                  {b.imagePath ? (
+                    <img src={b.imagePath} alt={b.name} className="w-full h-full object-contain" />
+                  ) : (
+                    <Tag size={14} className="text-gray-400" />
+                  )}
+                </div>
+                <span className={`flex-1 text-sm ${b.isActive ? "text-gray-700" : "text-gray-300 line-through"}`}>{b.name}</span>
+                {b.code && <span className="text-[10px] text-gray-400 font-mono">{b.code}</span>}
+                <span className="text-xs text-gray-400">{b.productCount} prod.</span>
+              </label>
+              <button
+                onClick={(e) => { e.stopPropagation(); toggleActive(b); }}
+                className={`relative w-9 h-5 rounded-full transition-colors flex-shrink-0 cursor-pointer ${b.isActive ? "bg-green-500" : "bg-gray-300"}`}
+              >
+                <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${b.isActive ? "left-4" : "left-0.5"}`} />
+              </button>
+            </div>
+          ))}
+          {filtered.length === 0 && (
+            <p className="text-center text-xs text-gray-400 py-8">Sin resultados</p>
+          )}
+        </div>
+        <div className="flex items-center justify-between px-6 py-4 border-t border-gray-100 bg-gray-50 shrink-0">
+          <button onClick={onClose} className="px-4 py-2 text-sm text-gray-600">Cancelar</button>
+          <button onClick={handleSave} disabled={saving} className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-amber-900 bg-amber-400 hover:bg-amber-500 disabled:opacity-50 rounded-xl">
+            {saving && <Loader2 size={14} className="animate-spin" />}Guardar selección
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Landing Branches Manager ──
+const BRANCH_DAYS: { key: string; label: string }[] = [
+  { key: "monday", label: "Lunes" },
+  { key: "tuesday", label: "Martes" },
+  { key: "wednesday", label: "Miércoles" },
+  { key: "thursday", label: "Jueves" },
+  { key: "friday", label: "Viernes" },
+  { key: "saturday", label: "Sábado" },
+  { key: "sunday", label: "Domingo" },
+];
+
+interface LandingBranchItem {
+  id: number;
+  name: string;
+  address: string;
+  city: string;
+  phone: string;
+  email: string | null;
+  schedule: Record<string, string> | null;
+  isActive: boolean;
+  imagePath: string | null;
+}
+
+interface BranchForm {
+  name: string;
+  address: string;
+  phone: string;
+  imageUrl: string;
+  schedule: Record<string, string>;
+}
+
+function branchScheduleSummary(schedule: Record<string, string> | null): string {
+  if (!schedule) return "Horario no configurado";
+  const filled = BRANCH_DAYS.filter((d) => schedule[d.key]?.trim());
+  if (filled.length === 0) return "Horario no configurado";
+  return `${filled.length} días · ${schedule[filled[0].key]}`;
+}
+
+function BranchesLandingManager({ onClose }: { onClose: () => void }) {
+  const [branches, setBranches] = useState<LandingBranchItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [editing, setEditing] = useState<LandingBranchItem | null>(null);
+  const [form, setForm] = useState<BranchForm | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const [pendingPreview, setPendingPreview] = useState("");
+  const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:3000";
+
+  const load = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_BASE}/admin/branches`, { credentials: "include" });
+      if (res.ok) {
+        const data = await res.json();
+        setBranches(
+          (Array.isArray(data) ? data : []).map((b: any) => ({
+            id: b.id,
+            name: b.name,
+            address: b.address,
+            city: b.city,
+            phone: b.phone,
+            email: b.email ?? null,
+            schedule: b.schedule ?? null,
+            isActive: b.isActive,
+            imagePath: b.imagePath ?? null,
+          })),
+        );
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  }, [API_BASE]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const toggleVisible = async (b: LandingBranchItem) => {
+    const next = !b.isActive;
+    setBranches((prev) => prev.map((x) => (x.id === b.id ? { ...x, isActive: next } : x)));
+    try {
+      const res = await fetch(`${API_BASE}/admin/branches/${b.id}`, {
+        method: "PUT", credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isActive: next }),
+      });
+      if (!res.ok) {
+        setBranches((prev) => prev.map((x) => (x.id === b.id ? { ...x, isActive: b.isActive } : x)));
+      }
+    } catch {
+      setBranches((prev) => prev.map((x) => (x.id === b.id ? { ...x, isActive: b.isActive } : x)));
+    }
+  };
+
+  const openEdit = (b: LandingBranchItem) => {
+    setEditing(b);
+    setForm({
+      name: b.name,
+      address: b.address,
+      phone: b.phone,
+      imageUrl: b.imagePath ?? "",
+      schedule: b.schedule ?? {},
+    });
+    setPendingFile(null);
+    setPendingPreview("");
+    setError("");
+  };
+
+  const uploadImage = async (): Promise<string | null> => {
+    if (!pendingFile) return form?.imageUrl ?? null;
+    const fd = new FormData();
+    fd.append("file", pendingFile);
+    fd.append("code", `branch_${(form?.name ?? "sucursal").replace(/\s+/g, "_")}`);
+    const res = await fetch(`${API_BASE}/upload/image`, { method: "POST", body: fd });
+    if (!res.ok) throw new Error("Error al subir imagen");
+    const data = await res.json();
+    return data.url;
+  };
+
+  const saveEdit = async () => {
+    if (!editing || !form) return;
+    setSaving(true);
+    setError("");
+    try {
+      const imageUrl = await uploadImage();
+      const payload: any = {
+        name: form.name.trim(),
+        address: form.address.trim(),
+        phone: form.phone.trim(),
+        schedule: form.schedule,
+      };
+      if (imageUrl) payload.imageUrl = imageUrl;
+      const res = await fetch(`${API_BASE}/admin/branches/${editing.id}`, {
+        method: "PUT", credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) throw new Error("Error al guardar");
+      setEditing(null);
+      await load();
+    } catch (e: any) {
+      setError(e.message || "Error al guardar");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const inputCls =
+    "w-full text-xs border border-gray-200 rounded-lg px-2.5 py-2 focus:outline-none focus:ring-2 focus:ring-amber-300";
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col mx-4 overflow-hidden">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 shrink-0">
+          <div>
+            <h2 className="font-bold text-gray-900">Sucursales en Home</h2>
+            <p className="text-xs text-gray-400 mt-0.5">
+              {branches.filter((b) => b.isActive).length} visibles · {branches.filter((b) => !b.isActive).length} ocultas
+            </p>
+          </div>
+          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-500">
+            <X size={16} />
+          </button>
+        </div>
+
+        {loading ? (
+          <div className="flex items-center justify-center py-16">
+            <div className="w-6 h-6 border-2 border-gray-300 border-t-amber-400 rounded-full animate-spin" />
+          </div>
+        ) : branches.length === 0 ? (
+          <p className="text-xs text-gray-400 py-12 text-center">No hay sucursales</p>
+        ) : (
+          <div className="flex-1 overflow-y-auto divide-y divide-gray-50">
+            {branches.map((b) => (
+              <div key={b.id} className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors">
+                <div className="w-10 h-10 rounded-lg bg-gray-100 overflow-hidden shrink-0 flex items-center justify-center">
+                  {b.imagePath ? (
+                    <img src={b.imagePath} alt={b.name} className="w-full h-full object-cover" />
+                  ) : (
+                    <Store size={16} className="text-gray-400" />
+                  )}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <p className={`text-sm font-medium truncate ${b.isActive ? "text-gray-900" : "text-gray-400"}`}>{b.name}</p>
+                    {b.isActive ? (
+                      <span className="text-[10px] bg-green-50 text-green-600 px-1.5 py-0.5 rounded-full font-semibold">Visible</span>
+                    ) : (
+                      <span className="text-[10px] bg-red-50 text-red-500 px-1.5 py-0.5 rounded-full font-semibold">Oculta</span>
+                    )}
+                  </div>
+                  <p className="text-xs text-gray-400 truncate">{b.address} · {b.phone}</p>
+                  <p className="text-[11px] text-gray-400">{branchScheduleSummary(b.schedule)}</p>
+                </div>
+                <button
+                  onClick={() => toggleVisible(b)}
+                  className={`relative w-9 h-5 rounded-full transition-colors flex-shrink-0 cursor-pointer ${b.isActive ? "bg-green-500" : "bg-gray-300"}`}
+                  title={b.isActive ? "Ocultar" : "Mostrar"}
+                >
+                  <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${b.isActive ? "left-4" : "left-0.5"}`} />
+                </button>
+                <button
+                  onClick={() => openEdit(b)}
+                  className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600 shrink-0"
+                  title="Editar sucursal"
+                >
+                  <Edit size={13} />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div className="flex items-center justify-between px-6 py-4 border-t border-gray-100 bg-gray-50 shrink-0">
+          <button onClick={onClose} className="px-4 py-2 text-sm text-gray-600">Cerrar</button>
+          <p className="text-[11px] text-gray-400">Edita los datos con el lápiz · oculta/muestra con el switch</p>
+        </div>
+      </div>
+
+      {/* Drawer de edición */}
+      {editing && form && (
+        <>
+          <div className="fixed inset-0 bg-black/30 z-[60]" onClick={() => setEditing(null)} />
+          <div className="fixed right-0 top-0 bottom-0 w-96 bg-white shadow-2xl z-[60] overflow-y-auto">
+            <div className="sticky top-0 bg-white border-b border-gray-100 px-5 py-4 flex items-center justify-between">
+              <h3 className="font-bold text-sm text-gray-900">Editar sucursal</h3>
+              <button onClick={() => setEditing(null)} className="p-1 rounded-lg hover:bg-gray-100 text-gray-400">
+                <X size={16} />
+              </button>
+            </div>
+            <div className="p-5 space-y-4">
+              <div>
+                <label className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider block mb-1">Título</label>
+                <input value={form.name} onChange={(e) => setForm((f) => (f ? { ...f, name: e.target.value } : f))} className={inputCls} />
+              </div>
+              <div>
+                <label className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider block mb-1">Dirección</label>
+                <input value={form.address} onChange={(e) => setForm((f) => (f ? { ...f, address: e.target.value } : f))} className={inputCls} />
+              </div>
+              <div>
+                <label className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider block mb-1">Teléfono</label>
+                <input value={form.phone} onChange={(e) => setForm((f) => (f ? { ...f, phone: e.target.value } : f))} className={inputCls} />
+              </div>
+
+              <div>
+                <label className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider block mb-1">Horario</label>
+                <div className="space-y-1.5">
+                  {BRANCH_DAYS.map((d) => (
+                    <div key={d.key} className="flex items-center gap-2">
+                      <span className="w-16 text-[11px] text-gray-500">{d.label}</span>
+                      <input
+                        value={form.schedule[d.key] ?? ""}
+                        onChange={(e) =>
+                          setForm((f) =>
+                            f ? { ...f, schedule: { ...f.schedule, [d.key]: e.target.value } } : f,
+                          )
+                        }
+                        placeholder="8:00 AM - 9:00 PM"
+                        className={inputCls}
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider block mb-1">Imagen</label>
+                {form.imageUrl || pendingFile ? (
+                  <div className="relative mb-2">
+                    <img src={pendingPreview || form.imageUrl} alt="" className="w-full h-28 object-cover rounded-lg border border-gray-200" />
+                    <button
+                      onClick={() => { setPendingFile(null); setPendingPreview(""); setForm((f) => (f ? { ...f, imageUrl: "" } : f)); }}
+                      className="absolute top-1 right-1 w-5 h-5 rounded-full bg-red-500 text-white flex items-center justify-center text-xs hover:bg-red-600"
+                    >
+                      <X size={10} />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="w-full h-28 rounded-lg border-2 border-dashed border-gray-200 flex items-center justify-center text-gray-400">Sin imagen</div>
+                )}
+                <label className="mt-2 flex items-center justify-center gap-1 px-3 py-2 text-xs font-semibold border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors">
+                  Subir imagen
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      setPendingFile(file);
+                      setPendingPreview(URL.createObjectURL(file));
+                    }}
+                    className="hidden"
+                  />
+                </label>
+              </div>
+
+              {error && <p className="text-xs text-red-500">{error}</p>}
+
+              <button
+                onClick={saveEdit}
+                disabled={saving}
+                className="w-full py-2.5 rounded-xl text-sm font-bold bg-amber-400 text-amber-900 hover:bg-amber-500 transition-colors disabled:opacity-50"
+              >
+                {saving ? "Guardando..." : "Guardar cambios"}
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ── Landing Benefits Manager ──
+const BENEFIT_OPTIONS = [
+  { key: "Truck", label: "🚚 Envío" },
+  { key: "MapPin", label: "📍 Mapa" },
+  { key: "CreditCard", label: "💳 Pago" },
+  { key: "ShieldCheck", label: "🛡️ Seguro" },
+  { key: "Phone", label: "📞 Teléfono" },
+  { key: "Store", label: "🏪 Tienda" },
+  { key: "Heart", label: "❤️ Salud" },
+  { key: "Zap", label: "⚡ Rápido" },
+  { key: "Clock", label: "⏱ Horario" },
+  { key: "Star", label: "⭐ Calidad" },
+];
+
+interface BenefitItemForm {
+  id: string;
+  icon: string;
+  title: string;
+  desc: string;
+}
+
+function BenefitsLandingManager({ onClose }: { onClose: () => void }) {
+  const [items, setItems] = useState<BenefitItemForm[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:3000";
+
+  const load = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_BASE}/admin/landing/benefits`, {
+        credentials: "include",
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setItems(
+          (Array.isArray(data) ? data : []).map((it: any, idx: number) => ({
+            id: String(it.id ?? idx),
+            icon: it.icon ?? "Star",
+            title: it.title ?? "",
+            desc: it.desc ?? "",
+          })),
+        );
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  }, [API_BASE]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const updateItem = (idx: number, field: "icon" | "title" | "desc", value: string) => {
+    setItems((prev) => prev.map((it, i) => (i === idx ? { ...it, [field]: value } : it)));
+  };
+
+  const addItem = () => {
+    setItems((prev) => [
+      ...prev,
+      { id: `n${Date.now()}`, icon: "Star", title: "", desc: "" },
+    ]);
+  };
+
+  const removeItem = (idx: number) => {
+    setItems((prev) => prev.filter((_, i) => i !== idx));
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    setError("");
+    try {
+      const payload = items
+        .filter((it) => it.title.trim() || it.desc.trim())
+        .map((it, i) => ({
+          id: i,
+          icon: it.icon,
+          title: it.title.trim(),
+          desc: it.desc.trim(),
+        }));
+      const res = await fetch(`${API_BASE}/admin/landing/benefits`, {
+        method: "PUT", credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) throw new Error("Error al guardar");
+      onClose();
+    } catch (e: any) {
+      setError(e.message || "Error al guardar");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const inputCls =
+    "w-full text-xs border border-gray-200 rounded-lg px-2.5 py-2 focus:outline-none focus:ring-2 focus:ring-amber-300";
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[85vh] flex flex-col mx-4 overflow-hidden">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 shrink-0">
+          <div>
+            <h2 className="font-bold text-gray-900">Beneficios</h2>
+            <p className="text-xs text-gray-400 mt-0.5">
+              Sección ¿Por qué comprar en Mercaldas? ({items.length} ítems)
+            </p>
+          </div>
+          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-500"><X size={16} /></button>
+        </div>
+
+        {loading ? (
+          <div className="flex items-center justify-center py-16">
+            <div className="w-6 h-6 border-2 border-gray-300 border-t-amber-400 rounded-full animate-spin" />
+          </div>
+        ) : (
+          <div className="flex-1 overflow-y-auto p-6 space-y-3">
+            {items.length === 0 && (
+              <p className="text-center text-xs text-gray-400 py-8">Sin beneficios configurados</p>
+            )}
+            {items.map((it, i) => (
+              <div key={it.id} className="flex flex-col gap-2 bg-gray-50 rounded-xl p-3">
+                <div className="flex items-center gap-2">
+                  <select
+                    value={it.icon}
+                    onChange={(e) => updateItem(i, "icon", e.target.value)}
+                    className="w-28 px-2 py-1.5 text-xs border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-amber-300"
+                  >
+                    {BENEFIT_OPTIONS.map((o) => (
+                      <option key={o.key} value={o.key}>{o.label}</option>
+                    ))}
+                  </select>
+                  <input
+                    value={it.title}
+                    onChange={(e) => updateItem(i, "title", e.target.value)}
+                    placeholder="Título del beneficio"
+                    className={`${inputCls} flex-1`}
+                  />
+                  <button
+                    onClick={() => removeItem(i)}
+                    className="w-6 h-6 flex items-center justify-center rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500 shrink-0"
+                    title="Quitar beneficio"
+                  >
+                    <X size={12} />
+                  </button>
+                </div>
+                <textarea
+                  value={it.desc}
+                  onChange={(e) => updateItem(i, "desc", e.target.value)}
+                  placeholder="Descripción del beneficio"
+                  rows={2}
+                  className={`${inputCls} resize-none`}
+                />
+              </div>
+            ))}
+            <button
+              onClick={addItem}
+              className="w-full flex items-center justify-center gap-1.5 py-2.5 text-xs font-semibold text-gray-500 border border-dashed border-gray-300 rounded-xl hover:border-amber-300 hover:text-amber-600 transition-colors"
+            >
+              <Plus size={13} /> Añadir beneficio
+            </button>
+          </div>
+        )}
+
+        <div className="flex items-center justify-between px-6 py-4 border-t border-gray-100 bg-gray-50 shrink-0">
+          <button onClick={onClose} className="px-4 py-2 text-sm text-gray-600">Cancelar</button>
+          {error && <span className="text-xs text-red-500">{error}</span>}
+          <button onClick={handleSave} disabled={saving} className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-amber-900 bg-amber-400 hover:bg-amber-500 disabled:opacity-50 rounded-xl">
+            {saving && <Loader2 size={14} className="animate-spin" />} Guardar cambios
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Product Types Selector ──
 interface LandingProductType { id: number; code: string; name: string; count: number; isActive: boolean; selected: boolean; }
 
@@ -1644,7 +2763,13 @@ export default function Banners() {
   const [promoManagerOpen, setPromoManagerOpen] = useState(false);
   const [prodTypesOpen, setProdTypesOpen] = useState(false);
   const [featuredOpen, setFeaturedOpen] = useState(false);
+  const [dealsOpen, setDealsOpen] = useState(false);
   const [landingTypes, setLandingTypes] = useState<LandingProductType[]>([]);
+  const [landingBrands, setLandingBrands] = useState<LandingBrand[]>([]);
+  const [brandsOpen, setBrandsOpen] = useState(false);
+  const [landingBranches, setLandingBranches] = useState<LandingBranchItem[]>([]);
+  const [branchesOpen, setBranchesOpen] = useState(false);
+  const [benefitsOpen, setBenefitsOpen] = useState(false);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -1664,6 +2789,14 @@ export default function Banners() {
       const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:3000";
       const res = await fetch(`${API_BASE}/admin/landing/product-types`, { credentials: "include" });
       if (res.ok) setLandingTypes(await res.json());
+
+      // Load landing brands
+      const brandRes = await fetch(`${API_BASE}/admin/landing/brands`, { credentials: "include" });
+      if (brandRes.ok) setLandingBrands(await brandRes.json());
+
+      // Load landing branches
+      const branchRes = await fetch(`${API_BASE}/admin/branches`, { credentials: "include" });
+      if (branchRes.ok) setLandingBranches(await branchRes.json());
     } catch (e) { console.error(e); }
     finally { setLoading(false); }
   }, []);
@@ -1769,6 +2902,82 @@ export default function Banners() {
               <p className="text-xs text-gray-400">Administra las pestañas y adjunta productos a cada una</p>
             </div>
 
+            {/* Daily Deals card */}
+            <div
+              onClick={() => setDealsOpen(true)}
+              className="bg-white rounded-2xl border border-gray-100 p-5 cursor-pointer hover:shadow-md hover:border-amber-200 transition-all group"
+            >
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-10 h-10 rounded-xl bg-orange-100 flex items-center justify-center group-hover:bg-orange-200 transition-colors">
+                  <Clock size={18} className="text-orange-600" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-gray-900 text-sm">Ofertas del Día</h3>
+                  <p className="text-xs text-gray-500">Display rotativo y carousel de ofertas</p>
+                </div>
+              </div>
+              <p className="text-xs text-gray-400">Administra el display izquierdo y los productos del carousel</p>
+            </div>
+
+            {/* Landing Brands card */}
+            <div
+              onClick={() => setBrandsOpen(true)}
+              className="bg-white rounded-2xl border border-gray-100 p-5 cursor-pointer hover:shadow-md hover:border-amber-200 transition-all group"
+            >
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-10 h-10 rounded-xl bg-teal-100 flex items-center justify-center group-hover:bg-teal-200 transition-colors">
+                  <Tag size={18} className="text-teal-600" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-gray-900 text-sm">Marcas en Home</h3>
+                  <p className="text-xs text-gray-500">Selecciona las marcas visibles en la landing</p>
+                </div>
+              </div>
+              <div className="flex gap-6 text-sm">
+                <div><span className="font-bold text-gray-900">{landingBrands.length}</span> <span className="text-gray-400 text-xs">marcas</span></div>
+                <div><span className="font-bold text-green-600">{landingBrands.filter((b) => b.isActive).length}</span> <span className="text-gray-400 text-xs">activas</span></div>
+                <div><span className="font-bold text-red-500">{landingBrands.filter((b) => !b.isActive).length}</span> <span className="text-gray-400 text-xs">inactivas</span></div>
+              </div>
+            </div>
+
+            {/* Landing Branches card */}
+            <div
+              onClick={() => setBranchesOpen(true)}
+              className="bg-white rounded-2xl border border-gray-100 p-5 cursor-pointer hover:shadow-md hover:border-amber-200 transition-all group"
+            >
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-10 h-10 rounded-xl bg-sky-100 flex items-center justify-center group-hover:bg-sky-200 transition-colors">
+                  <Store size={18} className="text-sky-600" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-gray-900 text-sm">Sucursales</h3>
+                  <p className="text-xs text-gray-500">Visibilidad y datos de las sucursales</p>
+                </div>
+              </div>
+              <div className="flex gap-6 text-sm">
+                <div><span className="font-bold text-gray-900">{landingBranches.length}</span> <span className="text-gray-400 text-xs">sucursales</span></div>
+                <div><span className="font-bold text-green-600">{landingBranches.filter((b) => b.isActive).length}</span> <span className="text-gray-400 text-xs">visibles</span></div>
+                <div><span className="font-bold text-red-500">{landingBranches.filter((b) => !b.isActive).length}</span> <span className="text-gray-400 text-xs">ocultas</span></div>
+              </div>
+            </div>
+
+            {/* Landing Benefits card */}
+            <div
+              onClick={() => setBenefitsOpen(true)}
+              className="bg-white rounded-2xl border border-gray-100 p-5 cursor-pointer hover:shadow-md hover:border-amber-200 transition-all group"
+            >
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-10 h-10 rounded-xl bg-rose-100 flex items-center justify-center group-hover:bg-rose-200 transition-colors">
+                  <Star size={18} className="text-rose-600" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-gray-900 text-sm">Beneficios</h3>
+                  <p className="text-xs text-gray-500">Sección ¿Por qué comprar en Mercaldas?</p>
+                </div>
+              </div>
+              <p className="text-xs text-gray-400">Administra los beneficios (icono, título y descripción)</p>
+            </div>
+
             {/* Promo/Advertising card */}
             <div
               onClick={() => setPromoManagerOpen(true)}
@@ -1839,6 +3048,26 @@ export default function Banners() {
           onSaved={() => { setFeaturedOpen(false); }}
         />
       )}
+
+      {/* Daily deals manager */}
+      {dealsOpen && <DailyDealsManager onClose={() => setDealsOpen(false)} />}
+
+      {/* Landing brands manager */}
+      {brandsOpen && (
+        <BrandsLandingManager
+          brands={landingBrands}
+          onClose={() => setBrandsOpen(false)}
+          onSaved={() => { setBrandsOpen(false); fetchData(); }}
+        />
+      )}
+
+      {/* Landing branches manager */}
+      {branchesOpen && (
+        <BranchesLandingManager onClose={() => { setBranchesOpen(false); fetchData(); }} />
+      )}
+
+      {/* Landing benefits manager */}
+      {benefitsOpen && <BenefitsLandingManager onClose={() => setBenefitsOpen(false)} />}
     </>
   );
 }
