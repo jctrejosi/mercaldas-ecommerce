@@ -10,6 +10,8 @@ import {
   X,
   Star,
   Upload,
+  Crop,
+  Eraser,
 } from "lucide-react";
 import { catalogService, CatalogProduct } from "../services/catalog.service";
 
@@ -40,6 +42,8 @@ export default function Brands() {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [trimEnabled, setTrimEnabled] = useState(false);
+  const [removeBgEnabled, setRemoveBgEnabled] = useState(false);
 
   const [deleteConfirm, setDeleteConfirm] = useState<AdminBrand | null>(null);
 
@@ -199,6 +203,8 @@ export default function Brands() {
     });
     setPendingFile(null);
     setPreviewUrl(null);
+    setTrimEnabled(false);
+    setRemoveBgEnabled(false);
     setSaveError(null);
   };
 
@@ -218,6 +224,8 @@ export default function Brands() {
     });
     setPendingFile(null);
     setPreviewUrl(brand.image);
+    setTrimEnabled(false);
+    setRemoveBgEnabled(false);
     setSaveError(null);
     loadBrandProducts(brand.id);
   };
@@ -227,6 +235,8 @@ export default function Brands() {
     setCreating(false);
     setPendingFile(null);
     setPreviewUrl(null);
+    setTrimEnabled(false);
+    setRemoveBgEnabled(false);
     setSaveError(null);
   };
 
@@ -245,6 +255,8 @@ export default function Brands() {
       const fd = new FormData();
       fd.append("file", pendingFile);
       fd.append("code", `brand_${name.replace(/\s+/g, "_")}`);
+      fd.append("trim", trimEnabled ? "true" : "false");
+      fd.append("removeBg", removeBgEnabled ? "true" : "false");
       const res = await fetch(
         `${import.meta.env.VITE_API_URL || "http://localhost:3000"}/upload/image`,
         { method: "POST", body: fd },
@@ -820,6 +832,36 @@ export default function Brands() {
                   disabled={uploading}
                 />
               </div>
+
+              {/* Image processing options */}
+              {pendingFile && (
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setTrimEnabled((v) => !v)}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
+                      trimEnabled
+                        ? "bg-amber-50 border-amber-300 text-amber-700"
+                        : "border-gray-200 text-gray-500 hover:bg-gray-50"
+                    }`}
+                  >
+                    <Crop size={13} />
+                    Recortar al contenido
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setRemoveBgEnabled((v) => !v)}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
+                      removeBgEnabled
+                        ? "bg-amber-50 border-amber-300 text-amber-700"
+                        : "border-gray-200 text-gray-500 hover:bg-gray-50"
+                    }`}
+                  >
+                    <Eraser size={13} />
+                    Quitar fondo
+                  </button>
+                </div>
+              )}
 
               {/* Name */}
               <div>

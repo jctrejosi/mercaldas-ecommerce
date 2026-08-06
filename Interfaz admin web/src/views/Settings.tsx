@@ -122,6 +122,13 @@ export default function SettingsView() {
     fetch(`${API_BASE}/admin/settings/payment-methods`, { method: "PUT", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify(updated) });
   };
 
+  const toggleEfectivo = () => {
+    if (!payMethods) return;
+    const updated = { ...payMethods, efectivo: { ...payMethods.efectivo, enabled: !payMethods.efectivo?.enabled } };
+    setPayMethods(updated);
+    fetch(`${API_BASE}/admin/settings/payment-methods`, { method: "PUT", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify(updated) });
+  };
+
   return (
     <div className="p-6">
       <div className="mb-6">
@@ -217,6 +224,19 @@ export default function SettingsView() {
                   <div className="flex items-center justify-center py-12"><Loader2 size={24} className="animate-spin text-amber-500" /></div>
                 ) : (
                   <div className="space-y-3">
+                    {/* Efectivo contra entrega */}
+                    <div className="border border-gray-200 rounded-xl p-4">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-semibold text-gray-800">Efectivo contra entrega</p>
+                          <p className="text-xs text-gray-400">Pago en efectivo al recibir el pedido</p>
+                        </div>
+                        <button onClick={toggleEfectivo} className={`w-11 h-6 rounded-full relative transition-all ${payMethods?.efectivo?.enabled ? "bg-green-500" : "bg-gray-300"}`}>
+                          <span className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-all ${payMethods?.efectivo?.enabled ? "right-1" : "left-1"}`} />
+                        </button>
+                      </div>
+                    </div>
+
                     {/* Wompi */}
                     <div className="border border-gray-200 rounded-xl p-4">
                       <div className="flex items-center justify-between mb-3">
