@@ -25,7 +25,7 @@ export class CloudinaryController {
   ) {
     if (!file) throw new BadRequestException('Archivo requerido');
     const folderCode = code || `img_${Date.now().toString(36)}`;
-    const url = await this.cloudinaryService.uploadImage(file, folderCode);
-    return { url };
+    const result = await this.cloudinaryService.uploadImage(file, folderCode);
+    return result;
   }
 }

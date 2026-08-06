@@ -380,6 +380,7 @@ export const store = pgTable(
     invoiceResolution: varchar('invoice_resolution', { length: 50 }),
     email: varchar({ length: 255 }).notNull(),
     phone: varchar({ length: 50 }).notNull(),
+    whatsapp: varchar({ length: 50 }),
     primaryDomain: varchar('primary_domain', { length: 255 }).notNull(),
     secondaryDomains: jsonb('secondary_domains'),
     address: text().notNull(),

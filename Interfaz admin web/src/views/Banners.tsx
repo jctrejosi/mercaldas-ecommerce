@@ -143,7 +143,7 @@ function SlideEditor({
     }
   };
 
-  const uploadFile = async (file: File): Promise<string> => {
+  const uploadFile = async (file: File): Promise<{ url: string; mediaType: string } | null> => {
     const fd = new FormData();
     fd.append("file", file);
     fd.append("code", `hero_${Date.now()}`);
@@ -153,7 +153,7 @@ function SlideEditor({
     );
     if (!res.ok) throw new Error("Error al subir imagen");
     const data = await res.json();
-    return data.url;
+    return { url: data.url, mediaType: data.mediaType || "image/webp" };
   };
 
   // Filter config in content tab is read-only — managed in Filter tab
@@ -166,8 +166,8 @@ function SlideEditor({
     try {
       let finalImageUrl = imageUrl.trim();
       let finalMobileUrl = mobileImageUrl.trim();
-      if (pendingFile) finalImageUrl = await uploadFile(pendingFile);
-      if (pendingMobileFile) finalMobileUrl = await uploadFile(pendingMobileFile);
+      if (pendingFile) { const u = await uploadFile(pendingFile); if (u) finalImageUrl = u.url; }
+      if (pendingMobileFile) { const u = await uploadFile(pendingMobileFile); if (u) finalMobileUrl = u.url; }
       const imageMediaId = await createMediaFromUrl(finalImageUrl);
       const mobileMediaId = finalMobileUrl ? await createMediaFromUrl(finalMobileUrl) : undefined;
       const data: CreateBannerData = {
@@ -314,12 +314,12 @@ function SlideEditor({
 }
 
 // ── Helper ──
-async function createMediaFromUrl(url: string): Promise<number> {
+async function createMediaFromUrl(url: string, mediaType?: string): Promise<number> {
   const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:3000";
   const res = await fetch(`${API_BASE_URL}/admin/banners/upload-url`, {
     method: "POST", credentials: "include",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ url }),
+    body: JSON.stringify({ url, mediaType }),
   });
   if (!res.ok) throw new Error("Error al crear media");
   return (await res.json()).mediaId;
@@ -606,7 +606,7 @@ function PromoSlideEditor({
     setImageUrl(URL.createObjectURL(file));
   };
 
-  const uploadFile = async (file: File): Promise<string> => {
+  const uploadFile = async (file: File): Promise<{ url: string; mediaType: string } | null> => {
     const fd = new FormData();
     fd.append("file", file);
     fd.append("code", `promo_${Date.now()}`);
@@ -616,7 +616,7 @@ function PromoSlideEditor({
     );
     if (!res.ok) throw new Error("Error al subir imagen");
     const data = await res.json();
-    return data.url;
+    return { url: data.url, mediaType: data.mediaType || "image/webp" };
   };
 
   const handleSave = async () => {
@@ -624,7 +624,7 @@ function PromoSlideEditor({
     setError(""); setSaving(true);
     try {
       let finalImageUrl = imageUrl.trim();
-      if (pendingFile) finalImageUrl = await uploadFile(pendingFile);
+      if (pendingFile) { const u = await uploadFile(pendingFile); if (u) finalImageUrl = u.url; }
       const imageMediaId = await createMediaFromUrl(finalImageUrl);
       const data: CreateBannerData = {
         title: title.trim(),

@@ -72,13 +72,13 @@ export class AdminBannersController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Crear media desde URL' })
   @ApiResponse({ status: 200, description: 'Media creado' })
-  async uploadUrl(@Body() body: { url: string }) {
+  async uploadUrl(@Body() body: { url: string; mediaType?: string }) {
     const [row] = await this.drizzle.db
       .insert(media)
       .values({
         path: body.url,
         fileName: body.url.split('/').pop() || 'image',
-        mimeType: 'image/jpeg',
+        mimeType: body.mediaType || 'image/webp',
         sizeBytes: 0,
         checksum: `url_${Date.now()}`,
         mediaType: 'image',

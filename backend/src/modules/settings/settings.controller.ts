@@ -23,6 +23,7 @@ export class SettingsController {
       currencyCode: row.currencyCode,
       timezone: row.timezone,
       phone: row.phone,
+      whatsapp: row.whatsapp,
       address: row.address,
     };
   }
@@ -38,6 +39,7 @@ export class SettingsController {
       currencyCode?: string;
       timezone?: string;
       phone?: string;
+      whatsapp?: string;
       address?: string;
     },
   ) {
@@ -51,6 +53,7 @@ export class SettingsController {
     if (body.currencyCode !== undefined) data.currencyCode = body.currencyCode;
     if (body.timezone !== undefined) data.timezone = body.timezone;
     if (body.phone !== undefined) data.phone = body.phone;
+    if (body.whatsapp !== undefined) data.whatsapp = body.whatsapp;
     if (body.address !== undefined) data.address = body.address;
 
     if (Object.keys(data).length > 0) {
@@ -90,5 +93,13 @@ export class SettingsController {
       };
     }
     return row.value as any;
+  }
+
+  @Public()
+  @Get("public-info")
+  async getPublicInfo() {
+    const [row] = await this.db.select().from(store).limit(1);
+    if (!row) return {};
+    return { phone: row.phone, whatsapp: row.whatsapp, tradeName: row.tradeName };
   }
 }

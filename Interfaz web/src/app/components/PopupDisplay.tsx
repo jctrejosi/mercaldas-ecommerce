@@ -37,6 +37,7 @@ export function PopupDisplay({ onApplyFilter }: PopupDisplayProps) {
   const [activePopups, setActivePopups] = useState<PopupData[]>([]);
   const [visibleIds, setVisibleIds] = useState<Set<number>>(new Set());
   const [dismissedIds, setDismissedIds] = useState<Set<number>>(new Set());
+  const [closingIds, setClosingIds] = useState<Set<number>>(new Set());
   const timersRef = useRef<Map<number, ReturnType<typeof setTimeout>>>(new Map());
 
   // Fetch active popups
@@ -67,11 +68,7 @@ export function PopupDisplay({ onApplyFilter }: PopupDisplayProps) {
         // Auto-hide after duration (only if position is not static)
         if (p.durationMs > 0) {
           const hideTimer = setTimeout(() => {
-            setVisibleIds((prev) => {
-              const next = new Set(prev);
-              next.delete(p.id);
-              return next;
-            });
+            setClosingIds((prev) => new Set(prev).add(p.id));
           }, p.durationMs);
           timersRef.current.set(p.id, hideTimer);
         }
@@ -86,6 +83,29 @@ export function PopupDisplay({ onApplyFilter }: PopupDisplayProps) {
       timersRef.current.clear();
     };
   }, [activePopups, dismissedIds]);
+
+  // Finalize closing after the exit animation completes
+  useEffect(() => {
+    if (closingIds.size === 0) return;
+    const timeouts: ReturnType<typeof setTimeout>[] = [];
+    closingIds.forEach((id) => {
+      const t = setTimeout(() => {
+        setVisibleIds((prev) => {
+          const next = new Set(prev);
+          next.delete(id);
+          return next;
+        });
+        setDismissedIds((prev) => new Set(prev).add(id));
+        setClosingIds((prev) => {
+          const next = new Set(prev);
+          next.delete(id);
+          return next;
+        });
+      }, 500);
+      timeouts.push(t);
+    });
+    return () => timeouts.forEach((t) => clearTimeout(t));
+  }, [closingIds]);
 
   const handleClick = useCallback(
     (p: PopupData) => {
@@ -110,12 +130,7 @@ export function PopupDisplay({ onApplyFilter }: PopupDisplayProps) {
   const handleDismiss = useCallback(
     (id: number, e: React.MouseEvent) => {
       e.stopPropagation();
-      setDismissedIds((prev) => new Set(prev).add(id));
-      setVisibleIds((prev) => {
-        const next = new Set(prev);
-        next.delete(id);
-        return next;
-      });
+      setClosingIds((prev) => new Set(prev).add(id));
       if (timersRef.current.has(id)) {
         clearTimeout(timersRef.current.get(id));
         timersRef.current.delete(id);
@@ -159,11 +174,22 @@ export function PopupDisplay({ onApplyFilter }: PopupDisplayProps) {
         }
 
         // Header: por encima del navbar (z-50); footer: sobre el contenido
+        const isClosing = closingIds.has(p.id);
+        const exitClass =
+          p.position === "header"
+            ? "animate-popup-out-top"
+            : p.position === "footer"
+              ? "animate-popup-out-bottom"
+              : p.position === "left"
+                ? "animate-popup-out-left"
+                : "animate-popup-out-right";
         const containerClass = isHorizontal
-          ? `cursor-pointer animate-slide-down ${p.position === "header" ? "z-[60]" : "z-40"}`
+          ? `cursor-pointer ${p.position === "header" ? "z-[60]" : "z-40"} ${
+              isClosing ? exitClass : "animate-slide-down"
+            }`
           : p.position === "left"
-            ? "cursor-pointer z-[70] animate-popup-in-left"
-            : "cursor-pointer z-[70] animate-popup-in-right";
+            ? `cursor-pointer z-[70] ${isClosing ? exitClass : "animate-popup-in-left"}`
+            : `cursor-pointer z-[70] ${isClosing ? exitClass : "animate-popup-in-right"}`;
 
         return (
           <div

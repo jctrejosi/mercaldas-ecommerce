@@ -5,7 +5,6 @@ import {
   MapPin,
   User,
   Package,
-  Clock,
   Menu,
   TrendingUp,
   ArrowUpRight,
@@ -13,8 +12,9 @@ import {
   ChevronRight,
   X,
   Plus,
-  Minus,
   Bell,
+  Phone,
+  MessageCircle,
 } from "lucide-react";
 import { Logo } from "../Logo";
 import type { CartItem, CatalogCategory, Product } from "../types";
@@ -26,6 +26,8 @@ import {
   customerAddressService,
 } from "../../services/customer-auth.service";
 import type { AppNotification } from "../../hooks/useNotifications";
+
+const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:3000";
 
 interface HeaderProps {
   cartCount: number;
@@ -104,6 +106,8 @@ export function Header({
   const [defaultAddress, setDefaultAddress] = useState<CustomerAddress | null>(
     null,
   );
+  const [storePhone, setStorePhone] = useState("");
+  const [storeWhatsapp, setStoreWhatsapp] = useState("");
 
   // Load default address when customer changes
   useEffect(() => {
@@ -118,6 +122,18 @@ export function Header({
       setDefaultAddress(null);
     }
   }, [customer]);
+
+  // Load store contact info
+  useEffect(() => {
+    fetch(`${API_BASE_URL}/admin/settings/public-info`)
+      .then((r) => (r.ok ? r.json() : {}))
+      .then((d) => {
+        setStorePhone(d.phone || "");
+        setStoreWhatsapp(d.whatsapp || "");
+      })
+      .catch(() => {});
+  }, []);
+
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (notifRef.current && !notifRef.current.contains(e.target as Node))
@@ -300,38 +316,6 @@ export function Header({
 
   return (
     <header className="sticky top-0 z-50 bg-white border-b border-border shadow-sm">
-      {/* Top strip */}
-      <div className="hidden md:block" style={{ background: "#1A1A2E" }}>
-        <div className="max-w-7xl mx-auto px-4 py-1.5 flex items-center justify-between">
-          <div
-            className="flex items-center gap-1.5 text-xs"
-            style={{ color: "rgba(255,255,255,0.65)" }}
-          >
-            <button
-              onClick={() => setAddressModalOpen(true)}
-              className="flex items-center gap-1.5 text-xs cursor-pointer hover:brightness-110 transition-all"
-              style={{ color: "rgba(255,255,255,0.65)" }}
-            >
-              <MapPin className="w-3 h-3" />
-              <span>
-                Entregar en ·{" "}
-                <strong className="text-white underline-offset-2 hover:underline">
-                  {getAddressDisplay(defaultAddress)}
-                </strong>
-              </span>
-            </button>
-          </div>
-          <div
-            className="flex items-center gap-4 text-xs"
-            style={{ color: "rgba(255,255,255,0.65)" }}
-          >
-            <span className="flex items-center gap-1">
-              <Clock className="w-3 h-3" /> Lun–Dom 6am–10pm
-            </span>
-            <span>📞 (606) 890-1234</span>
-          </div>
-        </div>
-      </div>
 
       {/* Main header row */}
       <div className="max-w-7xl mx-auto px-4 h-16 flex items-center gap-3">
@@ -725,6 +709,29 @@ export function Header({
               {item}
             </a>
           ))}
+        </div>
+      )}
+
+      {/* Contact strip */}
+      {(storePhone || storeWhatsapp) && (
+        <div className="hidden md:flex items-center justify-center gap-6 bg-muted/30 border-b border-border py-1.5 px-4">
+          {storePhone && (
+            <a href={`tel:${storePhone}`} className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors">
+              <Phone className="w-3 h-3" />
+              <span>{storePhone}</span>
+            </a>
+          )}
+          {storeWhatsapp && (
+            <a
+              href={`https://wa.me/${storeWhatsapp.replace(/\D/g, "")}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1.5 text-xs text-green-600 hover:text-green-700 transition-colors"
+            >
+              <MessageCircle className="w-3 h-3" />
+              <span>{storeWhatsapp}</span>
+            </a>
+          )}
         </div>
       )}
 

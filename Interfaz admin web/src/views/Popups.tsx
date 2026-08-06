@@ -34,12 +34,12 @@ const STATUS_LABEL: Record<string, string> = {
   expirado: "Expirado",
 };
 
-async function createMediaFromUrl(url: string): Promise<number> {
+async function createMediaFromUrl(url: string, mediaType?: string): Promise<number> {
   const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:3000";
   const res = await fetch(`${API_BASE_URL}/admin/popups/upload-url`, {
     method: "POST", credentials: "include",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ url }),
+    body: JSON.stringify({ url, mediaType }),
   });
   if (!res.ok) throw new Error("Error al crear media");
   return (await res.json()).mediaId;
@@ -146,7 +146,7 @@ function PopupEditor({
     setImageUrl(URL.createObjectURL(file));
   };
 
-  const uploadFile = async (file: File): Promise<string> => {
+  const uploadFile = async (file: File): Promise<{ url: string; mediaType: string } | null> => {
     const fd = new FormData();
     fd.append("file", file);
     fd.append("code", `popup_${Date.now()}`);
@@ -156,7 +156,7 @@ function PopupEditor({
     );
     if (!res.ok) throw new Error("Error al subir imagen");
     const data = await res.json();
-    return data.url;
+    return { url: data.url, mediaType: data.mediaType || "image/webp" };
   };
 
   // Filter state from popup's filterConfig
@@ -175,7 +175,7 @@ function PopupEditor({
     setError(""); setSaving(true);
     try {
       let finalImageUrl = imageUrl.trim();
-      if (pendingFile) finalImageUrl = await uploadFile(pendingFile);
+      if (pendingFile) { const u = await uploadFile(pendingFile); if (u) finalImageUrl = u.url; }
       const imageMediaId = await createMediaFromUrl(finalImageUrl);
       const filterConfig: Record<string, unknown> = {
         categoryIds: filterCategoryIds ? filterCategoryIds.split(",").map((s) => parseInt(s.trim())).filter((n) => !isNaN(n)) : [],

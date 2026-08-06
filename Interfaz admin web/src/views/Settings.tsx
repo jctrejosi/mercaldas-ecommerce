@@ -1,16 +1,11 @@
 import { useState, useEffect } from "react";
-import { Save, Globe, CreditCard, Truck, Percent, Bell, Mail, Zap, Clock, Loader2, CheckCircle } from "lucide-react";
+import { Save, Globe, CreditCard, Loader2, CheckCircle } from "lucide-react";
 
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:3000";
 
 const TABS = [
   { id: "general", label: "General", icon: Globe },
   { id: "payments", label: "Medios de pago", icon: CreditCard },
-  { id: "shipping", label: "Envíos", icon: Truck },
-  { id: "taxes", label: "Impuestos", icon: Percent },
-  { id: "notifications", label: "Notificaciones", icon: Bell },
-  { id: "schedule", label: "Horario", icon: Clock },
-  { id: "integrations", label: "Integraciones", icon: Zap },
 ];
 
 function SettingRow({ label, sub, children }: { label: string; sub?: string; children: React.ReactNode }) {
@@ -44,6 +39,7 @@ export default function SettingsView() {
   const [currency, setCurrency] = useState("COP");
   const [timezone, setTimezone] = useState("America/Bogota");
   const [phone, setPhone] = useState("");
+  const [whatsapp, setWhatsapp] = useState("");
   const [address, setAddress] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -61,6 +57,7 @@ export default function SettingsView() {
         setCurrency(d.currencyCode || "COP");
         setTimezone(d.timezone || "America/Bogota");
         setPhone(d.phone || "");
+        setWhatsapp(d.whatsapp || "");
         setAddress(d.address || "");
       })
       .catch(() => {})
@@ -80,6 +77,7 @@ export default function SettingsView() {
           currencyCode: currency,
           timezone,
           phone,
+          whatsapp,
           address,
         }),
       });
@@ -157,28 +155,31 @@ export default function SettingsView() {
                 ) : (
                   <>
                 <SettingRow label="Nombre de la tienda" sub="Visible en el encabezado y facturas">
-                  <input value={storeName} onChange={(e) => setStoreName(e.target.value)} className="px-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-300 w-52" />
+                  <input value={storeName} onChange={(e) => setStoreName(e.target.value)} className="px-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-300 w-72" />
                 </SettingRow>
                 <SettingRow label="Sitio web" sub="URL del frontend público">
-                  <input value={domain} onChange={(e) => setDomain(e.target.value)} className="px-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-300 w-52 font-mono" />
+                  <input value={domain} onChange={(e) => setDomain(e.target.value)} className="px-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-300 w-72 font-mono" />
                 </SettingRow>
                 <SettingRow label="Email de contacto">
-                  <input value={email} onChange={(e) => setEmail(e.target.value)} className="px-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-300 w-52" />
+                  <input value={email} onChange={(e) => setEmail(e.target.value)} className="px-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-300 w-72" />
                 </SettingRow>
                 <SettingRow label="Teléfono">
-                  <input value={phone} onChange={(e) => setPhone(e.target.value)} className="px-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-300 w-52" />
+                  <input value={phone} onChange={(e) => setPhone(e.target.value)} className="px-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-300 w-72" />
+                </SettingRow>
+                <SettingRow label="WhatsApp">
+                  <input value={whatsapp} onChange={(e) => setWhatsapp(e.target.value)} className="px-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-300 w-72" placeholder="+57 3001234567" />
                 </SettingRow>
                 <SettingRow label="Dirección">
                   <input value={address} onChange={(e) => setAddress(e.target.value)} className="px-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-300 w-72" />
                 </SettingRow>
                 <SettingRow label="Moneda" sub="Moneda principal del catálogo">
-                  <select value={currency} onChange={(e) => setCurrency(e.target.value)} className="px-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-300 bg-white">
+                  <select value={currency} onChange={(e) => setCurrency(e.target.value)} className="px-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-300 bg-white w-72">
                     <option value="COP">COP — Peso colombiano</option>
                     <option value="USD">USD — Dólar</option>
                   </select>
                 </SettingRow>
                 <SettingRow label="Zona horaria">
-                  <select value={timezone} onChange={(e) => setTimezone(e.target.value)} className="px-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-300 bg-white">
+                  <select value={timezone} onChange={(e) => setTimezone(e.target.value)} className="px-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-300 bg-white w-72">
                     <option value="America/Bogota">America/Bogota (UTC-5)</option>
                     <option value="America/Mexico_City">America/Mexico City (UTC-6)</option>
                     <option value="America/Lima">America/Lima (UTC-5)</option>
@@ -187,6 +188,23 @@ export default function SettingsView() {
                 <SettingRow label="Modo mantenimiento" sub="Muestra página de mantenimiento en el sitio">
                   <Toggle defaultOn={false} />
                 </SettingRow>
+
+                <div className="pt-4">
+                  <button
+                    onClick={handleSave}
+                    disabled={saving}
+                    className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-semibold text-sm transition-all disabled:opacity-50"
+                  >
+                    {saving ? (
+                      <Loader2 size={16} className="animate-spin" />
+                    ) : saved ? (
+                      <CheckCircle size={16} />
+                    ) : (
+                      <Save size={16} />
+                    )}
+                    {saving ? "Guardando..." : saved ? "Guardado" : "Guardar cambios"}
+                  </button>
+                </div>
                   </>
                 )}
               </div>
@@ -252,56 +270,7 @@ export default function SettingsView() {
               </div>
             )}
 
-            {tab === "notifications" && (
-              <div>
-                <h2 className="font-bold text-gray-900 mb-5">Notificaciones</h2>
-                <div className="space-y-0">
-                  {[
-                    { label: "Nuevo pedido recibido", sub: "Email + push al equipo" },
-                    { label: "Pedido entregado", sub: "Email al cliente" },
-                    { label: "Stock bajo (< mínimo)", sub: "Push a administradores" },
-                    { label: "Nuevo registro de cliente", sub: "Email de bienvenida automático" },
-                    { label: "Pago fallido", sub: "Email + push al supervisor" },
-                    { label: "Cupón utilizado", sub: "Registrar en analítica" },
-                  ].map((n) => (
-                    <SettingRow key={n.label} label={n.label} sub={n.sub}>
-                      <Toggle defaultOn={true} />
-                    </SettingRow>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {tab === "schedule" && (
-              <div>
-                <h2 className="font-bold text-gray-900 mb-5">Horario de la Tienda</h2>
-                <div className="space-y-3">
-                  {["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"].map((day, i) => (
-                    <div key={day} className="flex items-center gap-4 py-2 border-b border-gray-100 last:border-0">
-                      <span className="text-sm font-medium text-gray-700 w-24">{day}</span>
-                      <Toggle defaultOn={i < 6} />
-                      <div className="flex items-center gap-2 ml-2">
-                        <input type="time" defaultValue="08:00" className="px-2 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-300" />
-                        <span className="text-gray-400 text-sm">—</span>
-                        <input type="time" defaultValue="22:00" className="px-2 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-300" />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {(tab === "shipping" || tab === "taxes" || tab === "integrations") && (
-              <div className="flex flex-col items-center justify-center py-16 text-center">
-                <div className="w-16 h-16 rounded-2xl bg-gray-100 flex items-center justify-center mb-4">
-                  {tab === "shipping" ? <Truck size={24} className="text-gray-400" /> : tab === "taxes" ? <Percent size={24} className="text-gray-400" /> : <Zap size={24} className="text-gray-400" />}
-                </div>
-                <p className="text-sm font-semibold text-gray-700 mb-1">Próximamente</p>
-                <p className="text-xs text-gray-400">Esta sección estará disponible en la siguiente versión</p>
-              </div>
-            )}
-
-            <div className="flex justify-end mt-6 pt-6 border-t border-gray-100">
+        <div className="flex justify-end mt-6 pt-6 border-t border-gray-100">
               <button
                 onClick={handleSave}
                 disabled={saving}
