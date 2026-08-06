@@ -36,9 +36,9 @@ export class CloudinaryService {
         throw new Error('Cloudinary no configurado');
       }
 
-      // Convertir a WebP
+      // Convertir a WebP sin pérdida de calidad
       const webpBuffer = await sharp(file.buffer)
-        .webp({ quality: 82 })
+        .webp({ lossless: true })
         .toBuffer();
 
       this.logger.log(
