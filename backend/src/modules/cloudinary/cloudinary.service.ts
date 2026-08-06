@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { v2 as cloudinary, UploadApiResponse } from 'cloudinary';
 import { Readable } from 'stream';
 import sharp from 'sharp';
+import { removeBackground } from '@imgly/background-removal-node';
 
 @Injectable()
 export class CloudinaryService {
@@ -30,14 +31,37 @@ export class CloudinaryService {
   async uploadImage(
     file: any,
     productCode: string,
+    options?: { trim?: boolean; removeBg?: boolean },
   ): Promise<{ url: string; mediaType: string }> {
     try {
       if (!cloudinary.config().cloud_name) {
         throw new Error('Cloudinary no configurado');
       }
 
-      // Convertir a WebP sin pérdida de calidad
-      const webpBuffer = await sharp(file.buffer)
+      let buffer: Buffer = file.buffer;
+
+      // 1. Quitar fondo (removeBg)
+      if (options?.removeBg) {
+        this.logger.log(`Quitando fondo de: ${file.originalname}`);
+        const blob = await removeBackground(buffer, {
+          model: 'medium',
+          output: { format: 'image/png' },
+        });
+        buffer = Buffer.from(await blob.arrayBuffer());
+        this.logger.log(`Fondo eliminado: ${file.originalname}`);
+      }
+
+      // 2. Auto-recortar (trim)
+      if (options?.trim) {
+        this.logger.log(`Recortando: ${file.originalname}`);
+        buffer = await sharp(buffer)
+          .trim({ threshold: 10 })
+          .toBuffer();
+        this.logger.log(`Imagen recortada: ${file.originalname}`);
+      }
+
+      // 3. Convertir a WebP sin pérdida de calidad
+      const webpBuffer = await sharp(buffer)
         .webp({ lossless: true })
         .toBuffer();
 
