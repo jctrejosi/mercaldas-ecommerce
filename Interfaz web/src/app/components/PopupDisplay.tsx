@@ -149,19 +149,13 @@ export function PopupDisplay({ onApplyFilter }: PopupDisplayProps) {
           positionStyles.left = 0;
           positionStyles.right = 0;
         } else if (p.position === "left") {
-          // Tarjeta a la izquierda, centrada en el eje Y
-          positionStyles.top = "50%";
-          positionStyles.left = "16px";
-          positionStyles.transform = "translateY(-50%)";
+          positionStyles.top = "88px";
+          positionStyles.left = 0;
           cardStyles.width = "min(88vw, 380px)";
-          cardStyles.maxHeight = "480px";
         } else if (p.position === "right") {
-          // Tarjeta a la derecha, centrada en el eje Y
-          positionStyles.top = "50%";
-          positionStyles.right = "16px";
-          positionStyles.transform = "translateY(-50%)";
+          positionStyles.top = "88px";
+          positionStyles.right = 0;
           cardStyles.width = "min(88vw, 380px)";
-          cardStyles.maxHeight = "480px";
         }
 
         // Header: por encima del navbar (z-50); footer: sobre el contenido
@@ -199,7 +193,7 @@ export function PopupDisplay({ onApplyFilter }: PopupDisplayProps) {
                 <img
                   src={p.image!}
                   alt={p.title}
-                  className="w-full max-h-[480px] object-contain"
+                  className="w-full h-auto block"
                 />
               ) : (
                 <div className="h-full overflow-hidden shadow-2xl">

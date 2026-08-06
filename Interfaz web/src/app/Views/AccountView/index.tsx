@@ -51,6 +51,7 @@ import type { AppNotification } from "../../../hooks/useNotifications";
 import { ordersService } from "../../../services/orders.service";
 import { catalogService } from "../../../services/catalog.service";
 import {
+  customerAuthService,
   customerAddressService,
   type CustomerAddress,
 } from "../../../services/customer-auth.service";
@@ -2911,8 +2912,8 @@ export function UserAdminView({
                   "Mastercard",
                   "PSE",
                   "Nequi",
+                  "Bre-B",
                   "Daviplata",
-                  "Efecty",
                 ].map((m) => (
                   <span
                     key={m}
@@ -3879,6 +3880,8 @@ export function UserAdminView({
   const ProfileSection = () => {
     const [showPwd, setShowPwd] = useState(false);
     const [saved, setSaved] = useState(false);
+    const [saving, setSaving] = useState(false);
+    const [error, setError] = useState("");
     const [profile, setProfile] = useState({
       name: customer?.fullName || customer?.firstName || "Cliente",
       phone: "",
@@ -3886,11 +3889,73 @@ export function UserAdminView({
       password: "",
     });
     const [privacyPromo, setPrivacyPromo] = useState(true);
-    const [privacyData, setPrivacyData] = useState(false);
+    const [privacyData, setPrivacyData] = useState(true);
 
-    const saveProfile = () => {
-      setSaved(true);
-      setTimeout(() => setSaved(false), 2500);
+    // Confirm modals
+    const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+    const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+    const [deleteConfirmInput, setDeleteConfirmInput] = useState("");
+    const [deleting, setDeleting] = useState(false);
+
+    const accountNameForDelete = customer?.firstName || customer?.email || "";
+
+    const saveProfile = async () => {
+      setError("");
+      setSaving(true);
+      try {
+        const nameParts = profile.name.trim().split(/\s+/);
+        const firstName = nameParts[0] || "";
+        const lastName = nameParts.slice(1).join(" ") || "";
+
+        const body: Record<string, string | boolean> = {
+          firstName,
+          lastName,
+          phone: profile.phone,
+          email: profile.email,
+          acceptsMarketing: privacyPromo,
+        };
+        if (profile.password.trim()) {
+          body.password = profile.password;
+        }
+
+        const updated = await customerAuthService.updateProfile(body);
+        // Update local state with response
+        setProfile((p) => ({
+          ...p,
+          name: updated.fullName || updated.firstName || p.name,
+          phone: updated.phone || p.phone,
+          email: updated.email || p.email,
+          password: "",
+        }));
+        setSaved(true);
+        setTimeout(() => setSaved(false), 2500);
+      } catch (err: any) {
+        setError(err.message || "Error al guardar");
+      } finally {
+        setSaving(false);
+      }
+    };
+
+    const handleLogout = async () => {
+      try {
+        await customerAuthService.logout();
+      } catch {}
+      setShowLogoutConfirm(false);
+      onBack();
+    };
+
+    const handleDeleteAccount = async () => {
+      if (deleteConfirmInput.trim() !== accountNameForDelete) return;
+      setDeleting(true);
+      try {
+        await customerAuthService.deleteAccount();
+        setShowDeleteConfirm(false);
+        onBack();
+      } catch (err: any) {
+        setError(err.message || "Error al eliminar cuenta");
+      } finally {
+        setDeleting(false);
+      }
     };
 
     return (
@@ -3901,6 +3966,18 @@ export function UserAdminView({
         >
           Configuración de cuenta
         </h2>
+
+        {error && (
+          <div className="mb-4 p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm">
+            {error}
+            <button
+              className="ml-2 underline"
+              onClick={() => setError("")}
+            >
+              Cerrar
+            </button>
+          </div>
+        )}
 
         <div className="flex flex-col gap-4">
           {/* Personal info */}
@@ -4013,13 +4090,16 @@ export function UserAdminView({
 
             <button
               onClick={saveProfile}
-              className="flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-sm transition-all hover:brightness-95"
+              disabled={saving}
+              className="flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-sm transition-all hover:brightness-95 disabled:opacity-60"
               style={{
                 background: saved ? "#D4EDDA" : "#FFF200",
                 color: saved ? "#155724" : "#1A1A2E",
               }}
             >
-              {saved ? (
+              {saving ? (
+                "Guardando..."
+              ) : saved ? (
                 <>
                   <CheckCircle2 className="w-4 h-4" /> ¡Guardado!
                 </>
@@ -4046,7 +4126,7 @@ export function UserAdminView({
                 },
                 {
                   key: "privacyData",
-                  label: "Datos para recomendaciones personalizadas",
+                  label: "Autorización de tratamiento de datos",
                   desc: "Mejoramos tu experiencia con base en tus compras",
                   value: privacyData,
                   set: setPrivacyData,
@@ -4065,7 +4145,7 @@ export function UserAdminView({
                   <div
                     className="relative w-11 h-6 rounded-full transition-all flex-shrink-0"
                     style={{ background: value ? "#FFF200" : "#E5E7EB" }}
-                    onClick={() => set((v) => !v)}
+                    onClick={() => set((v: boolean) => !v)}
                   >
                     <div
                       className="absolute top-1 w-4 h-4 rounded-full bg-foreground shadow transition-all"
@@ -4083,15 +4163,106 @@ export function UserAdminView({
               Zona de peligro
             </p>
             <div className="flex gap-3 flex-wrap">
-              <button className="px-4 py-2 rounded-xl text-xs font-semibold border border-red-200 text-red-600 hover:bg-red-50 transition-colors">
+              <button
+                onClick={() => setShowLogoutConfirm(true)}
+                className="px-4 py-2 rounded-xl text-xs font-semibold border border-red-200 text-red-600 hover:bg-red-50 transition-colors"
+              >
                 Cerrar sesión
               </button>
-              <button className="px-4 py-2 rounded-xl text-xs font-semibold border border-red-200 text-red-600 hover:bg-red-50 transition-colors">
+              <button
+                onClick={() => {
+                  setDeleteConfirmInput("");
+                  setShowDeleteConfirm(true);
+                }}
+                className="px-4 py-2 rounded-xl text-xs font-semibold border border-red-200 text-red-600 hover:bg-red-50 transition-colors"
+              >
                 Eliminar cuenta
               </button>
             </div>
           </AcctCard>
         </div>
+
+        {/* Logout Confirm Modal */}
+        {showLogoutConfirm && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setShowLogoutConfirm(false)}>
+            <div
+              className="bg-background rounded-2xl p-6 max-w-sm w-full mx-4 shadow-xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <p className="font-bold text-lg mb-2">Cerrar sesión</p>
+              <p className="text-sm text-muted-foreground mb-5">
+                ¿Estás seguro de que deseas cerrar sesión?
+              </p>
+              <div className="flex gap-3 justify-end">
+                <button
+                  onClick={() => setShowLogoutConfirm(false)}
+                  className="px-4 py-2 rounded-xl text-sm font-semibold border border-border hover:bg-muted transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleLogout}
+                  className="px-4 py-2 rounded-xl text-sm font-semibold bg-red-600 text-white hover:bg-red-700 transition-colors"
+                >
+                  Cerrar sesión
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Delete Account Confirm Modal */}
+        {showDeleteConfirm && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setShowDeleteConfirm(false)}>
+            <div
+              className="bg-background rounded-2xl p-6 max-w-sm w-full mx-4 shadow-xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <p className="font-bold text-lg mb-2 text-red-600">Eliminar cuenta</p>
+              <p className="text-sm text-muted-foreground mb-3">
+                Esta acción es irreversible. Todos tus datos serán eliminados.
+              </p>
+              <p className="text-sm text-muted-foreground mb-3">
+                Para confirmar, escribe{" "}
+                <strong className="text-foreground">{accountNameForDelete}</strong>{" "}
+                a continuación:
+              </p>
+              <input
+                type="text"
+                value={deleteConfirmInput}
+                onChange={(e) => setDeleteConfirmInput(e.target.value)}
+                placeholder={accountNameForDelete}
+                className="w-full px-3 py-2 text-sm border border-border rounded-xl focus:outline-none mb-5"
+                onFocus={(e) => {
+                  e.target.style.boxShadow = "0 0 0 2px #EF4444";
+                  e.target.style.borderColor = "#EF4444";
+                }}
+                onBlur={(e) => {
+                  e.target.style.boxShadow = "none";
+                  e.target.style.borderColor = "";
+                }}
+              />
+              <div className="flex gap-3 justify-end">
+                <button
+                  onClick={() => setShowDeleteConfirm(false)}
+                  className="px-4 py-2 rounded-xl text-sm font-semibold border border-border hover:bg-muted transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleDeleteAccount}
+                  disabled={
+                    deleting ||
+                    deleteConfirmInput.trim() !== accountNameForDelete
+                  }
+                  className="px-4 py-2 rounded-xl text-sm font-semibold bg-red-600 text-white hover:bg-red-700 disabled:opacity-40 transition-colors"
+                >
+                  {deleting ? "Eliminando..." : "Eliminar cuenta"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   };
@@ -4114,15 +4285,54 @@ export function UserAdminView({
       case "payments":
         return <PaymentsSection />;
       case "coupons":
-        return <CouponsSection />;
+        return (
+          <div className="relative">
+            <div className="absolute inset-0 z-10 bg-gray-300/40 backdrop-blur-[3px] flex items-start justify-center pointer-events-none" style={{ minHeight: "40vh" }}>
+              <div className="mt-20 flex flex-col items-center gap-3 bg-white/80 rounded-3xl px-10 py-7 shadow-lg">
+                <span className="text-4xl select-none">🚧</span>
+                <p className="text-sm font-bold text-gray-500 uppercase tracking-widest">En Construcción</p>
+                <p className="text-xs text-gray-400">Próximamente disponible</p>
+              </div>
+            </div>
+            <div className="pointer-events-none opacity-35 select-none">
+              <CouponsSection />
+            </div>
+          </div>
+        );
       case "history":
         return <HistorySection />;
       case "notifications":
         return <NotificationsSection />;
       case "reviews":
-        return <ReviewsSection />;
+        return (
+          <div className="relative">
+            <div className="absolute inset-0 z-10 bg-gray-300/40 backdrop-blur-[3px] flex items-start justify-center pointer-events-none" style={{ minHeight: "40vh" }}>
+              <div className="mt-20 flex flex-col items-center gap-3 bg-white/80 rounded-3xl px-10 py-7 shadow-lg">
+                <span className="text-4xl select-none">🚧</span>
+                <p className="text-sm font-bold text-gray-500 uppercase tracking-widest">En Construcción</p>
+                <p className="text-xs text-gray-400">Próximamente disponible</p>
+              </div>
+            </div>
+            <div className="pointer-events-none opacity-35 select-none">
+              <ReviewsSection />
+            </div>
+          </div>
+        );
       case "support":
-        return <SupportSection />;
+        return (
+          <div className="relative">
+            <div className="absolute inset-0 z-10 bg-gray-300/40 backdrop-blur-[3px] flex items-start justify-center pointer-events-none" style={{ minHeight: "40vh" }}>
+              <div className="mt-20 flex flex-col items-center gap-3 bg-white/80 rounded-3xl px-10 py-7 shadow-lg">
+                <span className="text-4xl select-none">🚧</span>
+                <p className="text-sm font-bold text-gray-500 uppercase tracking-widest">En Construcción</p>
+                <p className="text-xs text-gray-400">Próximamente disponible</p>
+              </div>
+            </div>
+            <div className="pointer-events-none opacity-35 select-none">
+              <SupportSection />
+            </div>
+          </div>
+        );
       case "profile":
         return <ProfileSection />;
       default:

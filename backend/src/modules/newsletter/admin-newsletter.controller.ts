@@ -94,4 +94,20 @@ export class AdminNewsletterController {
   deleteCampaign(@Param('id') id: string) {
     return this.newsletterService.deleteCampaign(Number(id));
   }
+
+  // ── Welcome config ──
+  @Get('welcome')
+  @ApiOperation({ summary: 'Obtener configuración del email de bienvenida' })
+  @ApiResponse({ status: 200, description: 'Config de bienvenida o null' })
+  getWelcome() {
+    return this.newsletterService.getWelcomeConfig().then((c) => c ?? {});
+  }
+
+  @Put('welcome')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Actualizar configuración del email de bienvenida' })
+  @ApiResponse({ status: 200, description: 'Config actualizada' })
+  updateWelcome(@Body() body: { subject: string; content: string }) {
+    return this.newsletterService.updateWelcomeConfig(body);
+  }
 }

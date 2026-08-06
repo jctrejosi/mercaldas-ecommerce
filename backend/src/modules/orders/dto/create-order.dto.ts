@@ -124,8 +124,8 @@ export class CreateOrderDto {
   @IsEnum(['standard', 'express'])
   shippingType!: 'standard' | 'express';
 
-  @IsEnum(['efectivo', 'tarjeta', 'nequi', 'pse'])
-  paymentMethod!: 'efectivo' | 'tarjeta' | 'nequi' | 'pse';
+  @IsEnum(['efectivo', 'tarjeta', 'nequi', 'pse', 'breb'])
+  paymentMethod!: 'efectivo' | 'tarjeta' | 'nequi' | 'pse' | 'breb';
 
   @IsOptional()
   @ValidateNested()

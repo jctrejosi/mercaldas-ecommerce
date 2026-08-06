@@ -20,6 +20,8 @@ import { FeaturedProductsModule } from './modules/featured-products/featured-pro
 import { PopupsModule } from './modules/popups/popups.module';
 import { NewsletterModule } from './modules/newsletter/newsletter.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
+import { InventoryModule } from './modules/inventory/inventory.module';
+import { SettingsController } from './modules/settings/settings.controller';
 import {
   appConfig,
   databaseConfig,
@@ -66,8 +68,9 @@ import {
     PopupsModule,
     NewsletterModule,
     DashboardModule,
+    InventoryModule,
   ],
-  controllers: [AppController],
+  controllers: [AppController, SettingsController],
   providers: [AppService],
 })
 export class AppModule {}

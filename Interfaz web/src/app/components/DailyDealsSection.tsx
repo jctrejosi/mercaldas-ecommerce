@@ -80,8 +80,10 @@ interface DailyDealsSectionProps {
 export function DailyDealsSection({
   cartItems, onAdd, onRemove, onProductClick, dealProducts, dailyDeals,
 }: DailyDealsSectionProps) {
-  const featuredItems =
-    dailyDeals?.featuredItems?.length ? dailyDeals.featuredItems : DEAL_OF_DAY_ITEMS;
+  const featuredItems = (dailyDeals?.featuredItems?.length ? dailyDeals.featuredItems : DEAL_OF_DAY_ITEMS).map((item) => ({
+    ...item,
+    title: (item.title || "").replace(/\\n/g, "\n"),
+  }));
   const carouselProducts =
     dailyDeals?.carousel?.length ? dailyDeals.carousel : dealProducts;
 
@@ -92,22 +94,17 @@ export function DailyDealsSection({
 
   const VISIBLE = 3;
 
-  // Rotación del display izquierdo (más pausada y suave)
-  useEffect(() => {
-    if (featuredItems.length <= 1) return;
-    const t = setInterval(() => setFeaturedIdx((i) => (i + 1) % featuredItems.length), 8000);
-    return () => clearInterval(t);
-  }, [featuredItems.length]);
-
-  // Auto-scroll del carrusel derecho (más pausado)
+  // Rotación sincronizada: el display izquierdo y el carrusel derecho avanzan
+  // juntos con un solo timer (más lento y sin desfase)
   useEffect(() => {
     const maxStart = Math.max(0, carouselProducts.length - VISIBLE);
-    if (maxStart <= 0) return;
-    const interval = setInterval(() => {
-      setCarouselStart((prev) => (prev + 1 > maxStart ? 0 : prev + 1));
-    }, 5000);
-    return () => clearInterval(interval);
-  }, [carouselProducts.length]);
+    if (featuredItems.length <= 1 && maxStart <= 0) return;
+    const t = setInterval(() => {
+      setFeaturedIdx((i) => (i + 1) % featuredItems.length);
+      setCarouselStart((prev) => (maxStart <= 0 ? prev : prev + 1 > maxStart ? 0 : prev + 1));
+    }, 8000);
+    return () => clearInterval(t);
+  }, [featuredItems.length, carouselProducts.length]);
 
   const scrollCarousel = (dir: number) => {
     const next = carouselStart + dir;
@@ -132,8 +129,12 @@ export function DailyDealsSection({
     <section className="py-10 bg-muted/40">
       <style>{`
         @keyframes dealFadeUp {
-          from { opacity: 0; transform: translateY(16px); }
-          to { opacity: 1; transform: translateY(0); }
+          from { opacity: 0; transform: translateY(18px) scale(0.98); }
+          to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        @keyframes dealImgIn {
+          from { opacity: 0; transform: scale(1.06); }
+          to { opacity: 1; transform: scale(1); }
         }
       `}</style>
       <div className="max-w-7xl mx-auto px-4">
@@ -167,7 +168,7 @@ export function DailyDealsSection({
             style={{ background: `linear-gradient(160deg, ${featured.bgFrom} 0%, ${featured.bgTo} 100%)`, minHeight: "340px", transition: "background 1s ease" }}
           >
             <div className="p-6 z-10 relative">
-              <div key={`content-${featured.id}-${featuredIdx}`} style={{ animation: "dealFadeUp 0.7s ease-out both" }}>
+              <div key={`content-${featured.id}-${featuredIdx}`} style={{ animation: "dealFadeUp 0.8s cubic-bezier(0.22, 1, 0.36, 1) both" }}>
                 <span
                   className="inline-block text-[10px] font-black tracking-widest px-2.5 py-1 rounded-full mb-4"
                   style={{ background: "#FFF200", color: "#1A1A2E" }}
@@ -200,7 +201,7 @@ export function DailyDealsSection({
                 src={featured.image}
                 alt={featured.title}
                 className="w-full h-full object-cover"
-                style={{ animation: "dealFadeUp 0.8s ease-out both", objectPosition: "center" }}
+                style={{ animation: "dealImgIn 1.1s cubic-bezier(0.22, 1, 0.36, 1) both", objectPosition: "center" }}
               />
               <div className="absolute inset-0" style={{ background: "linear-gradient(to bottom, rgba(0,0,0,0.35) 0%, transparent 50%)" }} />
             </div>
@@ -248,7 +249,7 @@ export function DailyDealsSection({
                 const qty = localQtys[p.id] || 1;
                 const discountPct = p.originalPrice ? Math.round((1 - p.price / p.originalPrice) * 100) : 0;
                 return (
-                  <div key={p.id} className="bg-card border border-border rounded-xl overflow-hidden flex flex-col hover:shadow-md transition-shadow" style={{ animation: "dealFadeUp 0.55s ease-out both", animationDelay: `${idx * 130}ms` }}>
+                  <div key={p.id} className="bg-card border border-border rounded-xl overflow-hidden flex flex-col hover:shadow-md transition-shadow" style={{ animation: "dealFadeUp 0.6s cubic-bezier(0.22, 1, 0.36, 1) both", animationDelay: `${idx * 140}ms` }}>
                     <button
                       className="relative bg-muted aspect-square overflow-hidden"
                       onClick={() => onProductClick(p)}

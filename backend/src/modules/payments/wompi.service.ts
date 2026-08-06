@@ -137,4 +137,52 @@ export class WompiService {
     });
     return response.json();
   }
+
+  /** Crea una transacción Bre-B (redirect) vía PSE */
+  async createBreBTransaction(params: {
+    amountInCents: number;
+    customerEmail: string;
+    reference: string;
+    customerData?: { phone_number?: string; full_name?: string };
+    redirectUrl?: string;
+  }) {
+    if (!this.config.privateKey) {
+      throw new BadRequestException('Wompi private key no configurada');
+    }
+
+    const signature = this.generateIntegritySignature(
+      params.reference,
+      params.amountInCents,
+      'COP',
+    );
+
+    const response = await fetch(`${this.config.apiUrl}/transactions`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${this.config.privateKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        amount_in_cents: params.amountInCents,
+        currency: 'COP',
+        customer_email: params.customerEmail,
+        payment_method_type: 'PSE',
+        payment_method: { type: 'PSE' },
+        reference: params.reference,
+        signature,
+        redirect_url: params.redirectUrl || this.config.redirectUrl || undefined,
+        customer_data: params.customerData || undefined,
+      }),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new BadRequestException(
+        data?.error?.reason ?? data?.error?.messages ?? 'No se pudo crear la transacción Bre-B con Wompi',
+      );
+    }
+
+    return data?.data;
+  }
 }

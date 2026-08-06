@@ -7,6 +7,7 @@ import { DrizzleService } from '../../database/drizzle.service';
 import {
   newsletterCampaigns,
   newsletterSubscribers,
+  settings,
 } from '../../../drizzle/schema';
 import {
   SubscribeDto,
@@ -85,6 +86,8 @@ export class NewsletterService {
       .where(eq(newsletterSubscribers.email, email))
       .limit(1);
 
+    let subscriber: SubscriberResponse;
+
     if (existing.length) {
       const sub = existing[0];
       // Reactivar si estaba inactivo
@@ -100,26 +103,46 @@ export class NewsletterService {
             updatedAt: new Date().toISOString(),
           })
           .where(eq(newsletterSubscribers.id, sub.id));
+        subscriber = await this.getSubscriber(Number(sub.id));
       } else {
         throw new BadRequestException(
           'Este correo ya está suscrito al newsletter',
         );
       }
-      return this.getSubscriber(Number(sub.id));
+    } else {
+      const [row] = await this.db
+        .insert(newsletterSubscribers)
+        .values({
+          email,
+          name: dto.name ?? null,
+          acceptedTerms: dto.acceptedTerms,
+          isActive: true,
+        })
+        .returning({ id: newsletterSubscribers.id });
+      subscriber = await this.getSubscriber(Number(row.id));
+      this.logger.log(`Nuevo suscriptor: ${email}`);
+
+      // Enviar email de bienvenida (solo para suscripciones nuevas, no reactivaciones)
+      const welcome = await this.getWelcomeConfig();
+      if (welcome && this.resendEnabled) {
+        try {
+          const html = welcome.content
+            .replace(/{{name}}/g, dto.name || 'Cliente')
+            .replace(/{{email}}/g, email);
+          await this.resend!.emails.send({
+            from: this.senderEmail,
+            to: [email],
+            subject: welcome.subject,
+            html,
+          });
+          this.logger.log(`Email de bienvenida enviado a ${email}`);
+        } catch (err: any) {
+          this.logger.error(`Error al enviar bienvenida a ${email}: ${err.message}`);
+        }
+      }
     }
 
-    const [row] = await this.db
-      .insert(newsletterSubscribers)
-      .values({
-        email,
-        name: dto.name ?? null,
-        acceptedTerms: dto.acceptedTerms,
-        isActive: true,
-      })
-      .returning({ id: newsletterSubscribers.id });
-
-    this.logger.log(`Nuevo suscriptor: ${email}`);
-    return this.getSubscriber(Number(row.id));
+    return subscriber;
   }
 
   async unsubscribe(email: string): Promise<{ success: boolean }> {
@@ -504,4 +527,46 @@ export class NewsletterService {
       this.logger.error(`Error en scheduler de campañas: ${err.message}`);
     }
   }
+
+  // ── Welcome email config ─────────────────────────────────
+
+  async getWelcomeConfig(): Promise<WelcomeConfig | null> {
+    const row = await this.db
+      .select()
+      .from(settings)
+      .where(eq(settings.key, 'newsletter_welcome'))
+      .limit(1);
+    if (!row.length) return null;
+    return (row[0].value as WelcomeConfig) ?? null;
+  }
+
+  async updateWelcomeConfig(data: WelcomeConfig): Promise<WelcomeConfig> {
+    const row = await this.db
+      .select()
+      .from(settings)
+      .where(eq(settings.key, 'newsletter_welcome'))
+      .limit(1);
+    const value = data as any;
+    if (row.length) {
+      await this.db
+        .update(settings)
+        .set({ value, updatedAt: new Date().toISOString() } as any)
+        .where(eq(settings.key, 'newsletter_welcome'));
+    } else {
+      await this.db.insert(settings).values({
+        key: 'newsletter_welcome',
+        value,
+        dataType: 'json',
+        module: 'newsletter',
+        description: 'Configuración del email de bienvenida para nuevos suscriptores',
+        isPublic: false,
+      } as any);
+    }
+    return data;
+  }
+}
+
+export interface WelcomeConfig {
+  subject: string;
+  content: string;
 }

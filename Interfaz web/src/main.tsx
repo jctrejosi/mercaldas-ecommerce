@@ -7,6 +7,8 @@ import { BrowserRouter } from "react-router";
 import App from "./app/App.tsx";
 import { apiStatusService } from "./services/api-status.service";
 
+const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID as string;
+
 const renderApp = async () => {
   try {
     await apiStatusService.waitUntilReady();
@@ -14,12 +16,20 @@ const renderApp = async () => {
     console.error("Backend no disponible:", error);
   }
 
+  const app = (
+    <BrowserRouter>
+      <App />
+    </BrowserRouter>
+  );
+
   ReactDOM.createRoot(document.getElementById("root")!).render(
-    <GoogleOAuthProvider clientId={import.meta.env.VITE_GOOGLE_CLIENT_ID}>
-      <BrowserRouter>
-        <App />
-      </BrowserRouter>
-    </GoogleOAuthProvider>,
+    googleClientId ? (
+      <GoogleOAuthProvider clientId={googleClientId}>
+        {app}
+      </GoogleOAuthProvider>
+    ) : (
+      app
+    ),
   );
 };
 

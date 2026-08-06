@@ -130,6 +130,29 @@ export class CustomerAuthController {
   }
 
   @UseGuards(CustomerJwtAuthGuard)
+  @Put('me')
+  @HttpCode(HttpStatus.OK)
+  @ApiCookieAuth('customer_access_token')
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: 'Actualizar perfil del cliente' })
+  async updateProfile(
+    @CurrentUser() customer: AuthenticatedCustomer,
+    @Body() body: { firstName?: string; lastName?: string; phone?: string; email?: string; password?: string; acceptsMarketing?: boolean },
+  ) {
+    return this.customerAuthService.updateProfile(customer.sub, body);
+  }
+
+  @UseGuards(CustomerJwtAuthGuard)
+  @Delete('me')
+  @HttpCode(HttpStatus.OK)
+  @ApiCookieAuth('customer_access_token')
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: 'Eliminar cuenta (soft delete)' })
+  async deleteAccount(@CurrentUser() customer: AuthenticatedCustomer) {
+    return this.customerAuthService.deleteAccount(customer.sub);
+  }
+
+  @UseGuards(CustomerJwtAuthGuard)
   @Post('logout')
   @HttpCode(HttpStatus.OK)
   @ApiCookieAuth('customer_access_token')

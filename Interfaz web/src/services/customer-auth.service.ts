@@ -144,6 +144,45 @@ export const customerAuthService = {
     return response.json();
   },
 
+  async updateProfile(data: {
+    firstName?: string;
+    lastName?: string;
+    phone?: string;
+    email?: string;
+    password?: string;
+    acceptsMarketing?: boolean;
+  }): Promise<CustomerAuthResponse["customer"]> {
+    const response = await fetch(`${API_BASE_URL}/customer-auth/me`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", ...getAuthHeaders() },
+      credentials: "include",
+      body: JSON.stringify(data),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.message || "Error al actualizar perfil");
+    }
+
+    return response.json();
+  },
+
+  async deleteAccount(): Promise<{ success: boolean; message: string }> {
+    const response = await fetch(`${API_BASE_URL}/customer-auth/me`, {
+      method: "DELETE",
+      headers: getAuthHeaders(),
+      credentials: "include",
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.message || "Error al eliminar cuenta");
+    }
+
+    persistAccessToken(null);
+    return response.json();
+  },
+
   async logout(
     refreshToken?: string,
   ): Promise<{ success: boolean; message: string }> {

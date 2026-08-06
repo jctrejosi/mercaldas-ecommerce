@@ -1,8 +1,11 @@
 import { Body, Controller, Get, Post } from '@nestjs/common';
+import { eq } from 'drizzle-orm';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { Public } from '../../common/decorators/public.decorator';
+import { DrizzleService } from '../../database/drizzle.service';
 import { WompiService } from './wompi.service';
 import { EpaycoService } from './epayco.service';
+import { settings } from '../../../drizzle/schema';
 
 @ApiTags('Payments')
 @Controller('payments')
@@ -10,6 +13,7 @@ export class PaymentsController {
   constructor(
     private readonly wompiService: WompiService,
     private readonly epaycoService: EpaycoService,
+    private readonly drizzle: DrizzleService,
   ) {}
 
   @Public()
@@ -41,7 +45,27 @@ export class PaymentsController {
   @Get('wompi/config')
   @ApiOperation({ summary: 'Obtener configuración pública de Wompi' })
   @ApiResponse({ status: 200, description: 'Configuración pública de Wompi' })
-  getWompiConfig() {
-    return this.wompiService.getAcceptanceData();
+  async getWompiConfig() {
+    // Verificar si Wompi está habilitado
+    const [row] = await this.drizzle.db.select().from(settings).where(eq(settings.key, 'payment_methods')).limit(1);
+    if (row) {
+      const value = row.value as any;
+      if (value?.wompi?.enabled === false) {
+        return { enabled: false };
+      }
+    }
+    try { return await this.wompiService.getAcceptanceData(); } catch { return { enabled: false }; }
+  }
+
+  @Public()
+  @Get('methods')
+  @ApiOperation({ summary: 'Obtener medios de pago habilitados' })
+  @ApiResponse({ status: 200, description: 'Configuración de medios de pago' })
+  async getPaymentMethods() {
+    const [row] = await this.drizzle.db.select().from(settings).where(eq(settings.key, 'payment_methods')).limit(1);
+    if (!row) {
+      return { wompi: { enabled: true, methods: { card: true, pse: true, nequi: true } }, breb: { enabled: true } };
+    }
+    return row.value as any;
   }
 }

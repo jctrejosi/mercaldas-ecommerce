@@ -111,7 +111,7 @@ export default function App() {
     return s === "express" ? "express" : "standard";
   });
   const [checkoutPayment, setCheckoutPayment] = useState<
-    "efectivo" | "tarjeta" | "nequi" | "pse"
+    "efectivo" | "tarjeta" | "nequi" | "pse" | "breb"
   >(() => {
     const p = localStorage.getItem("checkout_payment");
     return p === "tarjeta" || p === "nequi" || p === "pse" ? p : "efectivo";
@@ -164,6 +164,9 @@ export default function App() {
   const [wompiConfig, setWompiConfig] = useState<WompiConfigResponse | null>(
     null,
   );
+  const [wompiEnabled, setWompiEnabled] = useState(true);
+  const [brebEnabled, setBrebEnabled] = useState(true);
+  const [wompiMethods, setWompiMethods] = useState({ card: true, pse: true, nequi: true });
   const [wompiAcceptance, setWompiAcceptance] = useState({
     terms: false,
     personalData: false,
@@ -617,10 +620,27 @@ export default function App() {
   };
 
   useEffect(() => {
-    void ordersService
-      .getWompiConfig()
-      .then(setWompiConfig)
-      .catch(() => null);
+    // Cargar medios de pago habilitados primero
+    fetch(`${import.meta.env.VITE_API_URL || "http://localhost:3000"}/payments/methods`)
+      .then((r) => r.json())
+      .then((d) => {
+        const wompiOn = d?.wompi?.enabled ?? true;
+        setWompiEnabled(wompiOn);
+        setBrebEnabled(d?.breb?.enabled ?? true);
+        setWompiMethods({
+          card: d?.wompi?.methods?.card ?? true,
+          pse: d?.wompi?.methods?.pse ?? true,
+          nequi: d?.wompi?.methods?.nequi ?? true,
+        });
+        // Solo cargar config de Wompi si está habilitado
+        if (wompiOn) {
+          void ordersService
+            .getWompiConfig()
+            .then(setWompiConfig)
+            .catch(() => null);
+        }
+      })
+      .catch(() => {});
   }, []);
   const handleSocialSuccess = () => {
     setLoginModal(false);
@@ -859,6 +879,9 @@ export default function App() {
         cardPayment={cardPayment}
         wompiAcceptance={wompiAcceptance}
         wompiConfig={wompiConfig}
+        wompiEnabled={wompiEnabled}
+        wompiMethods={wompiMethods}
+        brebEnabled={brebEnabled}
         psePayment={psePayment}
         nequiPayment={nequiPayment}
         lastOrderId={lastOrderId}

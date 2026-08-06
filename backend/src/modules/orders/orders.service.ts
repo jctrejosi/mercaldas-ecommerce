@@ -159,6 +159,9 @@ export class OrdersService {
             })
         : null;
 
+    // Bre-B: pago manual por transferencia — el cliente transfiere y el admin verifica
+    const brebTransaction = null;
+
     const isApprovedCardPayment =
       cardProvider === 'wompi'
         ? cardTransaction?.status === 'APPROVED'
@@ -263,6 +266,7 @@ export class OrdersService {
             shippingType: dto.shippingType,
             paymentDetails: this.buildPaymentResponse(dto),
             cardTransaction,
+            brebTransaction,
           },
           idempotencyKey: `checkout-${referenceCode}`,
         })
@@ -431,6 +435,8 @@ export class OrdersService {
         return 'efectivo';
       case 'NEQUI':
         return 'nequi';
+      case 'BREB':
+        return 'breb';
       case 'DAVIPLATA':
         return 'daviplata';
       case 'BANK_TRANSFER':
@@ -568,7 +574,8 @@ export class OrdersService {
         return 'PSE';
       case 'nequi':
         return 'NEQUI';
-      case 'efectivo':
+      case 'breb':
+        return 'BREB';
       default:
         return 'CASH';
     }
@@ -582,9 +589,10 @@ export class OrdersService {
         return 'pse';
       case 'nequi':
         return 'nequi';
-      case 'efectivo':
+      case 'breb':
+        return 'breb';
       default:
-        return 'cash_on_delivery';
+        return 'cash';
     }
   }
 

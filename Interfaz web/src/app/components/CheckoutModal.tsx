@@ -11,6 +11,8 @@ import {
   Smartphone,
   Building2,
   CreditCard,
+  Copy,
+  Check,
 } from "lucide-react";
 import { Logo } from "../Logo";
 import type { CartItem } from "../types";
@@ -31,7 +33,10 @@ interface CheckoutModalProps {
     notes: string;
   };
   checkoutShipping: "standard" | "express";
-  checkoutPayment: "efectivo" | "tarjeta" | "nequi" | "pse";
+  checkoutPayment: "efectivo" | "tarjeta" | "nequi" | "pse" | "breb";
+  wompiEnabled?: boolean;
+  wompiMethods?: { card: boolean; pse: boolean; nequi: boolean };
+  brebEnabled?: boolean;
   checkoutLoading: boolean;
   checkoutError: string | null;
   cardPayment: {
@@ -64,7 +69,7 @@ interface CheckoutModalProps {
   ) => void;
   onSetCheckoutShipping: (shipping: "standard" | "express") => void;
   onSetCheckoutPayment: (
-    payment: "efectivo" | "tarjeta" | "nequi" | "pse",
+    payment: "efectivo" | "tarjeta" | "nequi" | "pse" | "breb",
   ) => void;
   onSetCardPayment: (
     updater: (
@@ -105,6 +110,9 @@ export function CheckoutModal({
   cardPayment,
   wompiAcceptance,
   wompiConfig,
+  wompiEnabled = true,
+  wompiMethods = { card: true, pse: true, nequi: true },
+  brebEnabled = true,
   psePayment,
   nequiPayment,
   lastOrderId,
@@ -123,6 +131,36 @@ export function CheckoutModal({
   fmt,
 }: CheckoutModalProps) {
   if (!checkoutOpen) return null;
+
+  const [copied, setCopied] = useState(false);
+  const brebLlave = "@davi3148853458";
+  const brebBanco = "Davivienda";
+  const totalConEnvio = cartTotal + (checkoutShipping === "express" ? 9900 : 4900);
+
+  const paymentLabel: Record<string, string> = {
+    efectivo: "Efectivo contra entrega",
+    tarjeta: "Tarjeta débito / crédito",
+    nequi: "Nequi",
+    pse: "PSE",
+    breb: "Bre-B",
+  };
+
+  const handleCopyLlave = () => {
+    navigator.clipboard.writeText(brebLlave).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  };
+
+  // Métodos de pago filtrados según config de Wompi
+  const allMethods = [
+    { key: "efectivo" as const, label: "Efectivo contra entrega", Icon: Banknote, desc: "Paga al recibir tu pedido", enabled: true },
+    { key: "nequi" as const, label: "Nequi", Icon: Smartphone, desc: "Transferencia inmediata", enabled: wompiEnabled && wompiMethods.nequi },
+    { key: "pse" as const, label: "PSE", Icon: Building2, desc: "Débito bancario en línea", enabled: wompiEnabled && wompiMethods.pse },
+    { key: "tarjeta" as const, label: "Tarjeta débito / crédito", Icon: CreditCard, desc: "Visa, Mastercard, Amex", enabled: wompiEnabled && wompiMethods.card },
+    { key: "breb" as const, label: "Bre-B (Transferencia entre bancos)", Icon: Building2, desc: "Paga desde tu banco a llave @davi3148853458", enabled: brebEnabled },
+  ];
+  const paymentMethods = allMethods.filter((m) => m.enabled);
 
   return (
     <div className="fixed inset-0 z-[60] flex flex-col bg-muted overflow-y-auto">
@@ -384,32 +422,7 @@ export function CheckoutModal({
               Método de pago
             </h2>
             <div className="bg-white rounded-2xl border border-border divide-y divide-border overflow-hidden">
-              {([
-                {
-                  key: "efectivo" as const,
-                  label: "Efectivo contra entrega",
-                  Icon: Banknote,
-                  desc: "Paga al recibir tu pedido",
-                },
-                {
-                  key: "nequi" as const,
-                  label: "Nequi",
-                  Icon: Smartphone,
-                  desc: "Transferencia inmediata",
-                },
-                {
-                  key: "pse" as const,
-                  label: "PSE",
-                  Icon: Building2,
-                  desc: "Débito bancario en línea",
-                },
-                {
-                  key: "tarjeta" as const,
-                  label: "Tarjeta débito / crédito",
-                  Icon: CreditCard,
-                  desc: "Visa, Mastercard, Amex",
-                },
-              ]).map(({ key, label, Icon, desc }) => (
+              {paymentMethods.map(({ key, label, Icon, desc }) => (
                 <label
                   key={key}
                   className={`flex items-center gap-3 px-4 py-3.5 cursor-pointer transition-colors ${checkoutPayment === key ? "bg-yellow-50" : "hover:bg-muted/40"}`}
@@ -699,6 +712,40 @@ export function CheckoutModal({
               </div>
             )}
 
+            {checkoutPayment === "breb" && (
+              <div className="bg-white rounded-2xl border border-border p-4 space-y-3">
+                <h3 className="text-sm font-bold">Pago con Bre-B</h3>
+                <p className="text-xs text-muted-foreground">
+                  Transfiere el monto exacto a la siguiente llave desde la app de tu banco.
+                </p>
+                <div className="rounded-xl border border-border bg-muted/30 p-3 space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-muted-foreground">Llave</span>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-sm font-bold text-foreground">{brebLlave}</span>
+                      <button
+                        onClick={handleCopyLlave}
+                        className="p-1 rounded-lg hover:bg-muted transition-colors"
+                      >
+                        {copied ? <Check className="w-3.5 h-3.5 text-green-500" /> : <Copy className="w-3.5 h-3.5 text-muted-foreground" />}
+                      </button>
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-muted-foreground">Banco</span>
+                    <span className="text-sm font-semibold text-foreground">{brebBanco}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-muted-foreground">Monto a transferir</span>
+                    <span className="text-sm font-bold text-foreground">{fmt(totalConEnvio)}</span>
+                  </div>
+                </div>
+                <p className="text-xs text-amber-600 bg-amber-50 rounded-xl p-2">
+                  Tu pedido se confirmará cuando verifiquemos la transferencia. Usa el código de referencia como concepto.
+                </p>
+              </div>
+            )}
+
             <div className="bg-white rounded-2xl border border-border p-4 space-y-2 text-sm">
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Subtotal</span>
@@ -713,10 +760,7 @@ export function CheckoutModal({
               <div className="flex justify-between font-black text-base border-t border-border pt-2">
                 <span>Total a pagar</span>
                 <span>
-                  {fmt(
-                    cartTotal +
-                      (checkoutShipping === "express" ? 9900 : 4900),
-                  )}
+                  {fmt(totalConEnvio)}
                 </span>
               </div>
             </div>
@@ -782,14 +826,39 @@ export function CheckoutModal({
                     className="text-2xl font-black"
                     style={{ fontFamily: "'Bricolage Grotesque', sans-serif" }}
                   >
-                    Pago pendiente de confirmación
+                    {checkoutPayment === "breb" ? "Pendiente de transferencia" : "Pago pendiente de confirmación"}
                   </h2>
                   <p className="text-muted-foreground mt-1 text-sm">
-                    Tu pedido <strong>{lastOrderId}</strong> está siendo procesado por Wompi.
+                    {checkoutPayment === "breb"
+                      ? `Transfiere ${fmt(totalConEnvio)} a la llave ${brebLlave} (${brebBanco}) y tu pedido será confirmado.`
+                      : `Tu pedido ${lastOrderId} está siendo procesado por Wompi.`}
                   </p>
-                  <p className="text-muted-foreground text-xs mt-1">
-                    Te notificaremos cuando el pago sea confirmado.
-                  </p>
+                  {checkoutPayment === "breb" && (
+                    <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 space-y-2 text-left">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-muted-foreground">Llave</span>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-sm font-bold">{brebLlave}</span>
+                          <button onClick={handleCopyLlave} className="p-1 rounded-lg hover:bg-amber-100">
+                            {copied ? <Check className="w-3.5 h-3.5 text-green-500" /> : <Copy className="w-3.5 h-3.5 text-muted-foreground" />}
+                          </button>
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-muted-foreground">Referencia</span>
+                        <span className="text-sm font-bold">{lastOrderId}</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-muted-foreground">Monto</span>
+                        <span className="text-sm font-bold">{fmt(totalConEnvio)}</span>
+                      </div>
+                    </div>
+                  )}
+                  {checkoutPayment !== "breb" && (
+                    <p className="text-muted-foreground text-xs mt-1">
+                      Te notificaremos cuando el pago sea confirmado.
+                    </p>
+                  )}
                 </div>
               </>
             ) : (
@@ -827,7 +896,7 @@ export function CheckoutModal({
               </div>
               <div className="flex items-center gap-2 text-sm">
                 <Wallet className="w-4 h-4 text-muted-foreground shrink-0" />
-                <span className="capitalize">{checkoutPayment}</span>
+                <span>{paymentLabel[checkoutPayment] || checkoutPayment}</span>
               </div>
             </div>
             <button

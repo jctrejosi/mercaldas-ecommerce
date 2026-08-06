@@ -43,7 +43,7 @@ export type CheckoutPayload = {
   items: CheckoutItem[];
   address: CheckoutAddress;
   shippingType: "standard" | "express";
-  paymentMethod: "efectivo" | "tarjeta" | "nequi" | "pse";
+  paymentMethod: "efectivo" | "tarjeta" | "nequi" | "pse" | "breb";
   paymentDetails?: {
     card?: CardPaymentDetails;
     pse?: PsePaymentDetails;

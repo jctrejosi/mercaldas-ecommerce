@@ -506,6 +506,52 @@ export class CustomerAuthService {
     };
   }
 
+  async updateProfile(
+    customerId: number,
+    body: {
+      firstName?: string;
+      lastName?: string;
+      phone?: string;
+      email?: string;
+      password?: string;
+      acceptsMarketing?: boolean;
+    },
+  ) {
+    const setData: Record<string, unknown> = {
+      updatedAt: new Date().toISOString(),
+    };
+
+    if (body.firstName !== undefined) setData.firstName = body.firstName;
+    if (body.lastName !== undefined) setData.lastName = body.lastName;
+    if (body.phone !== undefined) setData.phone = body.phone;
+    if (body.email !== undefined) setData.email = body.email;
+    if (body.acceptsMarketing !== undefined) setData.acceptsMarketing = body.acceptsMarketing;
+    if (body.password) {
+      const salt = await bcrypt.genSalt(12);
+      setData.passwordHash = await bcrypt.hash(body.password, salt);
+    }
+
+    await this.db
+      .update(customers)
+      .set(setData)
+      .where(eq(customers.id, BigInt(customerId)));
+
+    return await this.getProfile(customerId);
+  }
+
+  async deleteAccount(customerId: number): Promise<{ success: boolean; message: string }> {
+    await this.db
+      .update(customers)
+      .set({
+        isActive: false,
+        deletedAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      })
+      .where(eq(customers.id, BigInt(customerId)));
+
+    return { success: true, message: 'Cuenta eliminada exitosamente' };
+  }
+
   async getProfile(customerId: number) {
     const results = await this.db
       .select()

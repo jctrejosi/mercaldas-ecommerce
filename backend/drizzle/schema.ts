@@ -154,6 +154,7 @@ export const paymentMethodEnum = pgEnum('payment_method_enum', [
   'BANK_TRANSFER',
   'NEQUI',
   'DAVIPLATA',
+  'BREB',
 ]);
 export const paymentStatusEnum = pgEnum('payment_status_enum', [
   'PENDING',
