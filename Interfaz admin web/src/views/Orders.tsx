@@ -20,13 +20,23 @@ const STATUSES: OrderStatus[] = ["pendiente", "confirmado", "preparando", "listo
 
 const fmt = (n: number) => "$" + n.toLocaleString("es-CO");
 
-function KanbanCard({ order, onClick }: { order: Order; onClick: () => void }) {
+function KanbanCard({ order, onClick, onConfirmPayment }: { order: Order; onClick: () => void; onConfirmPayment?: (o: Order) => void }) {
   const cfg = STATUS_CONFIG[order.status];
+  const isPending = order.status === "pendiente";
   return (
-    <div
-      onClick={onClick}
-      className="bg-white rounded-xl border border-gray-100 p-3 hover:shadow-md transition-all cursor-pointer hover:border-gray-200"
-    >
+    <div className="bg-white rounded-xl border border-gray-100 hover:shadow-md transition-all hover:border-gray-200 overflow-hidden">
+      {isPending && onConfirmPayment && (
+        <button
+          onClick={(e) => { e.stopPropagation(); onConfirmPayment(order); }}
+          className="w-full px-3 py-1.5 text-[10px] font-bold bg-blue-50 text-blue-700 hover:bg-blue-100 transition-colors flex items-center justify-center gap-1"
+        >
+          <CheckCircle size={10} /> Confirmar pago
+        </button>
+      )}
+      <div
+        onClick={onClick}
+        className="p-3 cursor-pointer"
+      >
       <div className="flex items-center justify-between mb-2">
         <span className="text-xs font-mono font-bold text-gray-600">{order.id}</span>
         <span className="text-xs text-gray-400">{order.time}</span>
@@ -40,6 +50,7 @@ function KanbanCard({ order, onClick }: { order: Order; onClick: () => void }) {
       <div className="mt-2 flex items-center gap-1.5">
         <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${cfg.bg} ${cfg.color}`}>{order.payment}</span>
         {order.note && <span className="text-[10px] text-gray-400">📝 nota</span>}
+      </div>
       </div>
     </div>
   );
@@ -177,6 +188,15 @@ export default function Orders() {
     }
   }, [statusFilter, search]);
 
+  const handleConfirmPayment = async (o: Order) => {
+    try {
+      await ordersService.updateStatus(o.orderId.toString(), "confirmado");
+      fetchOrders();
+    } catch (err) {
+      console.error("Error confirming payment:", err);
+    }
+  };
+
   useEffect(() => {
     fetchOrders();
   }, [fetchOrders]);
@@ -312,7 +332,7 @@ export default function Orders() {
                   </div>
                   <div className="space-y-2">
                     {col.map((o) => (
-                      <KanbanCard key={o.id} order={o} onClick={() => setSelected(o)} />
+                      <KanbanCard key={o.id} order={o} onClick={() => setSelected(o)} onConfirmPayment={handleConfirmPayment} />
                     ))}
                     {col.length === 0 && (
                       <div className="text-center py-6 text-xs text-gray-400 border-2 border-dashed border-gray-200 rounded-xl">
@@ -371,7 +391,17 @@ export default function Orders() {
                           <span className="text-xs text-gray-400 font-mono">{o.time}</span>
                         </td>
                         <td className="px-4 py-3">
-                          <ChevronRight size={14} className="text-gray-400" />
+                          <div className="flex items-center gap-2">
+                            {o.status === "pendiente" && (
+                              <button
+                                onClick={(e) => { e.stopPropagation(); handleConfirmPayment(o); }}
+                                className="text-[10px] font-bold px-2 py-1 rounded-full bg-blue-50 text-blue-700 hover:bg-blue-100 transition-colors"
+                              >
+                                Confirmar
+                              </button>
+                            )}
+                            <ChevronRight size={14} className="text-gray-400" />
+                          </div>
                         </td>
                       </tr>
                     );

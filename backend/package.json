@@ -31,6 +31,7 @@
     "test:e2e": "jest --config ./test/jest-e2e.json"
   },
   "dependencies": {
+    "@imgly/background-removal-node": "^1.4.5",
     "@nestjs/cli": "11.0.24",
     "@nestjs/common": "11.1.28",
     "@nestjs/config": "4.0.4",

@@ -35,6 +35,7 @@ import { PaymentVerificationService } from './payment-verification.service';
 import { WompiService } from '../payments/wompi.service';
 import { EpaycoService } from '../payments/epayco.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { OrdersGateway } from './orders.gateway';
 
 @Injectable()
 export class OrdersService {
@@ -44,6 +45,7 @@ export class OrdersService {
     private readonly epaycoService: EpaycoService,
     private readonly paymentVerification: PaymentVerificationService,
     private readonly notificationsService: NotificationsService,
+    private readonly ordersGateway: OrdersGateway,
   ) {}
 
   private get db() {
@@ -359,7 +361,15 @@ export class OrdersService {
 
     if (!orderRows.length) return [];
 
-    const orderIds = orderRows.map((r) => Number(r.id));
+    // Deduplicar por id del pedido (el JOIN con payments puede multiplicar filas)
+    const dedupMap = new Map<string, (typeof orderRows)[number]>();
+    for (const row of orderRows) {
+      const key = String(row.id);
+      if (!dedupMap.has(key)) dedupMap.set(key, row);
+    }
+    const uniqueRows = [...dedupMap.values()];
+
+    const orderIds = uniqueRows.map((r) => Number(r.id));
 
     const itemRows = await this.db
       .select({
@@ -397,7 +407,7 @@ export class OrdersService {
       itemsByOrderId.set(oid, list);
     }
 
-    return orderRows.map((row) => {
+    return uniqueRows.map((row) => {
       const items = (itemsByOrderId.get(Number(row.id)) ?? []).map((item) => ({
         name: item.productName,
         price: Number(item.unitPrice ?? 0),
@@ -451,11 +461,11 @@ export class OrdersService {
       case 'created':
         return 'preparando';
       case 'confirmed':
-        return 'preparando';
+        return 'confirmado';
       case 'payment_pending':
         return 'pendiente';
       case 'paid':
-        return 'preparando';
+        return 'confirmado';
       case 'preparing':
         return 'preparando';
       case 'shipped':
@@ -673,8 +683,16 @@ export class OrdersService {
 
     const rows = await query;
 
+    // Deduplicar por id del pedido (el JOIN con payments puede multiplicar filas)
+    const dedupMap = new Map<string, (typeof rows)[number]>();
+    for (const row of rows) {
+      const key = String(row.id);
+      if (!dedupMap.has(key)) dedupMap.set(key, row);
+    }
+    const uniqueRows = [...dedupMap.values()];
+
     // Get item counts per order
-    const orderIds = rows.map((r) => Number(r.id));
+    const orderIds = uniqueRows.map((r) => Number(r.id));
     const itemCounts = new Map<number, number>();
     if (orderIds.length > 0) {
       const countRows = await this.db
@@ -690,7 +708,7 @@ export class OrdersService {
       }
     }
 
-    return rows.map((row) => ({
+    return uniqueRows.map((row) => ({
       id: row.referenceCode,
       orderId: Number(row.id),
       customer: row.customerName ?? row.customerEmail ?? 'Cliente',
@@ -834,7 +852,12 @@ export class OrdersService {
     }
 
     const [existing] = await this.db
-      .select({ id: orders.id, status: orders.status })
+      .select({
+        id: orders.id,
+        status: orders.status,
+        referenceCode: orders.referenceCode,
+        customerId: orders.customerId,
+      })
       .from(orders)
       .where(eq(orders.id, BigInt(orderId)))
       .limit(1);
@@ -860,9 +883,27 @@ export class OrdersService {
       });
     });
 
+    // Emitir por WebSocket al cliente
+    const displayStatus = this.mapOrderStatus(dbStatus);
+    this.ordersGateway.notifyOrderStatus(
+      existing.referenceCode,
+      displayStatus,
+    );
+
+    // Notificar al cliente si el pago fue confirmado
+    if (dbStatus === 'paid' && existing.customerId) {
+      await this.notificationsService.create({
+        type: 'ORDER',
+        title: 'Pago confirmado',
+        message: `El pago de tu pedido ${existing.referenceCode} ha sido confirmado. Ya estamos preparando tu pedido.`,
+        targetCustomerId: Number(existing.customerId),
+        linkUrl: `/account?tab=orders`,
+      });
+    }
+
     return {
       success: true,
-      status: this.mapOrderStatus(dbStatus),
+      status: displayStatus,
       orderId,
     };
   }

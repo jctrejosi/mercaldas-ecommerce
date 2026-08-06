@@ -3,6 +3,10 @@ import { useNavigate, useLocation } from "react-router";
 import { useCustomerAuth } from "../hooks/useCustomerAuth";
 import { catalogService } from "../services/catalog.service";
 import { ordersService } from "../services/orders.service";
+import {
+  customerAddressService,
+  type CustomerAddress,
+} from "../services/customer-auth.service";
 import { useOrderSocket } from "../hooks/useOrderSocket";
 import { useNotifications } from "../hooks/useNotifications";
 import { cartService } from "../services/cart.service";
@@ -91,6 +95,7 @@ export default function App() {
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [checkoutStep, setCheckoutStep] = useState(1);
+  const [savedAddresses, setSavedAddresses] = useState<CustomerAddress[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [ordersOpen, setOrdersOpen] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
@@ -166,6 +171,10 @@ export default function App() {
   );
   const [wompiEnabled, setWompiEnabled] = useState(true);
   const [brebEnabled, setBrebEnabled] = useState(true);
+  const [brebKey, setBrebKey] = useState("@davi3148853458");
+  const [brebBank, setBrebBank] = useState("Davivienda");
+  const [brebQrImageUrl, setBrebQrImageUrl] = useState("");
+  const [efectivoEnabled, setEfectivoEnabled] = useState(true);
   const [wompiMethods, setWompiMethods] = useState({ card: true, pse: true, nequi: true });
   const [wompiAcceptance, setWompiAcceptance] = useState({
     terms: false,
@@ -214,6 +223,29 @@ export default function App() {
     register,
     socialLogin,
   } = useCustomerAuth();
+  // Cargar direcciones guardadas al abrir el checkout y sugerir la default
+  useEffect(() => {
+    if (checkoutOpen && customer) {
+      customerAddressService
+        .getAddresses()
+        .then((addrs) => {
+          setSavedAddresses(addrs);
+          const suggested =
+            addrs.find((a) => a.isDefault) ?? addrs[0] ?? null;
+          if (suggested) {
+            setCheckoutAddress((prev) => ({
+              ...prev,
+              name: prev.name || customer.fullName || "",
+              phone: prev.phone || customer.phone || "",
+              address: prev.address || suggested.addressLine1,
+              city: prev.city || suggested.city,
+              notes: prev.notes || suggested.deliveryInstructions || "",
+            }));
+          }
+        })
+        .catch(() => setSavedAddresses([]));
+    }
+  }, [checkoutOpen, customer]);
   const { notifications, unreadCount, markAsRead } = useNotifications(
     customer?.id ?? null,
   );
@@ -627,6 +659,10 @@ export default function App() {
         const wompiOn = d?.wompi?.enabled ?? true;
         setWompiEnabled(wompiOn);
         setBrebEnabled(d?.breb?.enabled ?? true);
+        setBrebKey(d?.breb?.key ?? "@davi3148853458");
+        setBrebBank(d?.breb?.bank ?? "Davivienda");
+        setBrebQrImageUrl(d?.breb?.qrImageUrl ?? "");
+        setEfectivoEnabled(d?.efectivo?.enabled ?? true);
         setWompiMethods({
           card: d?.wompi?.methods?.card ?? true,
           pse: d?.wompi?.methods?.pse ?? true,
@@ -872,6 +908,9 @@ export default function App() {
         cartItems={cartItems}
         cartTotal={cartTotal}
         checkoutAddress={checkoutAddress}
+        savedAddresses={savedAddresses}
+        customerName={customer?.fullName ?? ""}
+        customerPhone={customer?.phone ?? ""}
         checkoutShipping={checkoutShipping}
         checkoutPayment={checkoutPayment}
         checkoutLoading={checkoutLoading}
@@ -882,6 +921,10 @@ export default function App() {
         wompiEnabled={wompiEnabled}
         wompiMethods={wompiMethods}
         brebEnabled={brebEnabled}
+        brebKey={brebKey}
+        brebBank={brebBank}
+        brebQrImageUrl={brebQrImageUrl}
+        efectivoEnabled={efectivoEnabled}
         psePayment={psePayment}
         nequiPayment={nequiPayment}
         lastOrderId={lastOrderId}

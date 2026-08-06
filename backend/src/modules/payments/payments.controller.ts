@@ -63,9 +63,31 @@ export class PaymentsController {
   @ApiResponse({ status: 200, description: 'Configuración de medios de pago' })
   async getPaymentMethods() {
     const [row] = await this.drizzle.db.select().from(settings).where(eq(settings.key, 'payment_methods')).limit(1);
+    const defaults = {
+      efectivo: { enabled: true },
+      wompi: { enabled: true, methods: { card: true, pse: true, nequi: true } },
+      breb: { enabled: true, key: '@davi3148853458', bank: 'Davivienda', qrImageUrl: '' },
+    };
     if (!row) {
-      return { wompi: { enabled: true, methods: { card: true, pse: true, nequi: true } }, breb: { enabled: true } };
+      return defaults;
     }
-    return row.value as any;
+    const value = row.value as any;
+    return {
+      efectivo: { enabled: value?.efectivo?.enabled ?? true },
+      wompi: {
+        enabled: value?.wompi?.enabled ?? true,
+        methods: {
+          card: value?.wompi?.methods?.card ?? true,
+          pse: value?.wompi?.methods?.pse ?? true,
+          nequi: value?.wompi?.methods?.nequi ?? true,
+        },
+      },
+      breb: {
+        enabled: value?.breb?.enabled ?? true,
+        key: value?.breb?.key ?? '@davi3148853458',
+        bank: value?.breb?.bank ?? 'Davivienda',
+        qrImageUrl: value?.breb?.qrImageUrl ?? '',
+      },
+    };
   }
 }

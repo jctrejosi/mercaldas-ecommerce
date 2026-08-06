@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { Save, Globe, CreditCard, Loader2, CheckCircle } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { Save, Globe, CreditCard, Loader2, CheckCircle, Upload } from "lucide-react";
 
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:3000";
 
@@ -46,6 +46,8 @@ export default function SettingsView() {
   const [saved, setSaved] = useState(false);
   const [payMethods, setPayMethods] = useState<any>(null);
   const [payLoading, setPayLoading] = useState(false);
+  const [qrUploading, setQrUploading] = useState(false);
+  const qrFileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     fetch(`${API_BASE}/admin/settings/store`, { credentials: "include" })
@@ -122,6 +124,39 @@ export default function SettingsView() {
     fetch(`${API_BASE}/admin/settings/payment-methods`, { method: "PUT", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify(updated) });
   };
 
+  const updateBrebField = (field: string, value: string) => {
+    if (!payMethods) return;
+    const updated = {
+      ...payMethods,
+      breb: { ...payMethods.breb, [field]: value },
+    };
+    setPayMethods(updated);
+    fetch(`${API_BASE}/admin/settings/payment-methods`, { method: "PUT", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify(updated) });
+  };
+
+  const handleQrFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setQrUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      fd.append("code", `breb_qr_${Date.now()}`);
+      const res = await fetch(`${API_BASE}/upload/image`, {
+        method: "POST",
+        body: fd,
+      });
+      if (!res.ok) throw new Error("Error al subir imagen");
+      const data = await res.json();
+      if (data.url) updateBrebField("qrImageUrl", data.url);
+    } catch (err) {
+      console.error("Error subiendo QR:", err);
+    } finally {
+      setQrUploading(false);
+      if (qrFileInputRef.current) qrFileInputRef.current.value = "";
+    }
+  };
+
   const toggleEfectivo = () => {
     if (!payMethods) return;
     const updated = { ...payMethods, efectivo: { ...payMethods.efectivo, enabled: !payMethods.efectivo?.enabled } };
@@ -195,23 +230,6 @@ export default function SettingsView() {
                 <SettingRow label="Modo mantenimiento" sub="Muestra página de mantenimiento en el sitio">
                   <Toggle defaultOn={false} />
                 </SettingRow>
-
-                <div className="pt-4">
-                  <button
-                    onClick={handleSave}
-                    disabled={saving}
-                    className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-semibold text-sm transition-all disabled:opacity-50"
-                  >
-                    {saving ? (
-                      <Loader2 size={16} className="animate-spin" />
-                    ) : saved ? (
-                      <CheckCircle size={16} />
-                    ) : (
-                      <Save size={16} />
-                    )}
-                    {saving ? "Guardando..." : saved ? "Guardado" : "Guardar cambios"}
-                  </button>
-                </div>
                   </>
                 )}
               </div>
@@ -274,15 +292,88 @@ export default function SettingsView() {
 
                     {/* Bre-B */}
                     <div className="border border-gray-200 rounded-xl p-4">
-                      <div className="flex items-center justify-between">
+                      <div className="flex items-center justify-between mb-3">
                         <div>
                           <p className="text-sm font-semibold text-gray-800">Bre-B</p>
-                          <p className="text-xs text-gray-400">Transferencia entre bancos a llave @davi3148853458</p>
+                          <p className="text-xs text-gray-400">Transferencia entre bancos</p>
                         </div>
                         <button onClick={toggleBreb} className={`w-11 h-6 rounded-full relative transition-all ${payMethods?.breb?.enabled ? "bg-green-500" : "bg-gray-300"}`}>
                           <span className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-all ${payMethods?.breb?.enabled ? "right-1" : "left-1"}`} />
                         </button>
                       </div>
+                      {payMethods?.breb?.enabled && (
+                        <div className="space-y-3 pl-2 border-t border-gray-100 pt-3">
+                          <div>
+                            <label className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider block mb-1">
+                              Llave
+                            </label>
+                            <input
+                              value={payMethods?.breb?.key ?? ""}
+                              onChange={(e) => updateBrebField("key", e.target.value)}
+                              placeholder="@davi3148853458"
+                              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-300"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider block mb-1">
+                              Banco
+                            </label>
+                            <input
+                              value={payMethods?.breb?.bank ?? ""}
+                              onChange={(e) => updateBrebField("bank", e.target.value)}
+                              placeholder="Davivienda"
+                              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-300"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider block mb-1">
+                              Imagen del QR
+                            </label>
+                            {payMethods?.breb?.qrImageUrl && (
+                              <div className="mb-2">
+                                <img
+                                  src={payMethods.breb.qrImageUrl}
+                                  alt="QR actual"
+                                  className="w-32 h-32 object-contain rounded-lg border border-gray-200 bg-white"
+                                />
+                              </div>
+                            )}
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => qrFileInputRef.current?.click()}
+                                disabled={qrUploading}
+                                className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50 transition-colors"
+                              >
+                                <Upload size={13} />
+                                {qrUploading ? "Subiendo..." : "Subir imagen"}
+                              </button>
+                              <input
+                                ref={qrFileInputRef}
+                                type="file"
+                                accept="image/*"
+                                onChange={handleQrFileSelect}
+                                className="hidden"
+                              />
+                              {payMethods?.breb?.qrImageUrl && (
+                                <button
+                                  type="button"
+                                  onClick={() => updateBrebField("qrImageUrl", "")}
+                                  className="px-3 py-2 text-xs font-semibold text-red-600 border border-red-200 rounded-lg hover:bg-red-50 transition-colors"
+                                >
+                                  Quitar
+                                </button>
+                              )}
+                            </div>
+                            <input
+                              value={payMethods?.breb?.qrImageUrl ?? ""}
+                              onChange={(e) => updateBrebField("qrImageUrl", e.target.value)}
+                              placeholder="https://..."
+                              className="mt-2 w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-300"
+                            />
+                          </div>
+                        </div>
+                      )}
                     </div>
                     <p className="text-xs text-gray-400 mt-2">Los cambios se reflejan en los medios de pago de la tienda.</p>
                   </div>

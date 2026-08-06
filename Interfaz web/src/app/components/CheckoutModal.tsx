@@ -1,3 +1,4 @@
+import { useState } from "react";
 import {
   ArrowLeft,
   X,
@@ -32,11 +33,26 @@ interface CheckoutModalProps {
     city: string;
     notes: string;
   };
+  savedAddresses?: {
+    id: number;
+    alias: string | null;
+    addressLine1: string;
+    addressLine2: string | null;
+    city: string;
+    deliveryInstructions: string | null;
+    isDefault: boolean;
+  }[];
+  customerName?: string;
+  customerPhone?: string;
   checkoutShipping: "standard" | "express";
   checkoutPayment: "efectivo" | "tarjeta" | "nequi" | "pse" | "breb";
   wompiEnabled?: boolean;
   wompiMethods?: { card: boolean; pse: boolean; nequi: boolean };
   brebEnabled?: boolean;
+  brebKey?: string;
+  brebBank?: string;
+  brebQrImageUrl?: string;
+  efectivoEnabled?: boolean;
   checkoutLoading: boolean;
   checkoutError: string | null;
   cardPayment: {
@@ -103,6 +119,9 @@ export function CheckoutModal({
   cartItems,
   cartTotal,
   checkoutAddress,
+  savedAddresses = [],
+  customerName = "",
+  customerPhone = "",
   checkoutShipping,
   checkoutPayment,
   checkoutLoading,
@@ -113,6 +132,10 @@ export function CheckoutModal({
   wompiEnabled = true,
   wompiMethods = { card: true, pse: true, nequi: true },
   brebEnabled = true,
+  brebKey = "@davi3148853458",
+  brebBank = "Davivienda",
+  brebQrImageUrl = "",
+  efectivoEnabled = true,
   psePayment,
   nequiPayment,
   lastOrderId,
@@ -133,9 +156,31 @@ export function CheckoutModal({
   if (!checkoutOpen) return null;
 
   const [copied, setCopied] = useState(false);
-  const brebLlave = "@davi3148853458";
-  const brebBanco = "Davivienda";
+  const [selectedAddressId, setSelectedAddressId] = useState<number | null>(null);
+  const [usingNewAddress, setUsingNewAddress] = useState(false);
   const totalConEnvio = cartTotal + (checkoutShipping === "express" ? 9900 : 4900);
+
+  const selectSavedAddress = (id: number) => {
+    const addr = savedAddresses.find((a) => a.id === id);
+    if (!addr) return;
+    setSelectedAddressId(id);
+    setUsingNewAddress(false);
+    onSetCheckoutAddress((prev) => ({
+      ...prev,
+      name: prev.name || customerName,
+      phone: prev.phone || customerPhone,
+      address: [addr.addressLine1, addr.addressLine2]
+        .filter(Boolean)
+        .join(", "),
+      city: addr.city,
+      notes: prev.notes || addr.deliveryInstructions || "",
+    }));
+  };
+
+  const switchToNewAddress = () => {
+    setUsingNewAddress(true);
+    setSelectedAddressId(null);
+  };
 
   const paymentLabel: Record<string, string> = {
     efectivo: "Efectivo contra entrega",
@@ -146,7 +191,7 @@ export function CheckoutModal({
   };
 
   const handleCopyLlave = () => {
-    navigator.clipboard.writeText(brebLlave).then(() => {
+    navigator.clipboard.writeText(brebKey).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     });
@@ -154,11 +199,11 @@ export function CheckoutModal({
 
   // Métodos de pago filtrados según config de Wompi
   const allMethods = [
-    { key: "efectivo" as const, label: "Efectivo contra entrega", Icon: Banknote, desc: "Paga al recibir tu pedido", enabled: true },
+    { key: "efectivo" as const, label: "Efectivo contra entrega", Icon: Banknote, desc: "Paga al recibir tu pedido", enabled: efectivoEnabled },
     { key: "nequi" as const, label: "Nequi", Icon: Smartphone, desc: "Transferencia inmediata", enabled: wompiEnabled && wompiMethods.nequi },
     { key: "pse" as const, label: "PSE", Icon: Building2, desc: "Débito bancario en línea", enabled: wompiEnabled && wompiMethods.pse },
     { key: "tarjeta" as const, label: "Tarjeta débito / crédito", Icon: CreditCard, desc: "Visa, Mastercard, Amex", enabled: wompiEnabled && wompiMethods.card },
-    { key: "breb" as const, label: "Bre-B (Transferencia entre bancos)", Icon: Building2, desc: "Paga desde tu banco a llave @davi3148853458", enabled: brebEnabled },
+    { key: "breb" as const, label: "Bre-B (Transferencia entre bancos)", Icon: Building2, desc: `Transfiere a ${brebKey}`, enabled: brebEnabled },
   ];
   const paymentMethods = allMethods.filter((m) => m.enabled);
 
@@ -338,66 +383,191 @@ export function CheckoutModal({
             >
               Dirección de entrega
             </h2>
-            <div className="bg-white rounded-2xl border border-border p-4 space-y-3">
-              {([
-                {
-                  key: "name" as const,
-                  label: "Nombre completo",
-                  placeholder: "Carlos Ríos",
-                  type: "text",
-                },
-                {
-                  key: "phone" as const,
-                  label: "Celular",
-                  placeholder: "300 123 4567",
-                  type: "tel",
-                },
-                {
-                  key: "address" as const,
-                  label: "Dirección",
-                  placeholder: "Cra 23 #45-67, Barrio San José",
-                  type: "text",
-                },
-                {
-                  key: "city" as const,
-                  label: "Ciudad",
-                  placeholder: "Manizales",
-                  type: "text",
-                },
-                {
-                  key: "notes" as const,
-                  label: "Indicaciones adicionales (opcional)",
-                  placeholder: "Apto 301, timbre no funciona...",
-                  type: "text",
-                },
-              ]).map(({ key, label, placeholder, type }) => (
-                <div key={key}>
-                  <label className="text-xs font-semibold block mb-1">
-                    {label}
-                  </label>
-                  <input
-                    type={type}
-                    placeholder={placeholder}
-                    value={checkoutAddress[key]}
-                    onChange={(e) =>
-                      onSetCheckoutAddress((prev) => ({
-                        ...prev,
-                        [key]: e.target.value,
-                      }))
-                    }
-                    className="w-full px-3 py-2.5 rounded-xl border border-border bg-muted/50 text-sm focus:outline-none"
-                    onFocus={(e) => {
-                      e.target.style.boxShadow = "0 0 0 2px #FFF200";
-                      e.target.style.borderColor = "#FFF200";
+
+            {/* Direcciones guardadas */}
+            {savedAddresses.length > 0 && !usingNewAddress && (
+              <div className="space-y-2">
+                {savedAddresses.map((a) => {
+                  const selected = selectedAddressId === a.id;
+                  return (
+                    <button
+                      key={a.id}
+                      type="button"
+                      onClick={() => selectSavedAddress(a.id)}
+                      className={`w-full text-left flex items-start gap-3 px-4 py-3 rounded-2xl border transition-all ${
+                        selected
+                          ? "border-yellow-400 bg-yellow-50"
+                          : "border-border bg-white hover:bg-muted/40"
+                      }`}
+                    >
+                      <div
+                        className={`mt-0.5 w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 ${
+                          selected ? "border-yellow-500" : "border-muted-foreground"
+                        }`}
+                      >
+                        {selected && (
+                          <div className="w-2 h-2 rounded-full bg-foreground" />
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold flex items-center gap-2">
+                          {a.alias || "Dirección"}
+                          {a.isDefault && (
+                            <span
+                              className="text-[10px] font-bold px-2 py-0.5 rounded-full"
+                              style={{ background: "#FFF200", color: "#1A1A2E" }}
+                            >
+                              Predeterminada
+                            </span>
+                          )}
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          {[a.addressLine1, a.addressLine2, a.city]
+                            .filter(Boolean)
+                            .join(", ")}
+                        </p>
+                        {a.deliveryInstructions && (
+                          <p className="text-xs text-muted-foreground mt-0.5">
+                            📝 {a.deliveryInstructions}
+                          </p>
+                        )}
+                      </div>
+                    </button>
+                  );
+                })}
+                <button
+                  type="button"
+                  onClick={switchToNewAddress}
+                  className="w-full text-center px-4 py-2.5 rounded-2xl border border-dashed border-border text-sm font-semibold text-muted-foreground hover:text-foreground hover:border-foreground transition-colors"
+                >
+                  + Usar otra dirección
+                </button>
+              </div>
+            )}
+
+            {/* Completar nombre/celular cuando se elige una guardada */}
+            {selectedAddressId !== null && !usingNewAddress && (
+              <div className="bg-white rounded-2xl border border-border p-4 space-y-3">
+                <p className="text-xs font-semibold text-muted-foreground">
+                  Confirma tus datos de contacto
+                </p>
+                {([
+                  {
+                    key: "name" as const,
+                    label: "Nombre completo",
+                    placeholder: "Carlos Ríos",
+                    type: "text",
+                  },
+                  {
+                    key: "phone" as const,
+                    label: "Celular",
+                    placeholder: "300 123 4567",
+                    type: "tel",
+                  },
+                ]).map(({ key, label, placeholder, type }) => (
+                  <div key={key}>
+                    <label className="text-xs font-semibold block mb-1">
+                      {label}
+                    </label>
+                    <input
+                      type={type}
+                      placeholder={placeholder}
+                      value={checkoutAddress[key]}
+                      onChange={(e) =>
+                        onSetCheckoutAddress((prev) => ({
+                          ...prev,
+                          [key]: e.target.value,
+                        }))
+                      }
+                      className="w-full px-3 py-2.5 rounded-xl border border-border bg-muted/50 text-sm focus:outline-none"
+                    />
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Formulario manual (nueva dirección o sin guardadas) */}
+            {(usingNewAddress || savedAddresses.length === 0) && (
+              <div className="bg-white rounded-2xl border border-border p-4 space-y-3">
+                {([
+                  {
+                    key: "name" as const,
+                    label: "Nombre completo",
+                    placeholder: "Carlos Ríos",
+                    type: "text",
+                  },
+                  {
+                    key: "phone" as const,
+                    label: "Celular",
+                    placeholder: "300 123 4567",
+                    type: "tel",
+                  },
+                  {
+                    key: "address" as const,
+                    label: "Dirección",
+                    placeholder: "Cra 23 #45-67, Barrio San José",
+                    type: "text",
+                  },
+                  {
+                    key: "city" as const,
+                    label: "Ciudad",
+                    placeholder: "Manizales",
+                    type: "text",
+                  },
+                  {
+                    key: "notes" as const,
+                    label: "Indicaciones adicionales (opcional)",
+                    placeholder: "Apto 301, timbre no funciona...",
+                    type: "text",
+                  },
+                ]).map(({ key, label, placeholder, type }) => (
+                  <div key={key}>
+                    <label className="text-xs font-semibold block mb-1">
+                      {label}
+                    </label>
+                    <input
+                      type={type}
+                      placeholder={placeholder}
+                      value={checkoutAddress[key]}
+                      onChange={(e) =>
+                        onSetCheckoutAddress((prev) => ({
+                          ...prev,
+                          [key]: e.target.value,
+                        }))
+                      }
+                      className="w-full px-3 py-2.5 rounded-xl border border-border bg-muted/50 text-sm focus:outline-none"
+                      onFocus={(e) => {
+                        e.target.style.boxShadow = "0 0 0 2px #FFF200";
+                        e.target.style.borderColor = "#FFF200";
+                      }}
+                      onBlur={(e) => {
+                        e.target.style.boxShadow = "none";
+                        e.target.style.borderColor = "";
+                      }}
+                    />
+                  </div>
+                ))}
+                {usingNewAddress && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setUsingNewAddress(false);
+                      if (selectedAddressId !== null) {
+                        selectSavedAddress(selectedAddressId);
+                      } else if (savedAddresses.length > 0) {
+                        selectSavedAddress(
+                          savedAddresses.find((a) => a.isDefault)?.id ??
+                            savedAddresses[0].id,
+                        );
+                      }
                     }}
-                    onBlur={(e) => {
-                      e.target.style.boxShadow = "none";
-                      e.target.style.borderColor = "";
-                    }}
-                  />
-                </div>
-              ))}
-            </div>
+                    className="w-full text-center px-4 py-2 rounded-xl border border-border text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    ← Volver a mis direcciones
+                  </button>
+                )}
+              </div>
+            )}
             <button
               onClick={() => onSetCheckoutStep(3)}
               disabled={
@@ -722,7 +892,7 @@ export function CheckoutModal({
                   <div className="flex items-center justify-between">
                     <span className="text-xs text-muted-foreground">Llave</span>
                     <div className="flex items-center gap-1.5">
-                      <span className="text-sm font-bold text-foreground">{brebLlave}</span>
+                      <span className="text-sm font-bold text-foreground">{brebKey}</span>
                       <button
                         onClick={handleCopyLlave}
                         className="p-1 rounded-lg hover:bg-muted transition-colors"
@@ -733,12 +903,21 @@ export function CheckoutModal({
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-xs text-muted-foreground">Banco</span>
-                    <span className="text-sm font-semibold text-foreground">{brebBanco}</span>
+                    <span className="text-sm font-semibold text-foreground">{brebBank}</span>
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-xs text-muted-foreground">Monto a transferir</span>
                     <span className="text-sm font-bold text-foreground">{fmt(totalConEnvio)}</span>
                   </div>
+                  {brebQrImageUrl && (
+                    <div className="flex justify-center pt-2">
+                      <img
+                        src={brebQrImageUrl}
+                        alt="QR de pago"
+                        className="w-40 h-40 object-contain rounded-lg border border-border"
+                      />
+                    </div>
+                  )}
                 </div>
                 <p className="text-xs text-amber-600 bg-amber-50 rounded-xl p-2">
                   Tu pedido se confirmará cuando verifiquemos la transferencia. Usa el código de referencia como concepto.
@@ -830,7 +1009,7 @@ export function CheckoutModal({
                   </h2>
                   <p className="text-muted-foreground mt-1 text-sm">
                     {checkoutPayment === "breb"
-                      ? `Transfiere ${fmt(totalConEnvio)} a la llave ${brebLlave} (${brebBanco}) y tu pedido será confirmado.`
+                      ? `Transfiere ${fmt(totalConEnvio)} a la llave ${brebKey} (${brebBank}) y tu pedido será confirmado.`
                       : `Tu pedido ${lastOrderId} está siendo procesado por Wompi.`}
                   </p>
                   {checkoutPayment === "breb" && (
@@ -838,7 +1017,7 @@ export function CheckoutModal({
                       <div className="flex items-center justify-between">
                         <span className="text-xs text-muted-foreground">Llave</span>
                         <div className="flex items-center gap-1.5">
-                          <span className="text-sm font-bold">{brebLlave}</span>
+                          <span className="text-sm font-bold">{brebKey}</span>
                           <button onClick={handleCopyLlave} className="p-1 rounded-lg hover:bg-amber-100">
                             {copied ? <Check className="w-3.5 h-3.5 text-green-500" /> : <Copy className="w-3.5 h-3.5 text-muted-foreground" />}
                           </button>
@@ -852,6 +1031,15 @@ export function CheckoutModal({
                         <span className="text-xs text-muted-foreground">Monto</span>
                         <span className="text-sm font-bold">{fmt(totalConEnvio)}</span>
                       </div>
+                      {brebQrImageUrl && (
+                        <div className="flex justify-center pt-2">
+                          <img
+                            src={brebQrImageUrl}
+                            alt="QR de pago"
+                            className="w-36 h-36 object-contain rounded-lg border border-amber-200"
+                          />
+                        </div>
+                      )}
                     </div>
                   )}
                   {checkoutPayment !== "breb" && (

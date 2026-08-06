@@ -1109,23 +1109,32 @@ export function UserAdminView({
     catalogService.removeFavorite(productId).catch(() => {});
   };
 
-  const allOrders: AcctOrder[] = [
-    ...apiOrders.map((o) => ({
-      ...o,
-      estimatedDelivery: "",
-      deliveredAt: o.status === "entregado" ? o.date : "",
-    })),
-    ...appOrders.map((o) => ({
-      ...o,
-      status: (o.status === "en camino"
-        ? "en camino"
-        : o.status === "preparando"
-          ? "preparando"
-          : "entregado") as AcctOrder["status"],
-      estimatedDelivery: "",
-      deliveredAt: o.status === "entregado" ? o.date : "",
-    })),
-  ];
+  const allOrders: AcctOrder[] = (() => {
+    const combined: AcctOrder[] = [
+      ...apiOrders.map((o) => ({
+        ...o,
+        estimatedDelivery: "",
+        deliveredAt: o.status === "entregado" ? o.date : "",
+      })),
+      ...appOrders.map((o) => ({
+        ...o,
+        status: (o.status === "en camino"
+          ? "en camino"
+          : o.status === "preparando"
+            ? "preparando"
+            : "entregado") as AcctOrder["status"],
+        estimatedDelivery: "",
+        deliveredAt: o.status === "entregado" ? o.date : "",
+      })),
+    ];
+    // Deduplicar por referencia (apiOrders tiene prioridad por ir primero)
+    const seen = new Set<string>();
+    return combined.filter((o) => {
+      if (seen.has(o.id)) return false;
+      seen.add(o.id);
+      return true;
+    });
+  })();
 
   // Initialize selected order from API data once loaded
   useEffect(() => {
