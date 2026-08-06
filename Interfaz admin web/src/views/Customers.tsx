@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { Search, Star, ShoppingBag, MapPin, Phone, Mail, ChevronRight, X } from "lucide-react";
-import { customersService, type Customer, type CustomerDetail, type LoyaltyTier, type LoyaltyStats } from "../services/customers.service";
+import { customersService, type Customer, type CustomerDetail, type LoyaltyTier, type LoyaltyStats, type LoyaltyTierConfig } from "../services/customers.service";
 
 const LOYALTY_BADGE: Record<string, string> = {
   bronce: "bg-amber-100 text-amber-700",
@@ -92,6 +92,7 @@ export default function Customers() {
   const [selected, setSelected] = useState<Customer | null>(null);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loyaltyStats, setLoyaltyStats] = useState<LoyaltyStats>({ platino: 0, oro: 0, plata: 0, bronce: 0 });
+  const [loyaltyTiers, setLoyaltyTiers] = useState<LoyaltyTierConfig[]>([]);
   const [loading, setLoading] = useState(true);
 
   const fetchCustomers = useCallback(async () => {
@@ -116,6 +117,9 @@ export default function Customers() {
   useEffect(() => {
     customersService.getLoyaltyStats()
       .then(setLoyaltyStats)
+      .catch(() => {});
+    customersService.getLoyaltyTiers()
+      .then(setLoyaltyTiers)
       .catch(() => {});
   }, []);
 
@@ -152,6 +156,34 @@ export default function Customers() {
             </div>
           ))}
         </div>
+
+        {/* Loyalty model */}
+        {loyaltyTiers.length > 0 && (
+          <div className="bg-white rounded-2xl border border-gray-100 p-5">
+            <div className="flex items-center gap-2 mb-4">
+              <Star size={16} className="text-amber-500" />
+              <h3 className="font-semibold text-gray-900">Modelo de Lealtad</h3>
+              <p className="text-xs text-gray-400">— el nivel se calcula según total gastado o número de pedidos</p>
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              {loyaltyTiers.map((t) => (
+                <div key={t.tier} className={`rounded-xl border p-3 ${LOYALTY_BADGE[t.tier] || "bg-gray-50 border-gray-200"}`}>
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <span className="text-base">{t.icon}</span>
+                    <span className="text-sm font-bold">{t.label}</span>
+                  </div>
+                  <p className="text-[11px] text-gray-600 leading-snug">
+                    Desde {t.minSpent > 0 ? fmt(t.minSpent) : "$0"} gastados{' '}
+                    {t.minOrders > 0 ? `o ${t.minOrders}+ pedidos` : "o cualquier compra"}
+                  </p>
+                  <p className="text-[11px] text-gray-500 mt-1 leading-snug">
+                    <span className="font-semibold">Beneficio:</span> {t.benefit}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         <div className="relative max-w-sm">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />

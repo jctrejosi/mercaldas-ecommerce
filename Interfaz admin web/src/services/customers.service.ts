@@ -23,6 +23,15 @@ export type CustomerDetail = Customer & {
 
 export type LoyaltyStats = Record<LoyaltyTier, number>;
 
+export type LoyaltyTierConfig = {
+  tier: LoyaltyTier;
+  label: string;
+  icon: string;
+  minSpent: number;
+  minOrders: number;
+  benefit: string;
+};
+
 async function fetchJson<T>(input: string, init?: RequestInit): Promise<T> {
   const response = await fetch(input, {
     ...init,
@@ -61,6 +70,12 @@ export const customersService = {
   async getLoyaltyStats(): Promise<LoyaltyStats> {
     return fetchJson<LoyaltyStats>(
       `${API_BASE_URL}/admin/customers/loyalty-stats`,
+    );
+  },
+
+  async getLoyaltyTiers(): Promise<LoyaltyTierConfig[]> {
+    return fetchJson<LoyaltyTierConfig[]>(
+      `${API_BASE_URL}/admin/customers/loyalty-tiers`,
     );
   },
 };

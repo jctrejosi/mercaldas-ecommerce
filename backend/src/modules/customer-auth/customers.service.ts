@@ -24,8 +24,8 @@ export class CustomersService {
     const spentSubquery = this.db
       .select({
         customerId: orders.customerId,
-        total: sql<number>`COALESCE(SUM(${orders.grandTotal}), 0)`,
-        orderCount: sql<number>`COUNT(${orders.id})::int`,
+        total: sql<number>`COALESCE(SUM(${orders.grandTotal}), 0)`.as('total'),
+        orderCount: sql<number>`COUNT(${orders.id})::int`.as('orderCount'),
       })
       .from(orders)
       .groupBy(orders.customerId)
@@ -177,24 +177,46 @@ export class CustomersService {
   }
 
   async getLoyaltyStats() {
-    // Aggregate all customer stats
-    const rows = await this.db
+    // Aggregate spend per customer WITH orders
+    const spentRows = await this.db
       .select({
         customerId: orders.customerId,
-        total: sql<number>`COALESCE(SUM(${orders.grandTotal}), 0)`,
-        orderCount: sql<number>`COUNT(${orders.id})::int`,
+        total: sql<number>`COALESCE(SUM(${orders.grandTotal}), 0)`.as('total'),
+        orderCount: sql<number>`COUNT(${orders.id})::int`.as('orderCount'),
       })
       .from(orders)
+      .where(sql`${orders.status} != 'cancelled'`)
       .groupBy(orders.customerId);
+
+    const spentMap = new Map<number, { total: number; count: number }>();
+    for (const row of spentRows) {
+      if (row.customerId !== null) {
+        spentMap.set(row.customerId, {
+          total: Number(row.total ?? 0),
+          count: Number(row.orderCount ?? 0),
+        });
+      }
+    }
+
+    // All active customers (those without orders count as bronce)
+    const allCustomers = await this.db
+      .select({ id: customers.id })
+      .from(customers)
+      .where(and(eq(customers.isActive, true), sql`${customers.deletedAt} is null`));
 
     const tiers = { platino: 0, oro: 0, plata: 0, bronce: 0 };
 
-    for (const row of rows) {
-      const tier = computeLoyalty(Number(row.total ?? 0), Number(row.orderCount ?? 0));
+    for (const c of allCustomers) {
+      const s = spentMap.get(Number(c.id)) ?? { total: 0, count: 0 };
+      const tier = computeLoyalty(s.total, s.count);
       tiers[tier]++;
     }
 
     return tiers;
+  }
+
+  async getLoyaltyTiers(): Promise<LoyaltyTierConfig[]> {
+    return LOYALTY_TIERS;
   }
 }
 
@@ -207,3 +229,47 @@ function computeLoyalty(
   if (totalSpent >= 300000 || orderCount >= 8) return 'plata';
   return 'bronce';
 }
+
+export interface LoyaltyTierConfig {
+  tier: 'bronce' | 'plata' | 'oro' | 'platino';
+  label: string;
+  icon: string;
+  minSpent: number;
+  minOrders: number;
+  benefit: string;
+}
+
+export const LOYALTY_TIERS: LoyaltyTierConfig[] = [
+  {
+    tier: 'platino',
+    label: 'Platino',
+    icon: '💎',
+    minSpent: 2000000,
+    minOrders: 50,
+    benefit: 'Envío gratis + 10% dto. permanente',
+  },
+  {
+    tier: 'oro',
+    label: 'Oro',
+    icon: '🥇',
+    minSpent: 1000000,
+    minOrders: 20,
+    benefit: 'Envío gratis + 7% dto. permanente',
+  },
+  {
+    tier: 'plata',
+    label: 'Plata',
+    icon: '🥈',
+    minSpent: 300000,
+    minOrders: 8,
+    benefit: 'Envío gratis en compras +$80.000',
+  },
+  {
+    tier: 'bronce',
+    label: 'Bronce',
+    icon: '🥉',
+    minSpent: 0,
+    minOrders: 0,
+    benefit: 'Acceso a ofertas exclusivas',
+  },
+];

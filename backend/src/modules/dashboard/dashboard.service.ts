@@ -5,6 +5,7 @@ import {
   orders,
   customers,
   products,
+  productVariants,
   inventory,
   shipments,
   promotions,
@@ -101,7 +102,7 @@ export class DashboardService {
         .select({ count: count() })
         .from(shipments)
         .where(
-          sql`${shipments.status} not in ('delivered', 'cancelled')`,
+          sql`${shipments.status} not in ('DELIVERED', 'CANCELLED')`,
         )
         .then((r) => r[0]?.count ?? 0),
 
@@ -217,7 +218,8 @@ export class DashboardService {
       })
       .from(orderItems)
       .innerJoin(orders, eq(orderItems.orderId, orders.id))
-      .innerJoin(products, eq(orderItems.productVariantId, products.id))
+      .innerJoin(productVariants, eq(orderItems.productVariantId, productVariants.id))
+      .innerJoin(products, eq(productVariants.productId, products.id))
       .innerJoin(productCategories, eq(products.id, productCategories.productId))
       .innerJoin(categories, eq(productCategories.categoryId, categories.id))
       .where(
@@ -250,7 +252,8 @@ export class DashboardService {
       })
       .from(orderItems)
       .innerJoin(orders, eq(orderItems.orderId, orders.id))
-      .innerJoin(products, eq(orderItems.productVariantId, products.id))
+      .innerJoin(productVariants, eq(orderItems.productVariantId, productVariants.id))
+      .innerJoin(products, eq(productVariants.productId, products.id))
       .innerJoin(brands, eq(products.brandId, brands.id))
       .where(
         and(
@@ -281,7 +284,8 @@ export class DashboardService {
       })
       .from(orderItems)
       .innerJoin(orders, eq(orderItems.orderId, orders.id))
-      .innerJoin(products, eq(orderItems.productVariantId, products.id))
+      .innerJoin(productVariants, eq(orderItems.productVariantId, productVariants.id))
+      .innerJoin(products, eq(productVariants.productId, products.id))
       .where(
         and(
           gte(orders.createdAt, since),
@@ -385,7 +389,7 @@ export class DashboardService {
       sql`${orders.createdAt} <= ${todayEnd}`,
     ];
     if (statusFilter) {
-      conditions.push(sql);
+      conditions.push(sql`${orders.status} = ${statusFilter}`);
     }
 
     const rows = await this.db
@@ -426,7 +430,8 @@ export class DashboardService {
         branchId: inventory.branchId,
       })
       .from(inventory)
-      .innerJoin(products, eq(inventory.productVariantId, products.id))
+      .innerJoin(productVariants, eq(inventory.productVariantId, productVariants.id))
+      .innerJoin(products, eq(productVariants.productId, products.id))
       .where(
         and(
           eq(products.isActive, true),
@@ -615,7 +620,7 @@ export class DashboardService {
       .leftJoin(orders, eq(shipments.orderId, orders.id))
       .leftJoin(customers, eq(orders.customerId, customers.id))
       .where(
-        sql`${shipments.status} not in ('delivered', 'cancelled')`,
+        sql`${shipments.status} not in ('DELIVERED', 'CANCELLED')`,
       )
       .orderBy(asc(shipments.estimatedDeliveryAt))
       .limit(limit);

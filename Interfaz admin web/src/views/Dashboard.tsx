@@ -36,12 +36,14 @@ function getTodayString() {
 }
 
 const STATUS_STYLES: Record<string, string> = {
-  pendiente: 'bg-gray-100 text-gray-600',
-  confirmado: 'bg-blue-50 text-blue-700',
-  preparando: 'bg-amber-50 text-amber-700',
-  'en camino': 'bg-purple-50 text-purple-700',
-  entregado: 'bg-green-50 text-green-700',
-  cancelado: 'bg-red-50 text-red-700',
+  created: 'bg-gray-100 text-gray-600',
+  payment_pending: 'bg-yellow-50 text-yellow-700',
+  paid: 'bg-blue-50 text-blue-700',
+  preparing: 'bg-amber-50 text-amber-700',
+  shipped: 'bg-purple-50 text-purple-700',
+  delivered: 'bg-green-50 text-green-700',
+  cancelled: 'bg-red-50 text-red-700',
+  refunded: 'bg-pink-50 text-pink-700',
 };
 
 const COLORS = ['#F59E0B','#10B981','#3B82F6','#8B5CF6','#EC4899','#6B7280','#EF4444','#14B8A6','#F97316','#6366F1'];
@@ -53,6 +55,17 @@ const BREAKDOWN_TABS = [
   { key: 'branch', label: 'Sucursal' },
   { key: 'productType', label: 'Tipo Producto' },
 ] as const;
+
+const STATUS_TABS = [
+  { value: '', label: 'Todos' },
+  { value: 'created', label: 'Creado' },
+  { value: 'payment_pending', label: 'Pago pend.' },
+  { value: 'paid', label: 'Pagado' },
+  { value: 'preparing', label: 'Preparando' },
+  { value: 'shipped', label: 'Enviado' },
+  { value: 'delivered', label: 'Entregado' },
+  { value: 'cancelled', label: 'Cancelado' },
+];
 
 // ─── types ──────────────────────────────────────────────────────────────────
 
@@ -144,7 +157,7 @@ interface DashboardProps {
   onNavigate?: (view: string) => void;
 }
 
-type ModalType = 'todayOrders' | 'customers' | 'lowStock' | 'deliveries' | 'promotions' | 'banners' | 'orderDetail' | null;
+type ModalType = 'todayOrders' | 'customers' | 'lowStock' | 'promotions' | 'banners' | 'orderDetail' | null;
 
 type BreakdownKey = typeof BREAKDOWN_TABS[number]['key'];
 
@@ -249,6 +262,8 @@ export default function Dashboard({ userName = 'Usuario', onNavigate }: Dashboar
   const [orderStatusTab, setOrderStatusTab] = useState('');
   const [todayOrders, setTodayOrders] = useState<OrderItem[]>([]);
   const [todayOrdersLoading, setTodayOrdersLoading] = useState(false);
+  const [orderDetail, setOrderDetail] = useState<any>(null);
+  const [orderDetailLoading, setOrderDetailLoading] = useState(false);
 
   // ─── fetching ───────────────────────────────────────────────────────────
 
@@ -335,6 +350,16 @@ export default function Dashboard({ userName = 'Usuario', onNavigate }: Dashboar
     loadTodayOrders(s || undefined);
   }, [loadTodayOrders]);
 
+  const loadOrderDetail = useCallback(async (orderId: number | string) => {
+    setOrderDetailLoading(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/admin/orders/${orderId}`, { credentials: 'include' });
+      if (res.ok) setOrderDetail(await res.json());
+      else setOrderDetail(null);
+    } catch { setOrderDetail(null); }
+    finally { setOrderDetailLoading(false); }
+  }, []);
+
   const openModal = useCallback((type: ModalType) => {
     if (type === 'todayOrders') {
       openOrdersModal();
@@ -376,8 +401,6 @@ export default function Dashboard({ userName = 'Usuario', onNavigate }: Dashboar
 
   const secondaryCards = stats
     ? [
-        { label: 'Entregas pendientes', value: fmtNum(stats.pendingDeliveries), icon: Truck, color: 'text-blue-500', modal: 'deliveries' as ModalType },
-        { label: 'Alertas de stock', value: fmtNum(stats.lowStockAlerts), icon: AlertTriangle, color: 'text-amber-500', modal: 'lowStock' as ModalType },
         { label: 'Promociones activas', value: fmtNum(stats.activePromotions), icon: Megaphone, color: 'text-green-500', modal: 'promotions' as ModalType },
         { label: 'Banners & Popups', value: fmtNum(stats.activeBanners + stats.activePopups), icon: Eye, color: 'text-purple-500', modal: 'banners' as ModalType },
       ]
@@ -451,7 +474,7 @@ export default function Dashboard({ userName = 'Usuario', onNavigate }: Dashboar
       </div>
 
       {/* ── Secondary stat cards ───────────────── */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-2 gap-4">
         {statsLoading ? (
           <div className="col-span-full"><LoadingSpinner /></div>
         ) : (
@@ -743,26 +766,19 @@ export default function Dashboard({ userName = 'Usuario', onNavigate }: Dashboar
         <Modal title="Pedidos de hoy" onClose={closeModal}>
           {/* status tabs */}
           <div className="flex items-center gap-1 mb-4 overflow-x-auto">
-            {(['', 'pendiente', 'confirmado', 'preparando', 'en camino', 'entregado', 'cancelado'] as const).map((tab) => {
-              const labels: Record<string, string> = {
-                '': 'Todos', pendiente: 'Pendiente', confirmado: 'Confirmado',
-                preparando: 'Preparando', 'en camino': 'En camino',
-                entregado: 'Entregado', cancelado: 'Cancelado',
-              };
-              return (
-                <button
-                  key={tab}
-                  onClick={() => handleOrderTab(tab)}
-                  className={`px-3 py-1.5 text-xs font-semibold rounded-lg whitespace-nowrap transition-all ${
-                    orderStatusTab === tab
-                      ? 'bg-amber-100 text-amber-700'
-                      : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
-                  }`}
-                >
-                  {labels[tab]}
-                </button>
-              );
-            })}
+            {STATUS_TABS.map((tab) => (
+              <button
+                key={tab.value}
+                onClick={() => handleOrderTab(tab.value)}
+                className={`px-3 py-1.5 text-xs font-semibold rounded-lg whitespace-nowrap transition-all ${
+                  orderStatusTab === tab.value
+                    ? 'bg-amber-100 text-amber-700'
+                    : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
           </div>
           {todayOrdersLoading ? (
             <LoadingSpinner />
@@ -771,7 +787,11 @@ export default function Dashboard({ userName = 'Usuario', onNavigate }: Dashboar
           ) : (
             <div className="space-y-2">
               {todayOrders.map((o) => (
-                <div key={o.id} className="flex items-center gap-4 p-3 rounded-xl border border-gray-100 hover:bg-gray-50 transition-colors">
+                <div
+                  key={o.id}
+                  onClick={() => { setSelectedOrder(o); setModal('orderDetail'); loadOrderDetail(o.id); }}
+                  className="flex items-center gap-4 p-3 rounded-xl border border-gray-100 hover:bg-gray-50 transition-colors cursor-pointer"
+                >
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-semibold text-gray-800 font-mono">{o.referenceCode || o.id}</span>
@@ -791,6 +811,37 @@ export default function Dashboard({ userName = 'Usuario', onNavigate }: Dashboar
               ))}
             </div>
           )}
+          <div className="mt-6 pt-4 border-t border-gray-200">
+            <div className="flex items-center gap-2 mb-3">
+              <Truck size={16} className="text-blue-500" />
+              <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">
+                Entregas pendientes ({stats ? fmtNum(stats.pendingDeliveries) : '—'})
+              </h4>
+            </div>
+            {deliveriesLoading ? (
+              <LoadingSpinner />
+            ) : deliveries.length === 0 ? (
+              <p className="text-xs text-gray-400 py-2">No hay entregas pendientes</p>
+            ) : (
+              <div className="space-y-1.5">
+                {deliveries.slice(0, 5).map((d) => (
+                  <div key={d.id} className="flex items-center gap-3 px-3 py-2 rounded-lg bg-gray-50 text-sm">
+                    <span className="text-xs text-gray-500 font-mono shrink-0">#{d.orderId}</span>
+                    <span className="flex-1 truncate text-gray-700">{d.recipientName}</span>
+                    <span className="text-[10px] text-gray-400">{d.status}</span>
+                    {d.estimatedDeliveryAt && (
+                      <span className="text-[10px] text-gray-400 shrink-0">
+                        {new Date(d.estimatedDeliveryAt).toLocaleDateString('es-CO')}
+                      </span>
+                    )}
+                  </div>
+                ))}
+                {deliveries.length > 5 && (
+                  <p className="text-xs text-gray-400 px-3">y {deliveries.length - 5} más...</p>
+                )}
+              </div>
+            )}
+          </div>
           <div className="mt-4 pt-3 border-t border-gray-100">
             <button
               onClick={() => onNavigate?.('orders')}
@@ -852,7 +903,18 @@ export default function Dashboard({ userName = 'Usuario', onNavigate }: Dashboar
 
       {/* Low stock modal */}
       {modal === 'lowStock' && (
-        <Modal title="Productos con stock bajo" onClose={closeModal}>
+        <Modal title="Productos activos" onClose={closeModal}>
+          {/* Active products summary */}
+          <div className="flex items-center gap-3 mb-4 bg-purple-50 border border-purple-200 rounded-xl px-4 py-3">
+            <Package size={18} className="text-purple-600 shrink-0" />
+            <div>
+              <p className="text-sm font-bold text-purple-800">{stats ? fmtNum(stats.activeProducts) : '—'} productos activos</p>
+              <p className="text-xs text-purple-600">{lowStock.length} con stock bajo</p>
+            </div>
+          </div>
+
+          {/* Low stock list */}
+          <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Stock crítico ({lowStock.length})</h4>
           {lowStockLoading ? (
             <LoadingSpinner />
           ) : lowStock.length === 0 ? (
@@ -882,40 +944,6 @@ export default function Dashboard({ userName = 'Usuario', onNavigate }: Dashboar
                       />
                     </div>
                   </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </Modal>
-      )}
-
-      {/* Pending deliveries modal */}
-      {modal === 'deliveries' && (
-        <Modal title="Entregas pendientes" onClose={closeModal}>
-          {deliveriesLoading ? (
-            <LoadingSpinner />
-          ) : deliveries.length === 0 ? (
-            <EmptyState icon={Truck} message="No hay entregas pendientes" />
-          ) : (
-            <div className="space-y-2">
-              {deliveries.map((d) => (
-                <div key={d.id} className="p-3 rounded-xl border border-gray-100">
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-sm font-semibold text-gray-800 font-mono">Pedido #{d.orderId}</span>
-                    <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${STATUS_STYLES[d.status] || 'bg-gray-100 text-gray-600'}`}>
-                      {d.status}
-                    </span>
-                  </div>
-                  <p className="text-xs text-gray-600">{d.recipientName}</p>
-                  <p className="text-xs text-gray-400 mt-0.5 truncate">{d.address}</p>
-                  {d.trackingNumber && (
-                    <p className="text-xs text-gray-400 mt-0.5">Guía: {d.trackingNumber}</p>
-                  )}
-                  {d.estimatedDeliveryAt && (
-                    <p className="text-xs text-gray-400 mt-0.5">
-                      Entrega est.: {new Date(d.estimatedDeliveryAt).toLocaleDateString('es-CO', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
-                    </p>
-                  )}
                 </div>
               ))}
             </div>
@@ -1017,54 +1045,98 @@ export default function Dashboard({ userName = 'Usuario', onNavigate }: Dashboar
 
       {/* Order detail modal */}
       {modal === 'orderDetail' && selectedOrder && (
-        <Modal title={`Pedido ${selectedOrder.referenceCode || selectedOrder.id}`} onClose={closeModal}>
-          <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-3">
-              <div className="bg-gray-50 rounded-xl p-3">
-                <p className="text-[10px] text-gray-400 uppercase tracking-wide">Cliente</p>
-                <p className="text-sm font-medium text-gray-800 mt-0.5">{selectedOrder.customerName}</p>
+        <Modal title={`Factura — Pedido ${selectedOrder.referenceCode || selectedOrder.id}`} onClose={closeModal}>
+          {orderDetailLoading ? <LoadingSpinner /> : orderDetail ? (
+            <div className="space-y-6">
+              {/* Header: cliente, fecha, estado */}
+              <div className="flex items-start justify-between bg-gray-50 rounded-xl p-4">
+                <div>
+                  <p className="text-xs text-gray-400 uppercase tracking-wide">Cliente</p>
+                  <p className="text-sm font-semibold text-gray-900">{orderDetail.customerName || 'Cliente invitado'}</p>
+                  {orderDetail.customerEmail && <p className="text-xs text-gray-500">{orderDetail.customerEmail}</p>}
+                  {orderDetail.customerPhone && <p className="text-xs text-gray-500">{orderDetail.customerPhone}</p>}
+                </div>
+                <div className="text-right">
+                  <span className={`inline-block text-xs font-semibold px-2 py-0.5 rounded-full ${STATUS_STYLES[orderDetail.status] || 'bg-gray-100 text-gray-600'}`}>
+                    {orderDetail.status}
+                  </span>
+                  <p className="text-xs text-gray-400 mt-1.5">{orderDetail.createdAt ? new Date(orderDetail.createdAt).toLocaleString('es-CO') : ''}</p>
+                </div>
               </div>
-              <div className="bg-gray-50 rounded-xl p-3">
-                <p className="text-[10px] text-gray-400 uppercase tracking-wide">Estado</p>
-                <span className={`inline-block mt-0.5 text-xs font-semibold px-2 py-0.5 rounded-full ${
-                  STATUS_STYLES[selectedOrder.status] || 'bg-gray-100 text-gray-600'
-                }`}>
-                  {selectedOrder.status}
-                </span>
+
+              {/* Items table */}
+              <div>
+                <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Productos</h4>
+                <div className="border border-gray-100 rounded-xl overflow-hidden">
+                  <table className="w-full text-sm">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="text-left px-4 py-2 text-xs font-semibold text-gray-500">Producto</th>
+                        <th className="text-center px-4 py-2 text-xs font-semibold text-gray-500 w-16">Cant.</th>
+                        <th className="text-right px-4 py-2 text-xs font-semibold text-gray-500 w-24">Precio</th>
+                        <th className="text-right px-4 py-2 text-xs font-semibold text-gray-500 w-24">Total</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-50">
+                      {(orderDetail.items || []).map((item: any, i: number) => (
+                        <tr key={i} className="hover:bg-gray-50">
+                          <td className="px-4 py-2.5">
+                            <p className="text-sm font-medium text-gray-800">{item.productName || `SKU: ${item.variantSku || '—'}`}</p>
+                            {item.variantSku && <p className="text-[10px] text-gray-400">{item.variantSku}</p>}
+                          </td>
+                          <td className="px-4 py-2.5 text-center text-gray-700">{item.quantity}</td>
+                          <td className="px-4 py-2.5 text-right text-gray-700">{fmt(item.unitPriceGross || item.unitPriceNet || 0)}</td>
+                          <td className="px-4 py-2.5 text-right font-semibold text-gray-900">{fmt(item.total || (item.unitPriceGross || item.unitPriceNet || 0) * (item.quantity || 1))}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
-              <div className="bg-gray-50 rounded-xl p-3">
-                <p className="text-[10px] text-gray-400 uppercase tracking-wide">Total</p>
-                <p className="text-sm font-bold text-gray-800 mt-0.5">{fmt(selectedOrder.grandTotal)}</p>
+
+              {/* Totals */}
+              <div className="border-t border-gray-200 pt-3 space-y-1.5">
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-500">Subtotal</span>
+                  <span className="text-gray-700">{fmt(orderDetail.subtotal || orderDetail.grandTotal || 0)}</span>
+                </div>
+                {orderDetail.discountTotal > 0 && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-green-600">Descuento</span>
+                    <span className="text-green-600">-{fmt(orderDetail.discountTotal)}</span>
+                  </div>
+                )}
+                {orderDetail.shippingCost > 0 && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-500">Envío</span>
+                    <span className="text-gray-700">{fmt(orderDetail.shippingCost)}</span>
+                  </div>
+                )}
+                {orderDetail.taxTotal > 0 && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-500">Impuestos</span>
+                    <span className="text-gray-700">{fmt(orderDetail.taxTotal)}</span>
+                  </div>
+                )}
+                <div className="flex justify-between text-lg font-bold pt-2 border-t border-gray-200">
+                  <span className="text-gray-900">Total</span>
+                  <span className="text-gray-900">{fmt(orderDetail.grandTotal || 0)}</span>
+                </div>
               </div>
-              <div className="bg-gray-50 rounded-xl p-3">
-                <p className="text-[10px] text-gray-400 uppercase tracking-wide">Productos</p>
-                <p className="text-sm font-medium text-gray-800 mt-0.5">{selectedOrder.itemsCount} items</p>
-              </div>
-            </div>
-            {selectedOrder.createdAt && (
-              <p className="text-xs text-gray-400">
-                Creado: {new Date(selectedOrder.createdAt).toLocaleString('es-CO')}
-              </p>
-            )}
-            <div className="flex items-center gap-2 pt-2 border-t border-gray-100">
-              {selectedOrder.status === 'pendiente' && (
-                <button
-                  onClick={() => { closeModal(); onNavigate?.('orders'); }}
-                  className="px-4 py-2 text-sm font-semibold text-white bg-amber-500 hover:bg-amber-600 rounded-xl transition-colors"
-                >
-                  Ir a Pedidos
-                </button>
-              )}
-              {selectedOrder.itemsCount > 0 && (
+
+              {/* Actions */}
+              <div className="flex items-center gap-2 pt-2">
                 <button
                   onClick={() => { closeModal(); onNavigate?.('orders'); }}
                   className="px-4 py-2 text-sm font-semibold text-amber-700 bg-amber-50 hover:bg-amber-100 rounded-xl transition-colors"
                 >
-                  Ver pedido
+                  Ver en Pedidos
                 </button>
-              )}
+              </div>
             </div>
-          </div>
+          ) : (
+            <EmptyState icon={Package} message="No se pudo cargar el detalle" />
+          )}
         </Modal>
       )}
     </div>

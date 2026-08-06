@@ -32,6 +32,13 @@ export class AdminCustomersController {
     return this.customersService.getLoyaltyStats();
   }
 
+  @Get('loyalty-tiers')
+  @ApiOperation({ summary: 'Configuración de tiers de lealtad' })
+  @ApiResponse({ status: 200, description: 'Descripción de los niveles' })
+  getLoyaltyTiers() {
+    return this.customersService.getLoyaltyTiers();
+  }
+
   @Get(':id')
   @ApiOperation({ summary: 'Detalle de cliente (admin)' })
   @ApiResponse({ status: 200, description: 'Detalle del cliente' })
