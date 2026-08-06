@@ -35,6 +35,7 @@ import {
   Building2,
   AlertTriangle,
   LayoutTemplate,
+  Mail,
 } from "lucide-react";
 import Dashboard from "./views/Dashboard";
 import Products from "./views/Products";
@@ -58,6 +59,7 @@ import UsersView from "./views/Users";
 import SettingsView from "./views/Settings";
 import Branches from "./views/Branches";
 import Popups from "./views/Popups";
+import Newsletter from "./views/Newsletter";
 
 export type ViewId =
   | "dashboard"
@@ -79,7 +81,8 @@ export type ViewId =
   | "settings"
   | "branches"
   | "general"
-  | "popups";
+  | "popups"
+  | "newsletter";
 
 interface NavItem {
   id: ViewId;
@@ -118,7 +121,10 @@ const NAV: NavSection[] = [
   },
   {
     title: "Marketing",
-    items: [{ id: "popups", label: "Popups", icon: Megaphone }],
+    items: [
+      { id: "popups", label: "Popups", icon: Megaphone },
+      { id: "newsletter", label: "Newsletter", icon: Mail },
+    ],
   },
   {
     title: "Contenido",
@@ -172,6 +178,7 @@ const VIEW_PATHS: Record<string, ViewId> = {
   settings: "settings",
   general: "general",
   popups: "popups",
+  newsletter: "newsletter",
 };
 
 const VIEW_SLUGS: Record<ViewId, string> = {
@@ -195,6 +202,7 @@ const VIEW_SLUGS: Record<ViewId, string> = {
   settings: "settings",
   general: "general",
   popups: "popups",
+  newsletter: "newsletter",
 };
 
 function useViewFromUrl(): [ViewId, (v: ViewId) => void] {
@@ -245,6 +253,7 @@ const LABELS: Record<ViewId, string> = {
   settings: "Configuración",
   general: "General",
   popups: "Popups",
+  newsletter: "Newsletter",
 };
 
 const QUICK_COMMANDS = [
@@ -674,12 +683,12 @@ function TopBar({
   );
 }
 
-function ViewRenderer({ view, user }: { view: ViewId; user: UserProfile | null }) {
+function ViewRenderer({ view, user, onNavigate }: { view: ViewId; user: UserProfile | null; onNavigate: (v: ViewId) => void }) {
   const userName = user?.firstName || user?.fullName?.split(" ")[0] || "Usuario";
   
   switch (view) {
     case "dashboard":
-      return <Dashboard userName={userName} />;
+      return <Dashboard userName={userName} onNavigate={(v) => onNavigate(v as ViewId)} />;
     case "products":
       return <Products />;
     case "orders":
@@ -712,6 +721,8 @@ function ViewRenderer({ view, user }: { view: ViewId; user: UserProfile | null }
       return <General />;
     case "popups":
       return <Popups />;
+    case "newsletter":
+      return <Newsletter />;
     case "reports":
       return <Reports />;
     case "users":
@@ -775,7 +786,7 @@ export default function App() {
           user={user}
         />
         <main className="flex-1 overflow-y-auto">
-          <ViewRenderer view={view} user={user} />
+          <ViewRenderer view={view} user={user} onNavigate={(v) => navigate(v as ViewId)} />
         </main>
         <footer className="shrink-0 border-t border-gray-100 bg-white px-6 py-2.5 relative flex items-center justify-center">
           <a

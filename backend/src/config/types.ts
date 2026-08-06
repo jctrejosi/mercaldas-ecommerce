@@ -59,6 +59,11 @@ export interface EpaycoConfig {
   test: boolean;
 }
 
+export interface ResendConfig {
+  apiKey: string;
+  senderEmail: string;
+}
+
 export type CrossOriginResourcePolicy =
   'cross-origin' | 'same-origin' | 'same-site';
 

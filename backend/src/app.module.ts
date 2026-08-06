@@ -18,6 +18,8 @@ import { BranchesModule } from './modules/branches/branches.module';
 import { LandingModule } from './modules/landing/landing.module';
 import { FeaturedProductsModule } from './modules/featured-products/featured-products.module';
 import { PopupsModule } from './modules/popups/popups.module';
+import { NewsletterModule } from './modules/newsletter/newsletter.module';
+import { DashboardModule } from './modules/dashboard/dashboard.module';
 import {
   appConfig,
   databaseConfig,
@@ -27,6 +29,7 @@ import {
   cloudinaryConfig,
   wompiConfig,
   epaycoConfig,
+  resendConfig,
 } from './config';
 
 @Module({
@@ -41,6 +44,7 @@ import {
         cloudinaryConfig,
         wompiConfig,
         epaycoConfig,
+        resendConfig,
       ],
       isGlobal: true,
     }),
@@ -60,6 +64,8 @@ import {
     LandingModule,
     FeaturedProductsModule,
     PopupsModule,
+    NewsletterModule,
+    DashboardModule,
   ],
   controllers: [AppController],
   providers: [AppService],

@@ -3520,3 +3520,74 @@ export const popups = pgTable(
     ),
   ],
 );
+
+export const newsletterCampaignStatusEnum = pgEnum(
+  'newsletter_campaign_status_enum',
+  ['borrador', 'programada', 'enviando', 'enviada', 'fallida', 'cancelada'],
+);
+
+export const newsletterSubscribers = pgTable(
+  'newsletter_subscribers',
+  {
+    id: bigserial({ mode: 'bigint' }).primaryKey().notNull(),
+    email: varchar({ length: 255 }).notNull(),
+    name: varchar({ length: 120 }),
+    acceptedTerms: boolean('accepted_terms').default(false).notNull(),
+    isActive: boolean('is_active').default(true).notNull(),
+    source: varchar({ length: 50 }).default('landing'),
+    subscribedAt: timestamp('subscribed_at', { withTimezone: true, mode: 'string' })
+      .defaultNow()
+      .notNull(),
+    unsubscribedAt: timestamp('unsubscribed_at', {
+      withTimezone: true,
+      mode: 'string',
+    }),
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'string' })
+      .defaultNow()
+      .notNull(),
+    deletedAt: timestamp('deleted_at', { withTimezone: true, mode: 'string' }),
+  },
+  (table) => [
+    unique('newsletter_subscribers_email_unique').on(table.email),
+    index('idx_newsletter_subs_active').using(
+      'btree',
+      table.isActive.asc().nullsLast().op('bool_ops'),
+    ),
+  ],
+);
+
+export const newsletterCampaigns = pgTable(
+  'newsletter_campaigns',
+  {
+    id: bigserial({ mode: 'bigint' }).primaryKey().notNull(),
+    title: varchar({ length: 200 }).notNull(),
+    subject: varchar({ length: 200 }).notNull(),
+    content: text('content').notNull(),
+    imageUrl: varchar({ length: 500 }),
+    status: newsletterCampaignStatusEnum('status')
+      .default('borrador')
+      .notNull(),
+    scheduledAt: timestamp('scheduled_at', { withTimezone: true, mode: 'string' }),
+    sentAt: timestamp('sent_at', { withTimezone: true, mode: 'string' }),
+    sentCount: integer('sent_count').default(0),
+    failedCount: integer('failed_count').default(0),
+    errorMessage: text('error_message'),
+    createdBy: bigint('created_by', { mode: 'number' }),
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'string' })
+      .defaultNow()
+      .notNull(),
+    deletedAt: timestamp('deleted_at', { withTimezone: true, mode: 'string' }),
+  },
+  (table) => [
+    index('idx_newsletter_campaigns_status').using(
+      'btree',
+      table.status.asc().nullsLast().op('enum_ops'),
+    ),
+  ],
+);
