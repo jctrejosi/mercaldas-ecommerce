@@ -10,8 +10,8 @@ const ROOT = __dirname;
 
 const SERVICES = [
   { name: "BACKEND", dir: "backend", url: "http://localhost:3000" },
-  { name: "WEB", dir: "Interfaz web", url: "http://localhost:5173" },
-  { name: "ADMIN", dir: "Interfaz admin web", url: "http://localhost:8443" },
+  { name: "WEB", dir: "Interfaz web client", url: "http://localhost:5173" },
+  { name: "ADMIN", dir: "Interfaz web admin", url: "http://localhost:8443" },
 ];
 
 const COLORS = {
