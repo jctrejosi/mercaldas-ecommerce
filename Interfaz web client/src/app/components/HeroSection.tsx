@@ -70,15 +70,30 @@ const ANIM_STYLES = `
   from { opacity: 0; transform: translateY(12px); }
   to   { opacity: 1; transform: translateY(0); }
 }
+@keyframes heroFadeOut {
+  from { opacity: 1; transform: translateY(0); }
+  to   { opacity: 0; transform: translateY(-8px); }
+}
 @keyframes heroImageIn {
   from { opacity: 0; transform: scale(1.05); }
   to   { opacity: 0.45; transform: scale(1); }
+}
+@keyframes heroImageOut {
+  from { opacity: 0.45; transform: scale(1); }
+  to   { opacity: 0; transform: scale(0.98); }
 }
 @keyframes heroBgShift {
   from { opacity: 0.6; }
   to   { opacity: 1; }
 }
+@keyframes heroBgFade {
+  from { opacity: 1; }
+  to   { opacity: 0; }
+}
 `;
+
+// Duración del fade-out del slide actual (ms)
+const FADE_OUT_MS = 450;
 
 export function HeroSection({
   onApplyFilter,
@@ -88,8 +103,10 @@ export function HeroSection({
   const [slides, setSlides] = useState<HeroSlide[]>(FALLBACK_SLIDES);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [animKey, setAnimKey] = useState(0);
+  const [isLeaving, setIsLeaving] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const isManualRef = useRef(false);
+  const leavingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     fetchHeroSlides().then((data) => {
@@ -99,9 +116,19 @@ export function HeroSection({
 
   const goTo = useCallback(
     (idx: number) => {
-      // Trigger re-mount animation
-      setAnimKey((k) => k + 1);
-      setTimeout(() => setCurrentIndex(idx), 50);
+      // Si ya hay una transición en curso, ignorar el cambio
+      if (leavingTimerRef.current) return;
+
+      // 1) Desvanecer el item actual
+      setIsLeaving(true);
+
+      // 2) Después del fade-out, cambiar de item y disparar el fade-in
+      leavingTimerRef.current = setTimeout(() => {
+        setCurrentIndex(idx);
+        setAnimKey((k) => k + 1);
+        setIsLeaving(false);
+        leavingTimerRef.current = null;
+      }, FADE_OUT_MS);
     },
     [],
   );
@@ -120,6 +147,7 @@ export function HeroSection({
     startTimer();
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
+      if (leavingTimerRef.current) clearTimeout(leavingTimerRef.current);
     };
   }, [startTimer]);
 
@@ -143,7 +171,14 @@ export function HeroSection({
       <style>{ANIM_STYLES}</style>
 
       <div className="max-w-7xl mx-auto px-4">
-        <div className="relative flex items-center h-[340px] md:h-[420px]">
+        <div
+          className="relative flex items-center h-[340px] md:h-[420px]"
+          style={
+            isLeaving
+              ? { animation: "heroBgFade 0.45s ease both" }
+              : undefined
+          }
+        >
           {/* Full-bleed image when there is no text content */}
           {!hasText && slide.image && (
             <div className="absolute inset-0">
@@ -152,7 +187,11 @@ export function HeroSection({
                 src={slide.image}
                 alt=""
                 className="w-full h-full object-contain"
-                style={{ animation: "heroBgShift 0.7s ease both" }}
+                style={{
+                  animation: isLeaving
+                    ? "heroImageOut 0.45s ease both"
+                    : "heroBgShift 0.7s ease both",
+                }}
               />
               <div className="absolute inset-0" style={{ background: "rgba(26,26,46,0.35)" }} />
             </div>
@@ -160,15 +199,25 @@ export function HeroSection({
 
           {/* Content */}
           {hasText && (
-          <div key={animKey} className="relative z-10 flex-1 py-8 max-w-xl">
+          <div
+            key={animKey}
+            className="relative z-10 flex-1 py-8 max-w-xl"
+            style={
+              isLeaving
+                ? { animation: "heroFadeOut 0.45s ease both" }
+                : undefined
+            }
+          >
             {slide.slogan && (
               <div
                 className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-widest px-3 py-1 rounded-full mb-5"
                 style={{
                   background: slide.accent,
                   color: "#1A1A2E",
-                  animation: "heroFadeIn 0.5s ease both",
-                  animationDelay: "0ms",
+                  animation: isLeaving
+                    ? "heroFadeOut 0.45s ease both"
+                    : "heroFadeIn 0.5s ease both",
+                  animationDelay: isLeaving ? "0ms" : "0ms",
                 }}
               >
                 <Sparkles className="w-3 h-3" />
@@ -227,7 +276,12 @@ export function HeroSection({
                 src={slide.image}
                 alt={slide.title}
                 className="w-full h-full object-contain"
-                style={{ opacity: 0.45, animation: "heroImageIn 0.7s ease both" }}
+                style={{
+                  opacity: 0.45,
+                  animation: isLeaving
+                    ? "heroImageOut 0.45s ease both"
+                    : "heroImageIn 0.7s ease both",
+                }}
               />
               <div
                 className="absolute inset-0"

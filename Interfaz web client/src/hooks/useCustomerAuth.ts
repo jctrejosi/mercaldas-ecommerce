@@ -97,6 +97,14 @@ export function useCustomerAuth() {
     }
   }, []);
 
+  // Actualiza el perfil en el backend y sincroniza el estado global
+  // (usado al guardar preferencias como acceptsMarketing)
+  const updateProfile = useCallback(async (data: any) => {
+    const updated = await customerAuthService.updateProfile(data);
+    setCustomer(updated);
+    return updated;
+  }, []);
+
   return {
     customer,
     loading,
@@ -106,5 +114,6 @@ export function useCustomerAuth() {
     socialLogin,
     logout,
     loadProfile,
+    updateProfile,
   };
 }

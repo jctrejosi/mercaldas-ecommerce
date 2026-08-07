@@ -13,6 +13,9 @@ import {
   customers,
   customerRefreshTokens,
   customerAddresses,
+  customerPaymentMethods,
+  newsletterSubscribers,
+  settings,
 } from '../../../drizzle/schema';
 import { eq, and, desc, sql } from 'drizzle-orm';
 import { CustomerLoginDto } from './dto/customer-login.dto';
@@ -60,6 +63,7 @@ export interface CustomerAuthResponse {
     isActive: boolean;
     provider: string | null;
     avatarUrl: string | null;
+    acceptsMarketing: boolean;
   };
 }
 
@@ -182,6 +186,18 @@ export class CustomerAuthService {
       .returning();
 
     const customer = inserted[0];
+
+    // Si aceptó marketing en el registro, crearlo como suscriptor del newsletter
+    if (registerDto.acceptsMarketing) {
+      await this.syncNewsletterSubscription(
+        Number(customer.id),
+        customer.email,
+        true,
+        customer.firstName ?? undefined,
+        customer.lastName ?? undefined,
+      );
+    }
+
     return this.buildAuthResponse(customer);
   }
 
@@ -536,10 +552,101 @@ export class CustomerAuthService {
       .set(setData)
       .where(eq(customers.id, BigInt(customerId)));
 
+    // Sincronizar preferencia de marketing con la suscripción al newsletter:
+    // si acceptsMarketing es true el cliente debe figurar como suscriptor activo,
+    // si es false debe quedar dado de baja de los suscriptores.
+    if (body.acceptsMarketing !== undefined) {
+      await this.syncNewsletterSubscription(
+        customerId,
+        body.email,
+        body.acceptsMarketing,
+        body.firstName,
+        body.lastName,
+      );
+    }
+
     return await this.getProfile(customerId);
   }
 
+  /**
+   * Mantiene consistencia entre customers.acceptsMarketing y la tabla
+   * newsletter_subscribers (mismo correo).
+   */
+  private async syncNewsletterSubscription(
+    customerId: number,
+    emailOverride: string | undefined,
+    acceptsMarketing: boolean,
+    firstName?: string,
+    lastName?: string,
+  ) {
+    const [customer] = await this.db
+      .select()
+      .from(customers)
+      .where(eq(customers.id, BigInt(customerId)))
+      .limit(1);
+
+    if (!customer) return;
+
+    const email = (emailOverride ?? customer.email).toLowerCase().trim();
+    const name = [firstName ?? customer.firstName, lastName ?? customer.lastName]
+      .filter(Boolean)
+      .join(' ')
+      .trim() || null;
+
+    const existing = await this.db
+      .select()
+      .from(newsletterSubscribers)
+      .where(eq(newsletterSubscribers.email, email))
+      .limit(1);
+
+    if (acceptsMarketing) {
+      if (existing.length) {
+        // Reactivar si estaba inactivo o eliminado
+        const sub = existing[0];
+        if (!sub.isActive || sub.deletedAt) {
+          await this.db
+            .update(newsletterSubscribers)
+            .set({
+              isActive: true,
+              name: name ?? sub.name,
+              acceptedTerms: true,
+              unsubscribedAt: null,
+              deletedAt: null,
+              updatedAt: new Date().toISOString(),
+            })
+            .where(eq(newsletterSubscribers.id, sub.id));
+        } else if (name && name !== sub.name) {
+          await this.db
+            .update(newsletterSubscribers)
+            .set({ name, updatedAt: new Date().toISOString() })
+            .where(eq(newsletterSubscribers.id, sub.id));
+        }
+      } else {
+        await this.db.insert(newsletterSubscribers).values({
+          email,
+          name,
+          acceptedTerms: true,
+          isActive: true,
+        });
+      }
+    } else {
+      if (existing.length) {
+        await this.db
+          .update(newsletterSubscribers)
+          .set({
+            isActive: false,
+            unsubscribedAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          })
+          .where(eq(newsletterSubscribers.id, existing[0].id));
+      }
+    }
+  }
+
   async deleteAccount(customerId: number): Promise<{ success: boolean; message: string }> {
+    // Quitar del newsletter para no seguir enviándole promociones
+    await this.syncNewsletterSubscription(customerId, undefined, false);
+
     await this.db
       .update(customers)
       .set({
@@ -657,6 +764,7 @@ export class CustomerAuthService {
         isActive: customer.isActive,
         provider: customer.provider,
         avatarUrl: customer.avatarUrl,
+        acceptsMarketing: customer.acceptsMarketing,
       },
     };
   }
@@ -842,6 +950,239 @@ export class CustomerAuthService {
       .update(customerAddresses)
       .set({ isDefault: true })
       .where(eq(customerAddresses.id, BigInt(addressId)));
+
+    return { success: true };
+  }
+
+  // ── Customer Payment Methods ──
+
+  /**
+   * Lee la configuración de medios de pago del admin
+   * (settings key 'payment_methods') y devuelve qué métodos
+   * están habilitados para los clientes.
+   */
+  private async getPaymentMethodsConfig() {
+    const [row] = await this.db
+      .select()
+      .from(settings)
+      .where(eq(settings.key, 'payment_methods'))
+      .limit(1);
+
+    const defaults = {
+      efectivo: { enabled: true },
+      wompi: {
+        enabled: true,
+        methods: { card: true, pse: true, nequi: true },
+      },
+      breb: { enabled: true },
+    };
+
+    if (!row) return defaults;
+    const value = row.value as any;
+    return {
+      efectivo: { enabled: value?.efectivo?.enabled ?? true },
+      wompi: {
+        enabled: value?.wompi?.enabled ?? true,
+        methods: {
+          card: value?.wompi?.methods?.card ?? true,
+          pse: value?.wompi?.methods?.pse ?? true,
+          nequi: value?.wompi?.methods?.nequi ?? true,
+        },
+      },
+      breb: { enabled: value?.breb?.enabled ?? true },
+    };
+  }
+
+  private getEnabledMethodTypes(config: Awaited<ReturnType<CustomerAuthService['getPaymentMethodsConfig']>>) {
+    const types: Array<'CARD' | 'NEQUI'> = [];
+    if (config.wompi.enabled && config.wompi.methods.card) types.push('CARD');
+    if (config.wompi.enabled && config.wompi.methods.nequi) types.push('NEQUI');
+    return types;
+  }
+
+  async getPaymentMethods(customerId: number) {
+    const rows = await this.db
+      .select()
+      .from(customerPaymentMethods)
+      .where(
+        and(
+          eq(customerPaymentMethods.customerId, customerId),
+          sql`${customerPaymentMethods.deletedAt} IS NULL`,
+        ),
+      )
+      .orderBy(
+        desc(customerPaymentMethods.isDefault),
+        desc(customerPaymentMethods.createdAt),
+      );
+
+    return rows.map((row) => ({
+      id: Number(row.id),
+      methodType: row.methodType,
+      label: row.label,
+      brand: row.brand,
+      last4: row.last4,
+      cardholderName: row.cardholderName,
+      phone: row.phone,
+      isDefault: row.isDefault,
+      createdAt: row.createdAt,
+    }));
+  }
+
+  async createPaymentMethod(
+    customerId: number,
+    dto: {
+      methodType: 'CARD' | 'NEQUI';
+      label?: string;
+      brand?: string;
+      last4?: string;
+      cardholderName?: string;
+      token?: string;
+      phone?: string;
+      isDefault?: boolean;
+    },
+  ) {
+    const config = await this.getPaymentMethodsConfig();
+    const enabledTypes = this.getEnabledMethodTypes(config);
+
+    if (!enabledTypes.includes(dto.methodType)) {
+      throw new BadRequestException(
+        'Este medio de pago no está habilitado por la tienda',
+      );
+    }
+
+    if (dto.methodType === 'CARD') {
+      if (!dto.token || !dto.last4 || !dto.brand) {
+        throw new BadRequestException(
+          'Faltan datos de la tarjeta (token, últimos 4 dígitos o marca)',
+        );
+      }
+    }
+
+    if (dto.methodType === 'NEQUI') {
+      if (!dto.phone) {
+        throw new BadRequestException('El número de Nequi es obligatorio');
+      }
+    }
+
+    if (dto.isDefault) {
+      await this.db
+        .update(customerPaymentMethods)
+        .set({ isDefault: false })
+        .where(eq(customerPaymentMethods.customerId, customerId));
+    }
+
+    const [inserted] = await this.db
+      .insert(customerPaymentMethods)
+      .values({
+        customerId,
+        methodType: dto.methodType,
+        label: dto.label ?? null,
+        brand: dto.brand ?? null,
+        last4: dto.last4 ?? null,
+        cardholderName: dto.cardholderName ?? null,
+        token: dto.token ?? null,
+        phone: dto.phone ?? null,
+        isDefault: dto.isDefault ?? false,
+      })
+      .returning({ id: customerPaymentMethods.id });
+
+    return { id: Number(inserted.id) };
+  }
+
+  async updatePaymentMethod(
+    customerId: number,
+    paymentMethodId: number,
+    dto: {
+      label?: string;
+      brand?: string;
+      last4?: string;
+      cardholderName?: string;
+      token?: string;
+      phone?: string;
+      isDefault?: boolean;
+    },
+  ) {
+    const [existing] = await this.db
+      .select({ id: customerPaymentMethods.id })
+      .from(customerPaymentMethods)
+      .where(
+        and(
+          eq(customerPaymentMethods.id, BigInt(paymentMethodId)),
+          eq(customerPaymentMethods.customerId, customerId),
+        ),
+      );
+
+    if (!existing) throw new NotFoundException('Método de pago no encontrado');
+
+    if (dto.isDefault) {
+      await this.db
+        .update(customerPaymentMethods)
+        .set({ isDefault: false })
+        .where(eq(customerPaymentMethods.customerId, customerId));
+    }
+
+    await this.db
+      .update(customerPaymentMethods)
+      .set({
+        ...(dto.label !== undefined && { label: dto.label }),
+        ...(dto.brand !== undefined && { brand: dto.brand }),
+        ...(dto.last4 !== undefined && { last4: dto.last4 }),
+        ...(dto.cardholderName !== undefined && {
+          cardholderName: dto.cardholderName,
+        }),
+        ...(dto.token !== undefined && { token: dto.token }),
+        ...(dto.phone !== undefined && { phone: dto.phone }),
+        ...(dto.isDefault !== undefined && { isDefault: dto.isDefault }),
+        updatedAt: new Date().toISOString(),
+      })
+      .where(eq(customerPaymentMethods.id, BigInt(paymentMethodId)));
+
+    return { id: paymentMethodId };
+  }
+
+  async deletePaymentMethod(customerId: number, paymentMethodId: number) {
+    const [existing] = await this.db
+      .select({ id: customerPaymentMethods.id })
+      .from(customerPaymentMethods)
+      .where(
+        and(
+          eq(customerPaymentMethods.id, BigInt(paymentMethodId)),
+          eq(customerPaymentMethods.customerId, customerId),
+        ),
+      );
+
+    if (!existing) throw new NotFoundException('Método de pago no encontrado');
+
+    await this.db
+      .update(customerPaymentMethods)
+      .set({ deletedAt: new Date().toISOString() })
+      .where(eq(customerPaymentMethods.id, BigInt(paymentMethodId)));
+
+    return { success: true };
+  }
+
+  async setDefaultPaymentMethod(customerId: number, paymentMethodId: number) {
+    const [existing] = await this.db
+      .select({ id: customerPaymentMethods.id })
+      .from(customerPaymentMethods)
+      .where(
+        and(
+          eq(customerPaymentMethods.id, BigInt(paymentMethodId)),
+          eq(customerPaymentMethods.customerId, customerId),
+        ),
+      );
+
+    if (!existing) throw new NotFoundException('Método de pago no encontrado');
+
+    await this.db
+      .update(customerPaymentMethods)
+      .set({ isDefault: false })
+      .where(eq(customerPaymentMethods.customerId, customerId));
+
+    await this.db
+      .update(customerPaymentMethods)
+      .set({ isDefault: true })
+      .where(eq(customerPaymentMethods.id, BigInt(paymentMethodId)));
 
     return { success: true };
   }

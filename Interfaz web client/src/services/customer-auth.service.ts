@@ -68,6 +68,7 @@ export interface CustomerAuthResponse {
     isActive: boolean;
     provider: string | null;
     avatarUrl: string | null;
+    acceptsMarketing: boolean;
   };
 }
 
@@ -301,6 +302,98 @@ export const customerAddressService = {
       headers: getAuthHeaders(),
     });
     if (!response.ok) throw new Error("Error al establecer dirección predeterminada");
+    return response.json();
+  },
+};
+
+
+export interface CustomerPaymentMethod {
+  id: number;
+  methodType: "CARD" | "NEQUI";
+  label: string | null;
+  brand: string | null;
+  last4: string | null;
+  cardholderName: string | null;
+  phone: string | null;
+  isDefault: boolean;
+  createdAt: string;
+}
+
+export const customerPaymentService = {
+  async getPaymentMethods(): Promise<CustomerPaymentMethod[]> {
+    const response = await fetch(`${API_BASE_URL}/customer-auth/payment-methods`, {
+      credentials: "include",
+      headers: getAuthHeaders(),
+    });
+    if (!response.ok) throw new Error("Error al obtener métodos de pago");
+    return response.json();
+  },
+
+  async createPaymentMethod(data: {
+    methodType: "CARD" | "NEQUI";
+    label?: string;
+    brand?: string;
+    last4?: string;
+    cardholderName?: string;
+    token?: string;
+    phone?: string;
+    isDefault?: boolean;
+  }): Promise<{ id: number }> {
+    const response = await fetch(`${API_BASE_URL}/customer-auth/payment-methods`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...getAuthHeaders() },
+      credentials: "include",
+      body: JSON.stringify(data),
+    });
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => null);
+      throw new Error(errorData?.message || "Error al guardar método de pago");
+    }
+    return response.json();
+  },
+
+  async updatePaymentMethod(
+    id: number,
+    data: Partial<{
+      label: string;
+      brand: string;
+      last4: string;
+      cardholderName: string;
+      token: string;
+      phone: string;
+      isDefault: boolean;
+    }>,
+  ): Promise<{ id: number }> {
+    const response = await fetch(`${API_BASE_URL}/customer-auth/payment-methods/${id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", ...getAuthHeaders() },
+      credentials: "include",
+      body: JSON.stringify(data),
+    });
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => null);
+      throw new Error(errorData?.message || "Error al actualizar método de pago");
+    }
+    return response.json();
+  },
+
+  async deletePaymentMethod(id: number): Promise<{ success: boolean }> {
+    const response = await fetch(`${API_BASE_URL}/customer-auth/payment-methods/${id}`, {
+      method: "DELETE",
+      credentials: "include",
+      headers: getAuthHeaders(),
+    });
+    if (!response.ok) throw new Error("Error al eliminar método de pago");
+    return response.json();
+  },
+
+  async setDefault(id: number): Promise<{ success: boolean }> {
+    const response = await fetch(`${API_BASE_URL}/customer-auth/payment-methods/${id}/default`, {
+      method: "POST",
+      credentials: "include",
+      headers: getAuthHeaders(),
+    });
+    if (!response.ok) throw new Error("Error al establecer método de pago predeterminado");
     return response.json();
   },
 };

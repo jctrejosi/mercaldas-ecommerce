@@ -3478,6 +3478,50 @@ export const featuredProductAssignments = pgTable(
   ],
 );
 
+export const customerPaymentMethodTypeEnum = pgEnum(
+  'customer_payment_method_type_enum',
+  ['CARD', 'NEQUI'],
+);
+
+export const customerPaymentMethods = pgTable(
+  'customer_payment_methods',
+  {
+    id: bigserial({ mode: 'bigint' }).primaryKey().notNull(),
+    customerId: bigint('customer_id', { mode: 'number' }).notNull(),
+    methodType: customerPaymentMethodTypeEnum('method_type').notNull(),
+    label: varchar({ length: 50 }),
+    brand: varchar({ length: 50 }),
+    last4: varchar({ length: 4 }),
+    cardholderName: varchar('cardholder_name', { length: 100 }),
+    // Token del proveedor (Wompi/ePayco) para cobros futuros
+    token: varchar({ length: 255 }),
+    // Para billeteras digitales (Nequi)
+    phone: varchar({ length: 20 }),
+    isDefault: boolean('is_default').default(false).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'string' })
+      .defaultNow()
+      .notNull(),
+    deletedAt: timestamp('deleted_at', { withTimezone: true, mode: 'string' }),
+  },
+  (table) => [
+    index('idx_customer_payment_methods_customer').using(
+      'btree',
+      table.customerId.asc().nullsLast().op('int8_ops'),
+    ),
+    uniqueIndex('idx_customer_default_payment_method')
+      .using('btree', table.customerId.asc().nullsLast().op('int8_ops'))
+      .where(sql`(is_default = true)`),
+    foreignKey({
+      columns: [table.customerId],
+      foreignColumns: [customers.id],
+      name: 'customer_payment_methods_customer_id_fkey',
+    }).onDelete('cascade'),
+  ],
+);
+
 export const popupPositionEnum = pgEnum('popup_position_enum', [
   'header',
   'footer',

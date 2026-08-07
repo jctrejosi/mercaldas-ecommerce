@@ -235,6 +235,94 @@ export class CustomerAuthController {
     return this.customerAuthService.setDefaultAddress(customer.sub, Number(id));
   }
 
+  // ── Payment methods (guardados por el cliente) ──
+
+  @UseGuards(CustomerJwtAuthGuard)
+  @Get('payment-methods')
+  @ApiCookieAuth('customer_access_token')
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: 'Obtener métodos de pago guardados del cliente' })
+  async getPaymentMethods(@CurrentUser() customer: AuthenticatedCustomer) {
+    return this.customerAuthService.getPaymentMethods(customer.sub);
+  }
+
+  @UseGuards(CustomerJwtAuthGuard)
+  @Post('payment-methods')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiCookieAuth('customer_access_token')
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: 'Guardar un método de pago del cliente' })
+  async createPaymentMethod(
+    @CurrentUser() customer: AuthenticatedCustomer,
+    @Body()
+    dto: {
+      methodType: 'CARD' | 'NEQUI';
+      label?: string;
+      brand?: string;
+      last4?: string;
+      cardholderName?: string;
+      token?: string;
+      phone?: string;
+      isDefault?: boolean;
+    },
+  ) {
+    return this.customerAuthService.createPaymentMethod(customer.sub, dto);
+  }
+
+  @UseGuards(CustomerJwtAuthGuard)
+  @Put('payment-methods/:id')
+  @ApiCookieAuth('customer_access_token')
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: 'Actualizar un método de pago guardado' })
+  async updatePaymentMethod(
+    @CurrentUser() customer: AuthenticatedCustomer,
+    @Param('id') id: string,
+    @Body()
+    dto: {
+      label?: string;
+      brand?: string;
+      last4?: string;
+      cardholderName?: string;
+      token?: string;
+      phone?: string;
+      isDefault?: boolean;
+    },
+  ) {
+    return this.customerAuthService.updatePaymentMethod(
+      customer.sub,
+      Number(id),
+      dto,
+    );
+  }
+
+  @UseGuards(CustomerJwtAuthGuard)
+  @Delete('payment-methods/:id')
+  @ApiCookieAuth('customer_access_token')
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: 'Eliminar un método de pago guardado (soft delete)' })
+  async deletePaymentMethod(
+    @CurrentUser() customer: AuthenticatedCustomer,
+    @Param('id') id: string,
+  ) {
+    return this.customerAuthService.deletePaymentMethod(customer.sub, Number(id));
+  }
+
+  @UseGuards(CustomerJwtAuthGuard)
+  @Post('payment-methods/:id/default')
+  @HttpCode(HttpStatus.OK)
+  @ApiCookieAuth('customer_access_token')
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: 'Establecer método de pago como predeterminado' })
+  async setDefaultPaymentMethod(
+    @CurrentUser() customer: AuthenticatedCustomer,
+    @Param('id') id: string,
+  ) {
+    return this.customerAuthService.setDefaultPaymentMethod(
+      customer.sub,
+      Number(id),
+    );
+  }
+
   private setAuthCookies(
     response: Response,
     accessToken: string,

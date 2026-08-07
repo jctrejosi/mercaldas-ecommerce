@@ -11,7 +11,9 @@ import dsiLogo from "../../assets/logo.png";
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:3000";
 
-const PAYMENT_ICONS = ["Visa", "Mastercard", "PSE", "Nequi", "Daviplata", "Efecty"];
+// Métodos de pago habilitados por el admin (settings payment_methods).
+// Se cargan desde /payments/methods para mostrar solo los aceptados por la tienda.
+const DEFAULT_PAYMENT_ICONS: string[] = [];
 
 const DEFAULT_CONFIG = {
   description:
@@ -55,6 +57,7 @@ interface FooterProps {
 
 export function Footer({ categories, onCategoryClick, generalLogo }: FooterProps) {
   const [config, setConfig] = useState(DEFAULT_CONFIG);
+  const [paymentIcons, setPaymentIcons] = useState<string[]>(DEFAULT_PAYMENT_ICONS);
 
   useEffect(() => {
     fetch(`${API_BASE_URL}/landing/footer`)
@@ -63,6 +66,29 @@ export function Footer({ categories, onCategoryClick, generalLogo }: FooterProps
         if (data && Object.keys(data).length > 0) setConfig({ ...DEFAULT_CONFIG, ...data });
       })
       .catch(() => {});
+  }, []);
+
+  // Medios de pago aceptados: solo los habilitados en la configuración del admin
+  useEffect(() => {
+    fetch(`${API_BASE_URL}/payments/methods`)
+      .then((r) => r.json())
+      .then((d) => {
+        const wompiOn = d?.wompi?.enabled ?? true;
+        const methods = d?.wompi?.methods ?? { card: true, pse: true, nequi: true };
+        const icons: string[] = [];
+        if (d?.efectivo?.enabled !== false) icons.push("Efectivo");
+        if (wompiOn && methods.card !== false) {
+          icons.push("Visa", "Mastercard");
+        }
+        if (wompiOn && methods.pse !== false) icons.push("PSE");
+        if (wompiOn && methods.nequi !== false) icons.push("Nequi");
+        if (d?.breb?.enabled !== false) icons.push("Bre-B");
+        setPaymentIcons(icons);
+      })
+      .catch(() => {
+        // Si falla, no mostramos logos engañosos; la tienda puede no tener métodos habilitados
+        setPaymentIcons([]);
+      });
   }, []);
 
   // Categorías: de la config (resolvedCategories) o fallback a raíz del catálogo
@@ -157,20 +183,24 @@ export function Footer({ categories, onCategoryClick, generalLogo }: FooterProps
         </div>
 
         <div className="border-t py-5" style={{ borderColor: "rgba(255,255,255,0.08)" }}>
-          <p className="text-xs mb-3 font-medium" style={{ color: "rgba(255,255,255,0.4)" }}>
-            Medios de pago aceptados
-          </p>
-          <div className="flex flex-wrap gap-2">
-            {PAYMENT_ICONS.map((pm) => (
-              <div
-                key={pm}
-                className="px-3 py-1.5 rounded-lg text-xs font-bold"
-                style={{ background: "rgba(255,255,255,0.08)", color: "rgba(255,255,255,0.65)" }}
-              >
-                {pm}
+          {paymentIcons.length > 0 && (
+            <>
+              <p className="text-xs mb-3 font-medium" style={{ color: "rgba(255,255,255,0.4)" }}>
+                Medios de pago aceptados
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {paymentIcons.map((pm) => (
+                  <div
+                    key={pm}
+                    className="px-3 py-1.5 rounded-lg text-xs font-bold"
+                    style={{ background: "rgba(255,255,255,0.08)", color: "rgba(255,255,255,0.65)" }}
+                  >
+                    {pm}
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
+            </>
+          )}
         </div>
 
         <div className="border-t pt-4 pb-2 relative flex items-center justify-center" style={{ borderColor: "rgba(255,255,255,0.08)" }}>

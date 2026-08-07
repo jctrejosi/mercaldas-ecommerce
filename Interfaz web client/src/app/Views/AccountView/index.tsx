@@ -53,7 +53,9 @@ import { catalogService } from "../../../services/catalog.service";
 import {
   customerAuthService,
   customerAddressService,
+  customerPaymentService,
   type CustomerAddress,
+  type CustomerPaymentMethod,
 } from "../../../services/customer-auth.service";
 
 const MOCK_PRODUCTS: Product[] = [
@@ -457,11 +459,12 @@ interface SavedAddress {
 
 interface SavedPayment {
   id: string;
-  type: "credit" | "debit" | "digital";
+  methodType: "CARD" | "NEQUI";
   label: string;
   last4?: string;
   brand?: string;
-  wallet?: string;
+  phone?: string;
+  cardholderName?: string;
   color: string;
   isDefault: boolean;
 }
@@ -646,35 +649,6 @@ const INIT_ADDRESSES: SavedAddress[] = [
     address: "Av. 12 de Octubre # 41-55",
     city: "Manizales",
     notes: "Casa blanca — portón negro",
-    isDefault: false,
-  },
-];
-
-const INIT_PAYMENTS: SavedPayment[] = [
-  {
-    id: "p1",
-    type: "credit",
-    label: "Visa Clásica",
-    last4: "4521",
-    brand: "Visa",
-    color: "#1A1F71",
-    isDefault: true,
-  },
-  {
-    id: "p2",
-    type: "debit",
-    label: "Mastercard Débito",
-    last4: "8834",
-    brand: "Mastercard",
-    color: "#EB001B",
-    isDefault: false,
-  },
-  {
-    id: "p3",
-    type: "digital",
-    wallet: "Nequi",
-    label: "Nequi",
-    color: "#430050",
     isDefault: false,
   },
 ];
@@ -980,6 +954,23 @@ export interface UserAdminViewProps {
   onMarkNotifRead?: (id: number) => void;
   onReplaceCart?: (items: CartItem[]) => void;
   fmt?: (n: number) => string;
+  onProfileUpdated?: (
+    profile: {
+      firstName?: string;
+      lastName?: string;
+      phone?: string;
+      email?: string;
+      acceptsMarketing?: boolean;
+      password?: string;
+    },
+  ) => Promise<{
+    fullName: string;
+    firstName: string | null;
+    lastName: string | null;
+    phone: string | null;
+    email: string;
+    acceptsMarketing: boolean;
+  }>;
 }
 
 export function UserAdminView({
@@ -996,6 +987,7 @@ export function UserAdminView({
   unreadNotifCount = 0,
   onMarkNotifRead,
   onReplaceCart,
+  onProfileUpdated,
 }: UserAdminViewProps) {
   const [section, setSection] = useState<AccountSection>(initialSection);
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
@@ -1019,7 +1011,13 @@ export function UserAdminView({
   const [selectedListId, setSelectedListId] = useState<number | null>(null);
   const [addresses, setAddresses] = useState<SavedAddress[]>([]);
   const [addressesLoading, setAddressesLoading] = useState(false);
-  const [payments, setPayments] = useState<SavedPayment[]>(INIT_PAYMENTS);
+  const [payments, setPayments] = useState<SavedPayment[]>([]);
+  // Triestado: null = cargando config, true = hay métodos almacenables
+  // (tarjeta o Nequi vía Wompi), false = la tienda no permite guardar métodos.
+  // Mientras carga (null) la sección permanece oculta.
+  const [paymentsSectionEnabled, setPaymentsSectionEnabled] = useState<
+    boolean | null
+  >(null);
   const [coupons, setCoupons] = useState<Coupon[]>(INIT_COUPONS);
   const [notifs, setNotifs] = useState<AcctNotif[]>(() =>
     notifications.map((n) => ({
@@ -1091,6 +1089,53 @@ export function UserAdminView({
         .finally(() => setAddressesLoading(false));
     }
   }, [customer, section]);
+
+  // Detectar si el admin tiene métodos almacenables habilitados
+  // (tarjeta o Nequi vía Wompi). Si ninguno está habilitado, la sección
+  // "Métodos de Pago" se oculta del menú.
+  useEffect(() => {
+    fetch(`${import.meta.env.VITE_API_URL || "http://localhost:3000"}/payments/methods`)
+      .then((r) => r.json())
+      .then((d) => {
+        const wompiOn = d?.wompi?.enabled ?? true;
+        const cardEnabled = wompiOn && (d?.wompi?.methods?.card ?? true);
+        const nequiEnabled = wompiOn && (d?.wompi?.methods?.nequi ?? true);
+        setPaymentsSectionEnabled(cardEnabled || nequiEnabled);
+      })
+      .catch(() => setPaymentsSectionEnabled(false));
+  }, []);
+
+  // Si se llega a la sección "payments" pero la tienda no tiene métodos
+  // almacenables habilitados (config ya resuelta), redirigir a otra sección.
+  useEffect(() => {
+    if (section === "payments" && paymentsSectionEnabled === false) {
+      setSection("orders");
+    }
+  }, [section, paymentsSectionEnabled]);
+
+  // Load payment methods
+  useEffect(() => {
+    if (customer && section === "payments") {
+      customerPaymentService
+        .getPaymentMethods()
+        .then((data) => setPayments(data.map(mapCustomerPaymentMethod)))
+        .catch(() => setPayments([]));
+    }
+  }, [customer, section]);
+
+  const mapCustomerPaymentMethod = (p: CustomerPaymentMethod): SavedPayment => ({
+    id: String(p.id),
+    methodType: p.methodType,
+    label:
+      p.label ||
+      (p.methodType === "NEQUI" ? "Nequi" : p.brand || "Tarjeta"),
+    last4: p.last4 ?? undefined,
+    brand: p.brand ?? undefined,
+    phone: p.phone ?? undefined,
+    cardholderName: p.cardholderName ?? undefined,
+    color: p.methodType === "NEQUI" ? "#430050" : "#1A1F71",
+    isDefault: p.isDefault,
+  });
 
   const mapCustomerAddress = (a: CustomerAddress): SavedAddress => ({
     id: String(a.id),
@@ -1181,7 +1226,9 @@ export function UserAdminView({
     { id: "reviews", label: "Mis Reseñas", icon: Star },
     { id: "support", label: "Centro de Ayuda", icon: HelpCircle },
     { id: "profile", label: "Configuración", icon: Settings },
-  ];
+  ].filter(
+    (item) => item.id !== "payments" || paymentsSectionEnabled === true,
+  );
 
   const currentNav = navItems.find(
     (n) =>
@@ -2815,14 +2862,181 @@ export function UserAdminView({
     );
   };
 
-  /* ── Payment Methods ── */
+/* ── Payment Methods ── */
   const PaymentsSection = () => {
-    const setDefault = (id: string) =>
-      setPayments((prev) =>
-        prev.map((p) => ({ ...p, isDefault: p.id === id })),
-      );
-    const del = (id: string) =>
-      setPayments((prev) => prev.filter((p) => p.id !== id));
+    const [showForm, setShowForm] = useState(false);
+    const [editingId, setEditingId] = useState<string | null>(null);
+    const [formType, setFormType] = useState<"CARD" | "NEQUI">("CARD");
+    const [form, setForm] = useState<Record<string, string>>({});
+    const [saving, setSaving] = useState(false);
+    const [paymentsConfig, setPaymentsConfig] = useState<{
+      cardEnabled: boolean;
+      nequiEnabled: boolean;
+      pseEnabled: boolean;
+      efectivoEnabled: boolean;
+      brebEnabled: boolean;
+    }>({ cardEnabled: true, nequiEnabled: true, pseEnabled: true, efectivoEnabled: true, brebEnabled: true });
+
+    // Cargar la config de medios de pago del admin para saber
+    // qué métodos están habilitados y pueden guardarse.
+    useEffect(() => {
+      fetch(`${import.meta.env.VITE_API_URL || "http://localhost:3000"}/payments/methods`)
+        .then((r) => r.json())
+        .then((d) => {
+          const wompiOn = d?.wompi?.enabled ?? true;
+          setPaymentsConfig({
+            cardEnabled: wompiOn && (d?.wompi?.methods?.card ?? true),
+            nequiEnabled: wompiOn && (d?.wompi?.methods?.nequi ?? true),
+            pseEnabled: wompiOn && (d?.wompi?.methods?.pse ?? true),
+            efectivoEnabled: d?.efectivo?.enabled ?? true,
+            brebEnabled: d?.breb?.enabled ?? true,
+          });
+        })
+        .catch(() => {});
+    }, []);
+
+    const refreshPayments = async () => {
+      try {
+        const data = await customerPaymentService.getPaymentMethods();
+        setPayments(data.map(mapCustomerPaymentMethod));
+      } catch {}
+    };
+
+    const setDefault = async (id: string) => {
+      try {
+        await customerPaymentService.setDefault(Number(id));
+        setPayments((prev) =>
+          prev.map((p) => ({ ...p, isDefault: p.id === id })),
+        );
+      } catch {}
+    };
+
+    const del = async (id: string) => {
+      if (!window.confirm("¿Eliminar este método de pago?")) return;
+      try {
+        await customerPaymentService.deletePaymentMethod(Number(id));
+        setPayments((prev) => prev.filter((p) => p.id !== id));
+      } catch {}
+    };
+
+    const startAdd = () => {
+      setEditingId(null);
+      setForm({});
+      setFormType(paymentsConfig.cardEnabled ? "CARD" : "NEQUI");
+      setShowForm(true);
+    };
+
+    const startEdit = (pm: SavedPayment) => {
+      setEditingId(pm.id);
+      setFormType(pm.methodType);
+      setForm({
+        label: pm.label || "",
+        cardholderName: pm.cardholderName || "",
+        phone: pm.phone || "",
+      });
+      setShowForm(true);
+    };
+
+    const saveMethod = async () => {
+      setSaving(true);
+      try {
+        if (editingId) {
+          const id = Number(editingId);
+          if (formType === "NEQUI") {
+            await customerPaymentService.updatePaymentMethod(id, {
+              label: form.label || "Nequi",
+              phone: form.phone,
+            });
+          } else {
+            await customerPaymentService.updatePaymentMethod(id, {
+              label: form.label || undefined,
+              cardholderName: form.cardholderName || undefined,
+            });
+          }
+        } else if (formType === "CARD") {
+          if (
+            !form.cardholderName ||
+            !form.cardNumber ||
+            !form.expiryMonth ||
+            !form.expiryYear ||
+            !form.cvv
+          ) {
+            throw new Error("Completa todos los datos de la tarjeta");
+          }
+          const wompi = await ordersService.getWompiConfig();
+          if (!wompi?.publicKey) {
+            throw new Error(
+              "El procesador de tarjetas no está configurado por la tienda",
+            );
+          }
+          const tokenized = await ordersService.tokenizeWompiCard({
+            publicKey: wompi.publicKey,
+            number: form.cardNumber.replace(/\s/g, ""),
+            cvc: form.cvv,
+            expMonth: form.expiryMonth,
+            expYear: form.expiryYear,
+            cardHolder: form.cardholderName,
+          });
+          await customerPaymentService.createPaymentMethod({
+            methodType: "CARD",
+            label: form.label || tokenized.brand,
+            brand: tokenized.brand,
+            last4: tokenized.last_four,
+            cardholderName: form.cardholderName,
+            token: tokenized.id,
+            isDefault: visiblePayments.length === 0,
+          });
+        } else {
+          if (!form.phone) throw new Error("Ingresa el número de Nequi");
+          await customerPaymentService.createPaymentMethod({
+            methodType: "NEQUI",
+            label: form.label || "Nequi",
+            phone: form.phone,
+            isDefault: visiblePayments.length === 0,
+          });
+        }
+        await refreshPayments();
+        setShowForm(false);
+        setEditingId(null);
+        setForm({});
+      } catch (err) {
+        window.alert(err instanceof Error ? err.message : "Error al guardar");
+      } finally {
+        setSaving(false);
+      }
+    };
+
+    const availableTypes = [
+      paymentsConfig.cardEnabled && {
+        key: "CARD" as const,
+        label: "Tarjeta débito / crédito",
+        desc: "Visa, Mastercard, Amex",
+      },
+      paymentsConfig.nequiEnabled && {
+        key: "NEQUI" as const,
+        label: "Nequi",
+        desc: "Paga con tu número de celular",
+      },
+    ].filter(Boolean) as Array<{
+      key: "CARD" | "NEQUI";
+      label: string;
+      desc: string;
+    }>;
+
+    const acceptedLogos = [
+      paymentsConfig.efectivoEnabled && "Efectivo",
+      paymentsConfig.cardEnabled && "Visa",
+      paymentsConfig.cardEnabled && "Mastercard",
+      paymentsConfig.pseEnabled && "PSE",
+      paymentsConfig.nequiEnabled && "Nequi",
+      paymentsConfig.brebEnabled && "Bre-B",
+    ].filter(Boolean) as string[];
+
+    const visiblePayments = payments.filter((p) =>
+      p.methodType === "CARD"
+        ? paymentsConfig.cardEnabled
+        : paymentsConfig.nequiEnabled,
+    );
 
     return (
       <div>
@@ -2834,6 +3048,7 @@ export function UserAdminView({
             Métodos de Pago
           </h2>
           <button
+            onClick={startAdd}
             className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition-all hover:brightness-95"
             style={{ background: "#FFF200", color: "#1A1A2E" }}
           >
@@ -2842,16 +3057,17 @@ export function UserAdminView({
           </button>
         </div>
 
-        {payments.length === 0 ? (
+        {visiblePayments.length === 0 && !showForm ? (
           <EmptyState
             icon={<CreditCard className="w-9 h-9 text-muted-foreground" />}
             title="Sin métodos de pago"
-            subtitle="Agrega una tarjeta o billetera digital para pagar más rápido."
+            subtitle="Agrega una tarjeta o Nequi para pagar más rápido."
             cta="Agregar método"
+            onCta={startAdd}
           />
         ) : (
           <div className="flex flex-col gap-3">
-            {payments.map((pm) => (
+            {visiblePayments.map((pm) => (
               <AcctCard
                 key={pm.id}
                 className={`p-4 ${pm.isDefault ? "ring-2 ring-foreground" : ""}`}
@@ -2861,7 +3077,9 @@ export function UserAdminView({
                     className="w-14 h-10 rounded-xl flex items-center justify-center flex-shrink-0 text-white font-black text-xs"
                     style={{ background: pm.color }}
                   >
-                    {pm.type === "digital" ? pm.wallet?.[0] : pm.brand?.[0]}
+                    {pm.methodType === "NEQUI"
+                      ? pm.label?.[0] ?? "N"
+                      : pm.brand?.[0]}
                   </div>
                   <div className="flex-1">
                     <div className="flex items-center gap-2">
@@ -2882,12 +3100,15 @@ export function UserAdminView({
                         •••• •••• •••• {pm.last4}
                       </p>
                     )}
+                    {pm.phone && (
+                      <p className="text-xs text-muted-foreground">
+                        {pm.phone}
+                      </p>
+                    )}
                     <p className="text-xs text-muted-foreground capitalize">
-                      {pm.type === "digital"
+                      {pm.methodType === "NEQUI"
                         ? "Billetera digital"
-                        : pm.type === "credit"
-                          ? "Tarjeta de crédito"
-                          : "Tarjeta débito"}
+                        : "Tarjeta"}
                     </p>
                   </div>
                   <div className="flex gap-1.5 flex-shrink-0">
@@ -2900,6 +3121,12 @@ export function UserAdminView({
                       </button>
                     )}
                     <button
+                      onClick={() => startEdit(pm)}
+                      className="w-7 h-7 rounded-lg flex items-center justify-center border border-border hover:bg-muted transition-colors"
+                    >
+                      <Pencil className="w-3 h-3 text-muted-foreground" />
+                    </button>
+                    <button
                       onClick={() => del(pm.id)}
                       className="w-7 h-7 rounded-lg flex items-center justify-center border border-border hover:bg-muted transition-colors"
                     >
@@ -2910,29 +3137,213 @@ export function UserAdminView({
               </AcctCard>
             ))}
 
-            {/* Accepted logos */}
-            <AcctCard className="p-4 mt-1">
-              <p className="text-xs font-black uppercase tracking-wide text-muted-foreground mb-3">
-                Métodos aceptados
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {[
-                  "Visa",
-                  "Mastercard",
-                  "PSE",
-                  "Nequi",
-                  "Bre-B",
-                  "Daviplata",
-                ].map((m) => (
-                  <span
-                    key={m}
-                    className="px-3 py-1.5 rounded-lg text-xs font-bold border border-border text-muted-foreground"
+            {showForm && (
+              <AcctCard className="p-4 ring-2 ring-foreground">
+                <p className="font-bold text-sm mb-3">
+                  {editingId
+                    ? "Editar método de pago"
+                    : "Nuevo método de pago"}
+                </p>
+
+                {!editingId && (
+                  <div className="flex flex-col gap-2 mb-3">
+                    {availableTypes.length === 0 ? (
+                      <p className="text-xs text-muted-foreground">
+                        La tienda no tiene métodos de pago habilitados para
+                        guardar.
+                      </p>
+                    ) : (
+                      availableTypes.map((t) => (
+                        <label
+                          key={t.key}
+                          className={`flex items-center gap-3 px-3 py-2.5 rounded-xl border cursor-pointer ${formType === t.key ? "border-yellow-400 bg-yellow-50" : "border-border"}`}
+                        >
+                          <input
+                            type="radio"
+                            name="pm-type"
+                            checked={formType === t.key}
+                            onChange={() => setFormType(t.key)}
+                            className="sr-only"
+                          />
+                          <div
+                            className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 ${formType === t.key ? "border-yellow-500" : "border-muted-foreground"}`}
+                          >
+                            {formType === t.key && (
+                              <div className="w-2 h-2 rounded-full bg-foreground" />
+                            )}
+                          </div>
+                          <div className="flex-1">
+                            <p className="text-sm font-semibold">{t.label}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {t.desc}
+                            </p>
+                          </div>
+                        </label>
+                      ))
+                    )}
+                  </div>
+                )}
+
+                {formType === "CARD" && (
+                  <div className="flex flex-col gap-2">
+                    <input
+                      placeholder="Nombre del titular"
+                      value={form.cardholderName ?? ""}
+                      onChange={(e) =>
+                        setForm((f) => ({
+                          ...f,
+                          cardholderName: e.target.value,
+                        }))
+                      }
+                      className="w-full text-xs border border-border rounded-lg px-3 py-2 focus:outline-none"
+                    />
+                    <input
+                      placeholder="Número de tarjeta"
+                      inputMode="numeric"
+                      maxLength={19}
+                      value={form.cardNumber ?? ""}
+                      onChange={(e) =>
+                        setForm((f) => ({
+                          ...f,
+                          cardNumber: e.target.value
+                            .replace(/\D/g, "")
+                            .slice(0, 16)
+                            .replace(/(.{4})/g, "$1 ")
+                            .trim(),
+                        }))
+                      }
+                      className="w-full text-xs border border-border rounded-lg px-3 py-2 focus:outline-none"
+                    />
+                    <div className="grid grid-cols-3 gap-2">
+                      <input
+                        placeholder="MM"
+                        inputMode="numeric"
+                        maxLength={2}
+                        value={form.expiryMonth ?? ""}
+                        onChange={(e) =>
+                          setForm((f) => ({
+                            ...f,
+                            expiryMonth: e.target.value
+                              .replace(/\D/g, "")
+                              .slice(0, 2),
+                          }))
+                        }
+                        className="w-full text-xs border border-border rounded-lg px-3 py-2 focus:outline-none"
+                      />
+                      <input
+                        placeholder="AA"
+                        inputMode="numeric"
+                        maxLength={2}
+                        value={form.expiryYear ?? ""}
+                        onChange={(e) =>
+                          setForm((f) => ({
+                            ...f,
+                            expiryYear: e.target.value
+                              .replace(/\D/g, "")
+                              .slice(0, 2),
+                          }))
+                        }
+                        className="w-full text-xs border border-border rounded-lg px-3 py-2 focus:outline-none"
+                      />
+                      <input
+                        placeholder="CVV"
+                        type="password"
+                        inputMode="numeric"
+                        maxLength={4}
+                        value={form.cvv ?? ""}
+                        onChange={(e) =>
+                          setForm((f) => ({
+                            ...f,
+                            cvv: e.target.value.replace(/\D/g, "").slice(0, 4),
+                          }))
+                        }
+                        className="w-full text-xs border border-border rounded-lg px-3 py-2 focus:outline-none"
+                      />
+                    </div>
+                    <input
+                      placeholder="Nombre o alias (opcional)"
+                      value={form.label ?? ""}
+                      onChange={(e) =>
+                        setForm((f) => ({ ...f, label: e.target.value }))
+                      }
+                      className="w-full text-xs border border-border rounded-lg px-3 py-2 focus:outline-none"
+                    />
+                    <p className="text-[10px] text-muted-foreground">
+                      La tarjeta se tokeniza de forma segura con Wompi. Solo se
+                      guarda la marca y los últimos 4 dígitos.
+                    </p>
+                  </div>
+                )}
+
+                {formType === "NEQUI" && (
+                  <div className="flex flex-col gap-2">
+                    <input
+                      placeholder="Número de Nequi"
+                      inputMode="numeric"
+                      maxLength={10}
+                      value={form.phone ?? ""}
+                      onChange={(e) =>
+                        setForm((f) => ({
+                          ...f,
+                          phone: e.target.value
+                            .replace(/\D/g, "")
+                            .slice(0, 10),
+                        }))
+                      }
+                      className="w-full text-xs border border-border rounded-lg px-3 py-2 focus:outline-none"
+                    />
+                    <input
+                      placeholder="Nombre o alias (opcional)"
+                      value={form.label ?? ""}
+                      onChange={(e) =>
+                        setForm((f) => ({ ...f, label: e.target.value }))
+                      }
+                      className="w-full text-xs border border-border rounded-lg px-3 py-2 focus:outline-none"
+                    />
+                  </div>
+                )}
+
+                <div className="flex gap-2 mt-3">
+                  <button
+                    onClick={saveMethod}
+                    disabled={saving || availableTypes.length === 0}
+                    className="flex-1 py-2 rounded-lg text-xs font-bold transition-all hover:brightness-95 disabled:opacity-50"
+                    style={{ background: "#FFF200", color: "#1A1A2E" }}
                   >
-                    {m}
-                  </span>
-                ))}
-              </div>
-            </AcctCard>
+                    {saving ? "Guardando..." : "Guardar"}
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowForm(false);
+                      setEditingId(null);
+                      setForm({});
+                    }}
+                    className="flex-1 py-2 rounded-lg text-xs font-semibold border border-border hover:bg-muted transition-colors"
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              </AcctCard>
+            )}
+
+            {/* Accepted logos */}
+            {acceptedLogos.length > 0 && (
+              <AcctCard className="p-4 mt-1">
+                <p className="text-xs font-black uppercase tracking-wide text-muted-foreground mb-3">
+                  Métodos aceptados
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {acceptedLogos.map((m) => (
+                    <span
+                      key={m}
+                      className="px-3 py-1.5 rounded-lg text-xs font-bold border border-border text-muted-foreground"
+                    >
+                      {m}
+                    </span>
+                  ))}
+                </div>
+              </AcctCard>
+            )}
           </div>
         )}
       </div>
@@ -3897,8 +4308,15 @@ export function UserAdminView({
       email: customer?.email || "",
       password: "",
     });
-    const [privacyPromo, setPrivacyPromo] = useState(true);
+    const [privacyPromo, setPrivacyPromo] = useState(
+      customer?.acceptsMarketing ?? true,
+    );
     const [privacyData, setPrivacyData] = useState(true);
+
+    // Reflejar el valor del perfil cuando cambia (login o recarga)
+    useEffect(() => {
+      setPrivacyPromo(customer?.acceptsMarketing ?? true);
+    }, [customer?.acceptsMarketing]);
 
     // Confirm modals
     const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
@@ -3927,7 +4345,9 @@ export function UserAdminView({
           body.password = profile.password;
         }
 
-        const updated = await customerAuthService.updateProfile(body);
+        const updated = onProfileUpdated
+          ? await onProfileUpdated(body)
+          : await customerAuthService.updateProfile(body);
         // Update local state with response
         setProfile((p) => ({
           ...p,
@@ -4097,25 +4517,6 @@ export function UserAdminView({
               </div>
             </div>
 
-            <button
-              onClick={saveProfile}
-              disabled={saving}
-              className="flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-sm transition-all hover:brightness-95 disabled:opacity-60"
-              style={{
-                background: saved ? "#D4EDDA" : "#FFF200",
-                color: saved ? "#155724" : "#1A1A2E",
-              }}
-            >
-              {saving ? (
-                "Guardando..."
-              ) : saved ? (
-                <>
-                  <CheckCircle2 className="w-4 h-4" /> ¡Guardado!
-                </>
-              ) : (
-                "Guardar cambios"
-              )}
-            </button>
           </AcctCard>
 
           {/* Privacy */}
@@ -4166,6 +4567,27 @@ export function UserAdminView({
             </div>
           </AcctCard>
 
+          {/* Guardar cambios */}
+          <button
+            onClick={saveProfile}
+            disabled={saving}
+            className="w-full py-3.5 rounded-xl font-black text-sm transition-all hover:brightness-95 active:scale-[0.99] disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer"
+            style={{
+              background: saved ? "#D4EDDA" : "#FFF200",
+              color: saved ? "#155724" : "#1A1A2E",
+            }}
+          >
+            {saving ? (
+              "Guardando..."
+            ) : saved ? (
+              <>
+                <CheckCircle2 className="w-4 h-4 inline-block mr-1" /> ¡Guardado!
+              </>
+            ) : (
+              "Guardar cambios"
+            )}
+          </button>
+
           {/* Danger zone */}
           <AcctCard className="p-5 border-red-200">
             <p className="font-bold text-sm text-red-600 mb-3">
@@ -4189,6 +4611,7 @@ export function UserAdminView({
               </button>
             </div>
           </AcctCard>
+
         </div>
 
         {/* Logout Confirm Modal */}
@@ -4292,7 +4715,11 @@ export function UserAdminView({
       case "addresses":
         return <AddressesSection />;
       case "payments":
-        return <PaymentsSection />;
+        return paymentsSectionEnabled === true ? (
+          <PaymentsSection />
+        ) : (
+          <OrdersSection />
+        );
       case "coupons":
         return (
           <div className="relative">

@@ -70,7 +70,26 @@ const ANIM_STYLES = `
   from { opacity: 0.8; }
   to   { opacity: 1; }
 }
+@keyframes promoSlideInRight {
+  from { transform: translateX(64px); opacity: 0; }
+  to   { transform: translateX(0); opacity: 1; }
+}
+@keyframes promoSlideInLeft {
+  from { transform: translateX(-64px); opacity: 0; }
+  to   { transform: translateX(0); opacity: 1; }
+}
+@keyframes promoSlideOutLeft {
+  from { transform: translateX(0); opacity: 1; }
+  to   { transform: translateX(-64px); opacity: 0; }
+}
+@keyframes promoSlideOutRight {
+  from { transform: translateX(0); opacity: 1; }
+  to   { transform: translateX(64px); opacity: 0; }
+}
 `;
+
+// Duración del deslizamiento de salida (ms)
+const SLIDE_OUT_MS = 400;
 
 export function AdvertisingBanner({
   onShop,
@@ -82,7 +101,10 @@ export function AdvertisingBanner({
   const [banners, setBanners] = useState<AdBanner[]>(FALLBACK);
   const [current, setCurrent] = useState(0);
   const [animKey, setAnimKey] = useState(0);
+  const [isLeaving, setIsLeaving] = useState(false);
+  const [slideDir, setSlideDir] = useState<1 | -1>(1);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const leavingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     fetchPromoBanners().then((data) => {
@@ -90,10 +112,29 @@ export function AdvertisingBanner({
     });
   }, []);
 
+  const goTo = useCallback(
+    (idx: number, dir: 1 | -1 = 1) => {
+      // Si ya hay una transición en curso, ignorar el cambio
+      if (leavingTimerRef.current) return;
+
+      // 1) El item actual se desliza hacia afuera (según la dirección)
+      setSlideDir(dir);
+      setIsLeaving(true);
+
+      // 2) Al terminar, cambiar de item: el nuevo entra deslizándose
+      leavingTimerRef.current = setTimeout(() => {
+        setCurrent(idx);
+        setAnimKey((k) => k + 1);
+        setIsLeaving(false);
+        leavingTimerRef.current = null;
+      }, SLIDE_OUT_MS);
+    },
+    [],
+  );
+
   const advance = useCallback(() => {
-    setAnimKey((k) => k + 1);
-    setTimeout(() => setCurrent((c) => (c + 1) % banners.length), 50);
-  }, [banners.length]);
+    goTo((current + 1) % banners.length, 1);
+  }, [current, banners.length, goTo]);
 
   const startTimer = useCallback(() => {
     if (timerRef.current) clearInterval(timerRef.current);
@@ -105,15 +146,14 @@ export function AdvertisingBanner({
     startTimer();
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
+      if (leavingTimerRef.current) clearTimeout(leavingTimerRef.current);
     };
   }, [startTimer]);
 
   const go = (dir: number) => {
-    setAnimKey((k) => k + 1);
-    setTimeout(() => {
-      setCurrent((c) => (c + dir + banners.length) % banners.length);
-      startTimer();
-    }, 50);
+    goTo((current + dir + banners.length) % banners.length, dir as 1 | -1);
+    // Reiniciar el autoplay una vez completada la transición
+    setTimeout(() => startTimer(), SLIDE_OUT_MS + 60);
   };
 
   const handleClick = () => {
@@ -147,7 +187,15 @@ export function AdvertisingBanner({
                 src={banner.image}
                 alt=""
                 className={`w-full h-full object-contain ${hasText ? "opacity-25" : ""}`}
-                style={{ animation: "promoBgFade 0.7s ease both" }}
+                style={{
+                  animation: isLeaving
+                    ? slideDir === 1
+                      ? "promoSlideOutLeft 0.4s ease both"
+                      : "promoSlideOutRight 0.4s ease both"
+                    : slideDir === 1
+                      ? "promoSlideInRight 0.55s ease both"
+                      : "promoSlideInLeft 0.55s ease both",
+                }}
               />
             )}
             {hasText && (
@@ -159,7 +207,25 @@ export function AdvertisingBanner({
           </div>
 
           {/* Content */}
-          <div key={animKey} className="relative z-10 px-7 py-6 flex flex-col md:flex-row md:items-center gap-4 h-full">
+          <div
+            key={animKey}
+            className="relative z-10 px-7 py-6 flex flex-col md:flex-row md:items-center gap-4 h-full"
+            style={
+              isLeaving
+                ? {
+                    animation:
+                      slideDir === 1
+                        ? "promoSlideOutLeft 0.4s ease both"
+                        : "promoSlideOutRight 0.4s ease both",
+                  }
+                : {
+                    animation:
+                      slideDir === 1
+                        ? "promoSlideInRight 0.55s ease both"
+                        : "promoSlideInLeft 0.55s ease both",
+                  }
+            }
+          >
             <div className="flex-1 min-w-0">
               {(banner.title || banner.subtitle) && (
                 <span
@@ -243,8 +309,8 @@ export function AdvertisingBanner({
                 <button
                   key={i}
                   onClick={() => {
-                    setAnimKey((k) => k + 1);
-                    setTimeout(() => { setCurrent(i); startTimer(); }, 50);
+                    goTo(i, i > current ? 1 : -1);
+                    setTimeout(() => startTimer(), SLIDE_OUT_MS + 60);
                   }}
                   className="h-1.5 rounded-full transition-all duration-300"
                   style={{

@@ -28,6 +28,7 @@ import {
   customerSessions,
   guestSessions,
   customerTokens,
+  customerPaymentMethods,
   carts,
   coupons,
   cartItems,
@@ -362,8 +363,19 @@ export const customerAddressesRelations = relations(
   }),
 );
 
+export const customerPaymentMethodsRelations = relations(
+  customerPaymentMethods,
+  ({ one }) => ({
+    customer: one(customers, {
+      fields: [customerPaymentMethods.customerId],
+      references: [customers.id],
+    }),
+  }),
+);
+
 export const customersRelations = relations(customers, ({ many }) => ({
   customerAddresses: many(customerAddresses),
+  customerPaymentMethods: many(customerPaymentMethods),
   customerSessions: many(customerSessions),
   guestSessions: many(guestSessions),
   customerTokens: many(customerTokens),

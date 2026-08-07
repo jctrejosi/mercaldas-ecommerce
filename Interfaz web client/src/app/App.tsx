@@ -222,6 +222,7 @@ export default function App() {
     login,
     register,
     socialLogin,
+    updateProfile,
   } = useCustomerAuth();
   // Cargar direcciones guardadas al abrir el checkout y sugerir la default
   useEffect(() => {
@@ -827,6 +828,7 @@ export default function App() {
           unreadNotifCount={unreadCount}
           onMarkNotifRead={markAsRead}
           onReplaceCart={replaceCart}
+          onProfileUpdated={updateProfile}
         />
       )}
 
@@ -855,7 +857,10 @@ export default function App() {
         />
       </main>
 
-      <PopupDisplay onApplyFilter={handleApplyFilter} />
+      {/* Los popups solo aparecen en la página de inicio (landing) */}
+      {currentView === "home" && (
+        <PopupDisplay onApplyFilter={handleApplyFilter} />
+      )}
       <Footer
         categories={landingCategories}
         onCategoryClick={handleCategoryClick}
